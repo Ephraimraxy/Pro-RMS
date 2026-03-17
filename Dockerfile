@@ -34,8 +34,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Create a folder for the filestore
-RUN mkdir -p /var/lib/odoo && chown -R 1000:1000 /var/lib/odoo
+# Create a non-root user
+RUN useradd -m -d /opt/odoo -s /bin/bash odoo
+
+# Create folders for the filestore and config with correct permissions
+RUN mkdir -p /var/lib/odoo /etc/odoo && \
+    chown -R odoo:odoo /opt/odoo /var/lib/odoo /etc/odoo
 
 # Make entrypoint script executable
 RUN chmod +x /opt/odoo/entrypoint.sh
@@ -47,6 +51,9 @@ ENV PORT 8069
 
 # Expose Odoo port
 EXPOSE 8069
+
+# Switch to non-root user
+USER odoo
 
 # Entry point
 ENTRYPOINT ["/opt/odoo/entrypoint.sh"]

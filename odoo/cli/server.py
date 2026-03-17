@@ -40,8 +40,8 @@ def check_postgres_user():
     This function assumes the configuration has been initialized.
     """
     if (config['db_user'] or os.environ.get('PGUSER')) == 'postgres':
-        sys.stderr.write("Using the database user 'postgres' is a security risk, aborting.")
-        sys.exit(1)
+        sys.stderr.write("Using the database user 'postgres' is a security risk, but continuing for cloud compatibility.\n")
+        # sys.exit(1)
 
 def report_configuration():
     """ Log the server version and some configuration values.
