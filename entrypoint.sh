@@ -15,7 +15,9 @@ if url:
     print(f"export PGUSER={result.username}")
     # Use single quotes for password to handle special characters
     print(f"export PGPASSWORD='{result.password}'")
-    print(f"export PGDATABASE={result.path.lstrip('/')}")
+    # We do NOT export PGDATABASE here because Odoo will try to load it on startup.
+    # If the database is not initialized, it will cause an Internal Server Error (500).
+    # Leaving it unset allows the user to access the Database Manager to create/init.
 EOF
 )
     echo "Database host: $PGHOST"
