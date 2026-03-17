@@ -39,6 +39,68 @@ document.addEventListener("DOMContentLoaded", function () {
             }
     });
 
+    // Multi-step form logic
+    let currentStep = 1;
+    const form = document.getElementById('create_db_form');
+    
+    function updateSteps() {
+        document.querySelectorAll('.rms-step').forEach(step => {
+            step.classList.remove('active');
+            if (parseInt(step.dataset.step) === currentStep) {
+                step.classList.add('active');
+            }
+        });
+        
+        document.querySelectorAll('.progress-dot').forEach((dot, idx) => {
+            dot.classList.remove('active');
+            if (idx + 1 <= currentStep) dot.classList.add('active');
+        });
+    }
+
+    document.body.addEventListener('click', function(e) {
+        if (e.target.classList.contains('next-step')) {
+            const currentStepEl = document.querySelector(`.rms-step[data-step="${currentStep}"]`);
+            const inputs = currentStepEl.querySelectorAll('input[required]');
+            let valid = true;
+            inputs.forEach(input => {
+                if (!input.value) {
+                    input.classList.add('is-invalid');
+                    valid = false;
+                } else {
+                    input.classList.remove('is-invalid');
+                }
+            });
+
+            if (valid) {
+                currentStep++;
+                updateSteps();
+            }
+        }
+
+        if (e.target.classList.contains('prev-step')) {
+            currentStep--;
+            updateSteps();
+        }
+
+        if (e.target.classList.contains('trigger-submit')) {
+             const currentStepEl = document.querySelector(`.rms-step[data-step="${currentStep}"]`);
+             const inputs = currentStepEl.querySelectorAll('input[required]');
+             let valid = true;
+             inputs.forEach(input => {
+                if (!input.checkValidity()) {
+                    input.classList.add('is-invalid');
+                    valid = false;
+                } else {
+                    input.classList.remove('is-invalid');
+                }
+             });
+
+             if (valid) {
+                 form.submit();
+             }
+        }
+    });
+
     // close modal on submit
     const modals = document.querySelectorAll(".modal");
     for (const modalEl of modals) {
