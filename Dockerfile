@@ -34,9 +34,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Create a volume for the filestore
+# Create a folder for the filestore
 RUN mkdir -p /var/lib/odoo && chown -R 1000:1000 /var/lib/odoo
-VOLUME ["/var/lib/odoo"]
 
 # Default environment variables
 ENV ODOO_RC /etc/odoo/odoo.conf
