@@ -37,6 +37,9 @@ COPY . .
 # Create a folder for the filestore
 RUN mkdir -p /var/lib/odoo && chown -R 1000:1000 /var/lib/odoo
 
+# Make entrypoint script executable
+RUN chmod +x /opt/odoo/entrypoint.sh
+
 # Default environment variables
 ENV ODOO_RC /etc/odoo/odoo.conf
 ENV HOST 0.0.0.0
@@ -46,4 +49,5 @@ ENV PORT 8069
 EXPOSE 8069
 
 # Entry point
-CMD ["python3", "odoo-bin", "--http-interface", "0.0.0.0", "--http-port", "8069"]
+ENTRYPOINT ["/opt/odoo/entrypoint.sh"]
+CMD ["--http-interface", "0.0.0.0", "--http-port", "8069"]
