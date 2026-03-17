@@ -43,6 +43,11 @@ fi
 # Check if database is initialized
 if [ -n "$PGDATABASE" ]; then
     echo "Checking if database $PGDATABASE is initialized..."
+    # Use a temporary file to store the result of the check to avoid subshell issues with set -e
+    CHECK_RESULT_FILE="/tmp/odoo_db_check"
+    rm -f $CHECK_RESULT_FILE
+
+    # Run the check, avoiding set -e exit on the python call
     python3 - <<EOF
 import psycopg2
 import sys
@@ -54,24 +59,27 @@ try:
         port=os.environ.get('PGPORT', 5432),
         user=os.environ.get('PGUSER'),
         password=os.environ.get('PGPASSWORD'),
-        dbname=os.environ.get('PGDATABASE')
+        dbname=os.environ.get('PGDATABASE'),
+        connect_timeout=10
     )
     with conn.cursor() as cr:
         cr.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'ir_module_module'")
         exists = cr.fetchone()
         if not exists:
-            print(f"Database {os.environ.get('PGDATABASE')} is NOT initialized.")
-            sys.exit(1)
+            with open('$CHECK_RESULT_FILE', 'w') as f:
+                f.write('INIT_NEEDED')
         else:
             print(f"Database {os.environ.get('PGDATABASE')} is already initialized.")
 except Exception as e:
     print(f"Error checking database: {e}")
-    # We continue anyway, letting Odoo handle it
 EOF
-    if [ $? -eq 1 ]; then
-        echo "Running Odoo initialization with -i base..."
-        # We need to use the full path to odoo-bin or ensure current dir is /opt/odoo
-        python3 odoo-bin -d $PGDATABASE -i base --stop-after-init
+
+    if [ -f "$CHECK_RESULT_FILE" ]; then
+        echo "Database $PGDATABASE is NOT initialized. Running Odoo initialization with -i base..."
+        # Use full path to odoo-bin and ensure it's executable
+        python3 ./odoo-bin -d $PGDATABASE -i base --stop-after-init
+        echo "Database $PGDATABASE initialization completed."
+        rm -f $CHECK_RESULT_FILE
     fi
 fi
 
