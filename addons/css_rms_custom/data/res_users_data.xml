@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!-- Odoo 19 renamed groups_id to group_ids -->
         <function model="res.users" name="write">
             <function model="res.users" name="search">
                 <value eval="[('login', '=', 'wuseberger@gmail.com')]"/>
             </function>
-            <value eval="{'groups_id': [(4, ref('css_rms_custom.group_rms_manager'))]}"/>
+            <value eval="{'group_ids': [(4, ref('css_rms_custom.group_rms_manager'))]}"/>
         </function>
     </data>
 </odoo>
