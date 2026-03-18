@@ -99,5 +99,6 @@ unset PGDATABASE
 # Final check: If we have a preferred database (RMS), we force it to update.
 # Otherwise, we let Odoo start normally.
 # We use -i to ensure modules are INSTALLED if missing, and -u for web branding.
+# We explicitly set --addons-path to include our local custom 'addons' folder.
 echo "Starting Odoo with rebranding and RMS core installation on 'RMS' database..."
-exec python3 odoo-bin -d RMS -i purchase_requisition,hr_expense,css_rms_custom -u web "$@"
+exec python3 odoo-bin -d RMS --addons-path=addons,odoo/addons -i purchase_requisition,hr_expense,css_rms_custom -u web "$@"
