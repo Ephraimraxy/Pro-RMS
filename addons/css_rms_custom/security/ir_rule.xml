@@ -14,7 +14,7 @@
             <field name="name">HOD: Show Departmental Requisitions</field>
             <field name="model_id" ref="model_css_rms_requisition"/>
             <field name="groups" eval="[(4, ref('group_rms_hod'))]"/>
-            <field name="domain_force">[('department_id', '=', user.department_id.id)]</field>
+            <field name="domain_force">[('department_id', '=', user.employee_id.department_id.id)]</field>
         </record>
 
         <!-- Rule: Higher Authorities see everything but filtered by Dashboard -->
