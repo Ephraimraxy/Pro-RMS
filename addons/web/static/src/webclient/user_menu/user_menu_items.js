@@ -73,7 +73,7 @@ export function odooAccountItem(env) {
     return {
         type: "item",
         id: "account",
-        description: _t("My Odoo.com Account"),
+        description: _t("My CSS-RMS Account"),
         callback: () => {
             rpc("/web/session/account")
                 .then((url) => {

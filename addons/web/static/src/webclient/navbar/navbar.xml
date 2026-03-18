@@ -81,7 +81,7 @@
     <t t-else="">
       <div t-if="!isScopedApp" class="o_navbar_apps_menu">
         <Dropdown>
-          <button data-hotkey="h" title="Home Menu">
+          <button data-hotkey="h" title="CSS-RMS Menu">
             <i class="oi oi-apps" />
           </button>
           <t t-set-slot="content">
