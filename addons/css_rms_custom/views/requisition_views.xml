@@ -82,7 +82,7 @@
     <record id="action_css_rms_requisition_to_approve" model="ir.actions.act_window">
         <field name="name">To Approve</field>
         <field name="res_model">css.rms.requisition</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="domain">[('state', '=', 'pending')]</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
@@ -94,7 +94,7 @@
     <record id="action_css_rms_requisition_all" model="ir.actions.act_window">
         <field name="name">All Requisitions</field>
         <field name="res_model">css.rms.requisition</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 View and manage all organization requisitions here.
@@ -106,7 +106,7 @@
         <field name="name">My Requisitions</field>
         <field name="type">ir.actions.act_window</field>
         <field name="res_model">css.rms.requisition</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="domain">[('user_id', '=', uid)]</field>
     </record>
 
