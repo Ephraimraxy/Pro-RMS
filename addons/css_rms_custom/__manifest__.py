@@ -13,6 +13,7 @@
     'depends': ['base', 'purchase_requisition', 'hr_expense'],
     'data': [
         'security/security.xml',
+        'security/ir_rule.xml',
         'security/ir.model.access.csv',
         'data/ir_sequence_data.xml',
         'data/rms_stage_data.xml',

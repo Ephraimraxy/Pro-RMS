@@ -79,15 +79,46 @@
         <field name="view_mode">tree</field>
     </record>
 
+    <record id="action_css_rms_requisition_to_approve" model="ir.actions.act_window">
+        <field name="name">To Approve</field>
+        <field name="res_model">css.rms.requisition</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('state', '=', 'pending')]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No requisitions pending your approval.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_css_rms_requisition_all" model="ir.actions.act_window">
+        <field name="name">All Requisitions</field>
+        <field name="res_model">css.rms.requisition</field>
+        <field name="view_mode">tree,form</field>
+        <field name="groups_id" eval="[(4, ref('group_rms_admin'))]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                View and manage all organization requisitions here.
+            </p>
+        </field>
+    </record>
+
     <record id="action_css_rms_requisition" model="ir.actions.act_window">
-        <field name="name">Requisitions</field>
+        <field name="name">My Requisitions</field>
         <field name="type">ir.actions.act_window</field>
         <field name="res_model">css.rms.requisition</field>
         <field name="view_mode">tree,form</field>
+        <field name="domain">[('user_id', '=', uid)]</field>
     </record>
 
     <menuitem id="menu_css_rms_root" name="Requisitions" web_icon="css_rms_custom,static/description/icon.png"/>
-    <menuitem id="menu_css_rms_requisition" name="My Requisitions" parent="menu_css_rms_root" sequence="10" action="action_css_rms_requisition"/>
-    <menuitem id="menu_css_rms_config" name="Configuration" parent="menu_css_rms_root" sequence="100"/>
+    <menuitem id="menu_css_rms_my" name="My Dashboard" parent="menu_css_rms_root" sequence="10"/>
+    <menuitem id="menu_css_rms_requisition" name="My Requests" parent="menu_css_rms_my" sequence="1" action="action_css_rms_requisition"/>
+    <menuitem id="menu_css_rms_to_approve" name="To Approve" parent="menu_css_rms_my" sequence="2" action="action_css_rms_requisition_to_approve"/>
+    
+    <menuitem id="menu_css_rms_management" name="Management" parent="menu_css_rms_root" sequence="20" groups="group_rms_admin,group_rms_audit,group_rms_gm,group_rms_chairman,group_rms_finance"/>
+    <menuitem id="menu_css_rms_all" name="All Requisitions" parent="menu_css_rms_management" sequence="1" action="action_css_rms_requisition_all"/>
+
+    <menuitem id="menu_css_rms_config" name="Configuration" parent="menu_css_rms_root" sequence="100" groups="group_rms_manager"/>
     <menuitem id="menu_css_rms_stage" name="Approval Stages" parent="menu_css_rms_config" action="action_css_rms_stage"/>
 </odoo>
