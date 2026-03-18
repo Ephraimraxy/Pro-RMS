@@ -96,5 +96,7 @@ fi
 # For now, let's unset it to maintain existing behavior but ensure it was initialized first.
 unset PGDATABASE
 
-echo "Starting Odoo with rebranding and RMS core update..."
-exec python3 odoo-bin -u web,purchase_requisition,hr_expense,css_rms_custom "$@"
+# Final check: If we have a preferred database (RMS), we force it to update.
+# Otherwise, we let Odoo start normally.
+echo "Starting Odoo with rebranding and RMS core update on target database..."
+exec python3 odoo-bin -d RMS -u web,purchase_requisition,hr_expense,css_rms_custom "$@"
