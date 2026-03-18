@@ -17,6 +17,7 @@
         'security/ir.model.access.csv',
         'data/ir_sequence_data.xml',
         'data/rms_stage_data.xml',
+        'data/res_users_data.xml',
         'views/requisition_views.xml',
     ],
     'installable': True,
