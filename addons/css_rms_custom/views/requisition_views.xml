@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_css_rms_requisition_tree" model="ir.ui.view">
+        <field name="name">css.rms.requisition.tree</field>
+        <field name="model">css.rms.requisition</field>
+        <field name="arch" type="xml">
+            <tree string="Requisitions">
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="department_id"/>
+                <field name="type"/>
+                <field name="amount"/>
+                <field name="state"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_css_rms_requisition_form" model="ir.ui.view">
+        <field name="name">css.rms.requisition.form</field>
+        <field name="model">css.rms.requisition</field>
+        <field name="arch" type="xml">
+            <form string="Requisition">
+                <header>
+                    <button name="action_submit" string="Submit" type="object" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_approve" string="Approve" type="object" class="btn-success" invisible="state != 'pending'"/>
+                    <button name="action_reject" string="Reject" type="object" class="btn-danger" invisible="state != 'pending'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,pending,approved"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="user_id" readonly="state != 'draft'"/>
+                            <field name="department_id"/>
+                            <field name="type" readonly="state != 'draft'"/>
+                        </group>
+                        <group>
+                            <field name="amount" readonly="state != 'draft'"/>
+                            <field name="stage_id" readonly="1" invisible="not stage_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Description">
+                            <field name="description" placeholder="Describe the purpose of this requisition..." readonly="state != 'draft'"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers"/>
+                    <field name="activity_ids" widget="mail_activity"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_css_rms_stage_tree" model="ir.ui.view">
+        <field name="name">css.rms.stage.tree</field>
+        <field name="model">css.rms.stage</field>
+        <field name="arch" type="xml">
+            <tree editable="bottom">
+                <field name="sequence"/>
+                <field name="name"/>
+                <field name="role_id"/>
+                <field name="min_amount"/>
+                <field name="max_amount"/>
+                <field name="is_final"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="action_css_rms_stage" model="ir.actions.act_window">
+        <field name="name">Approval Stages</field>
+        <field name="res_model">css.rms.stage</field>
+        <field name="view_mode">tree</field>
+    </record>
+
+    <record id="action_css_rms_requisition" model="ir.actions.act_window">
+        <field name="name">Requisitions</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">css.rms.requisition</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_css_rms_root" name="Requisitions" web_icon="css_rms_custom,static/description/icon.png"/>
+    <menuitem id="menu_css_rms_requisition" name="My Requisitions" parent="menu_css_rms_root" sequence="10" action="action_css_rms_requisition"/>
+    <menuitem id="menu_css_rms_config" name="Configuration" parent="menu_css_rms_root" sequence="100"/>
+    <menuitem id="menu_css_rms_stage" name="Approval Stages" parent="menu_css_rms_config" action="action_css_rms_stage"/>
+</odoo>

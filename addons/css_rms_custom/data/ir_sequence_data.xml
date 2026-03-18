@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="seq_css_rms_requisition" model="ir.sequence">
+            <field name="name">CSS-RMS Requisition</field>
+            <field name="code">css.rms.requisition</field>
+            <field name="prefix">RMS/%(year)s/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>

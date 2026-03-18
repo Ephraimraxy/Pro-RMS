@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_css_rms_requisition,css.rms.requisition,model_css_rms_requisition,base.group_user,1,1,1,1
+access_css_rms_stage,css.rms.stage,model_css_rms_stage,base.group_system,1,1,1,1
+access_css_rms_stage_user,css.rms.stage,model_css_rms_stage,base.group_user,1,0,0,0

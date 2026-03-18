@@ -96,5 +96,5 @@ fi
 # For now, let's unset it to maintain existing behavior but ensure it was initialized first.
 unset PGDATABASE
 
-echo "Starting Odoo with rebranding update..."
-exec python3 odoo-bin -u web "$@"
+echo "Starting Odoo with rebranding and RMS core update..."
+exec python3 odoo-bin -u web,purchase_requisition,hr_expense,css_rms_custom "$@"
