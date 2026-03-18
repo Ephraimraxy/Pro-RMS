@@ -35,7 +35,12 @@ class CssRmsRequisition(models.Model):
 
     stage_id = fields.Many2one('css.rms.stage', string='Current Approval Stage', tracking=True)
     user_id = fields.Many2one('res.users', string='Requested By', default=lambda self: self.env.user, required=True)
-    department_id = fields.Many2one('hr.department', string='Department', related='user_id.department_id', store=True)
+    department_id = fields.Many2one('hr.department', string='Department', compute='_compute_department', store=True)
+
+    @api.depends('user_id')
+    def _compute_department(self):
+        for rec in self:
+            rec.department_id = rec.user_id.employee_id.department_id if rec.user_id.employee_id else False
 
     @api.model
     def create(self, vals):
