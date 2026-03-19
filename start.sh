@@ -3,7 +3,6 @@ set -e
 
 # Parse DATABASE_URL into Odoo-compatible flags
 if [ -n "$DATABASE_URL" ]; then
-  # Extract components from postgresql://user:pass@host:port/dbname
   DB_USER=$(echo "$DATABASE_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
   DB_PASS=$(echo "$DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
   DB_HOST=$(echo "$DATABASE_URL" | sed -n 's|.*@\([^:]*\):.*|\1|p')
@@ -22,5 +21,4 @@ exec odoo \
   --http-interface="${HOST:-0.0.0.0}" \
   --proxy-mode \
   --workers="${ODOO_WORKERS:-0}" \
-  --admin-passwd="${ODOO_ADMIN_PASSWD:-admin}" \
   --without-demo=all
