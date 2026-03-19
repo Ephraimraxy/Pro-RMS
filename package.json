@@ -24,6 +24,6 @@
     "seed": "node rms_backend/prisma/seed.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }
