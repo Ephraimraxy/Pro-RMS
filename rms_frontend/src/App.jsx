@@ -5,6 +5,9 @@ import WorkflowBuilder from './components/WorkflowBuilder'
 import DepartmentManager from './components/DepartmentManager'
 import AuditLogs from './components/AuditLogs'
 import DocumentStudio from './components/DocumentStudio'
+import RequisitionsPage from './components/RequisitionsPage'
+import MemoManagement from './components/MemoManagement'
+import MyActivity from './components/MyActivity'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Wifi, WifiOff } from 'lucide-react'
 import { Toaster, toast } from 'react-hot-toast'
@@ -38,7 +41,6 @@ const NetworkProvider = ({ children }) => {
   return (
     <NetworkContext.Provider value={{ isOnline }}>
       {children}
-      {/* Universal Network Indicator Badge */}
       {!isOnline && (
         <div className="fixed bottom-20 lg:bottom-6 right-6 z-[100] bg-destructive/10 border border-destructive text-destructive px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 backdrop-blur-md">
           <WifiOff size={16} className="animate-pulse" />
@@ -74,6 +76,9 @@ const AppContent = () => {
 
   const views = {
     dashboard: <Dashboard onViewChange={setCurrentView} />,
+    requisitions: <RequisitionsPage onViewChange={setCurrentView} />,
+    memos: <MemoManagement onViewChange={setCurrentView} />,
+    activity: <MyActivity onViewChange={setCurrentView} />,
     workflow_builder: <WorkflowBuilder onViewChange={setCurrentView} />,
     department_manager: <DepartmentManager onViewChange={setCurrentView} />,
     audit_logs: <AuditLogs onViewChange={setCurrentView} />,

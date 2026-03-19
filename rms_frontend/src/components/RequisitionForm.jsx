@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Upload, Send, Save, CreditCard, Package, FileText } from 'lucide-react';
+import { addRequisition } from '../lib/store';
 
 const RequisitionForm = ({ isOpen, onClose, user }) => {
   const [type, setType] = useState('cash'); // cash, material, memo
@@ -7,16 +8,19 @@ const RequisitionForm = ({ isOpen, onClose, user }) => {
     description: '',
     amount: '',
     department: user?.department_id?.[1] || 'General',
-    notes: ''
+    notes: '',
+    urgency: 'normal'
   });
   const [files, setFiles] = useState([]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e, isDraft = false) => {
+  const handleSubmit = async (e, isDraft = false) => {
     e.preventDefault();
-    console.log("Submitting Requisition:", { ...formData, type, isDraft, files });
-    // TODO: Node.js REST API call or Offline SQLite save
+    const typeMap = { cash: 'Cash', material: 'Material', memo: 'Memo' };
+    await addRequisition({ ...formData, type: typeMap[type], isDraft, createdBy: user?.name || 'Administrator' });
+    setFormData({ description: '', amount: '', department: user?.department_id?.[1] || 'General', notes: '', urgency: 'normal' });
+    setType('cash');
     onClose();
   };
 

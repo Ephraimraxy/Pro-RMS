@@ -62,9 +62,9 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
           <div className="space-y-1">
             <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 mt-2">Main Navigation</p>
             <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} />
-            <SidebarItem icon={FileText} label="Memo Management" />
-            <SidebarItem icon={ClipboardCheck} label="Requisitions" />
-            <SidebarItem icon={History} label="My Activity" />
+            <SidebarItem icon={FileText} label="Memo Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} />
+            <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} />
+            <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} />
             <SidebarItem icon={PenTool} label="Document Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} />
           </div>
 
@@ -86,7 +86,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       {/* Mobile Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-border/50 lg:hidden flex items-center justify-around px-2 py-3 z-[100] shadow-[0_-4px_24px_rgba(0,0,0,0.05)] pb-safe">
         <SidebarItem icon={LayoutDashboard} label="Overview" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
-        <SidebarItem icon={ClipboardCheck} label="Requests" mobile />
+        <SidebarItem icon={ClipboardCheck} label="Requests" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
         <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} mobile />
         <SidebarItem icon={Settings} label="Admin" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
         <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} mobile />
