@@ -20,12 +20,12 @@ async function ensureInitialized() {
 
   // CRITICAL: Clear out old mock data from previous sessions if they exist
   const dbVersion = await localforage.getItem('rms_db_version');
-  if (dbVersion !== '2.0') {
+  if (dbVersion !== '2.1') {
     await requisitionStore.clear();
     await activityStore.clear();
     await workflowStore.clear();
     await departmentStore.clear();
-    await localforage.setItem('rms_db_version', '2.0');
+    await localforage.setItem('rms_db_version', '2.1');
   }
 
   const existing = await requisitionStore.getItem('all');
@@ -44,17 +44,44 @@ async function ensureInitialized() {
       { id: 3, sequence: 3, name: 'Management Approval', role: 'GM', threshold: 500000 },
     ]);
   }
-  const existingDepts = await departmentStore.getItem('all');
-  if (!existingDepts) {
-    // Initial core departments
-    await departmentStore.setItem('all', [
-      { id: 1, name: 'Hatchery', type: 'Operational', accessCode: 'HATCH-2026' },
-      { id: 2, name: 'Poultry', type: 'Operational', accessCode: 'POULT-2026' },
-      { id: 3, name: 'QA/QC', type: 'Strategic', accessCode: 'QAQC-2026' },
-      { id: 4, name: 'Logistics', type: 'Operational', accessCode: 'LOG-2026' },
-      { id: 5, name: 'HR Department', type: 'Strategic', accessCode: 'HR-2026' },
-    ]);
-  }
+    const existingDepts = await departmentStore.getItem('all');
+    if (!existingDepts || existingDepts.length < 32) {
+      // Full 32-department corporate hierarchy
+      await departmentStore.setItem('all', [
+        { id: 1, name: 'Hatchery Management', type: 'Strategic', accessCode: 'HATCH-2026' },
+        { id: 2, name: 'Poultry Operations', type: 'Strategic', accessCode: 'POULT-2026' },
+        { id: 3, name: 'QA/QC', type: 'Strategic', accessCode: 'QAQC-2026' },
+        { id: 4, name: 'HR Department', type: 'Strategic', accessCode: 'HR-2026' },
+        { id: 5, name: 'Finance & Accounts', type: 'Strategic', accessCode: 'FIN-2026' },
+        { id: 6, name: 'Internal Audit', type: 'Strategic', accessCode: 'AUD-2026' },
+        { id: 7, name: 'Strategy & Growth', type: 'Strategic', accessCode: 'STRAT-2026' },
+        { id: 8, name: 'Legal & Compliance', type: 'Strategic', accessCode: 'LEGAL-2026' },
+        { id: 9, name: 'Logistics & Supply Chain', type: 'Operational', accessCode: 'LOG-2026' },
+        { id: 10, name: 'Procurement', type: 'Operational', accessCode: 'PROC-2026' },
+        { id: 11, name: 'Security Services', type: 'Operational', accessCode: 'SEC-2026' },
+        { id: 12, name: 'Facilities Management', type: 'Operational', accessCode: 'FAC-2026' },
+        { id: 13, name: 'ICT & Digital', type: 'Operational', accessCode: 'ICT-2026' },
+        { id: 14, name: 'Marketing', type: 'Operational', accessCode: 'MKT-2026' },
+        { id: 15, name: 'Sales & Distribution', type: 'Operational', accessCode: 'SALES-2026' },
+        { id: 16, name: 'Customer Experience', type: 'Operational', accessCode: 'CUST-2026' },
+        { id: 17, name: 'Research & Development', type: 'Operational', accessCode: 'RND-2026' },
+        { id: 18, name: 'Warehouse Alpha', type: 'Operational', accessCode: 'WHA-2026' },
+        { id: 19, name: 'Warehouse Beta', type: 'Operational', accessCode: 'WHB-2026' },
+        { id: 20, name: 'Technical Maintenance', type: 'Operational', accessCode: 'MAINT-2026' },
+        { id: 21, name: 'Power & Utilities', type: 'Operational', accessCode: 'POW-2026' },
+        { id: 22, name: 'Water Treatment', type: 'Operational', accessCode: 'WAT-2026' },
+        { id: 23, name: 'Waste Management', type: 'Operational', accessCode: 'WST-2026' },
+        { id: 24, name: 'Health & Safety (HSE)', type: 'Operational', accessCode: 'HSE-2026' },
+        { id: 25, name: 'Fleet Management', type: 'Operational', accessCode: 'FLEET-2026' },
+        { id: 26, name: 'Inventory Control', type: 'Operational', accessCode: 'INV-2026' },
+        { id: 27, name: 'Hospitality Services', type: 'Operational', accessCode: 'HOS-2026' },
+        { id: 28, name: 'Agro-Allied Projects', type: 'Operational', accessCode: 'AGRO-2026' },
+        { id: 29, name: 'Environmental Services', type: 'Operational', accessCode: 'ENV-2026' },
+        { id: 30, name: 'Special Projects (A)', type: 'Operational', accessCode: 'SPA-2026' },
+        { id: 31, name: 'Special Projects (B)', type: 'Operational', accessCode: 'SPB-2026' },
+        { id: 32, name: 'Corporate Secretariate', type: 'Strategic', accessCode: 'CORP-2026' },
+      ]);
+    }
   _initialized = true;
 }
 
