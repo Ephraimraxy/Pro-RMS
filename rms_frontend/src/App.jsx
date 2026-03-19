@@ -48,8 +48,6 @@ const NetworkProvider = ({ children }) => {
   return (
     <NetworkContext.Provider value={{ isOnline }}>
       {children}
-    <NetworkContext.Provider value={{ isOnline }}>
-      {children}
       <div className={`fixed bottom-20 lg:bottom-6 right-6 z-[100] px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 backdrop-blur-md border transition-all duration-500 ${
         isOnline 
           ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
