@@ -6,14 +6,8 @@ import React from 'react';
 const requisitionStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'requisitions' });
 const activityStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'activity' });
 
-// ── Seed data (loaded on first use) ──
-const SEED_REQUISITIONS = [
-  { id: 'REQ-2026-001', type: 'Cash', title: 'Office Supplies Reimbursement', amount: 45000, department: 'Hatchery', status: 'pending', urgency: 'normal', description: 'Reimbursement for office supplies purchased for Q1 operations.', createdBy: 'Administrator', createdAt: '2026-03-19T08:00:00Z' },
-  { id: 'REQ-2026-002', type: 'Material', title: 'Printer Toner Cartridges (10 units)', amount: 120000, department: 'Poultry', status: 'pending', urgency: 'urgent', description: '10 HP LaserJet toner cartridges for the poultry admin block.', createdBy: 'Administrator', createdAt: '2026-03-19T07:30:00Z' },
-  { id: 'REQ-2026-003', type: 'Memo', title: 'Request for Policy Review Meeting', amount: null, department: 'HR Department', status: 'approved', urgency: 'normal', description: 'Memo requesting a quarterly policy review meeting with department heads.', createdBy: 'Administrator', createdAt: '2026-03-18T14:00:00Z' },
-  { id: 'REQ-2026-004', type: 'Cash', title: 'Vehicle Maintenance', amount: 350000, department: 'Logistics', status: 'rejected', urgency: 'critical', description: 'Emergency brake repair for delivery truck #14.', createdBy: 'Staff User', createdAt: '2026-03-17T10:00:00Z' },
-  { id: 'REQ-2026-005', type: 'Material', title: 'PPE Kits (50 units)', amount: 200000, department: 'QA/QC', status: 'pending', urgency: 'normal', description: 'Personal protective equipment kits for field inspection team.', createdBy: 'Administrator', createdAt: '2026-03-19T09:15:00Z' },
-];
+// ── Seed data (Empty for Real Live Usage) ──
+const SEED_REQUISITIONS = [];
 
 // ── Initialize store with seed data ──
 let _initialized = false;
@@ -25,9 +19,7 @@ async function ensureInitialized() {
   }
   const existingActivity = await activityStore.getItem('log');
   if (!existingActivity) {
-    await activityStore.setItem('log', [
-      { id: 1, action: 'Logged In', detail: 'Administrator logged into the portal', timestamp: new Date().toISOString() },
-    ]);
+    await activityStore.setItem('log', []);
   }
   _initialized = true;
 }

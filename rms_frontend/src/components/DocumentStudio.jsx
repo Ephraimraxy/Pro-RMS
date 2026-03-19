@@ -93,13 +93,15 @@ const RichTextEditor = () => {
 
   // Load from offline storage sequentially
   useEffect(() => {
-    localforage.getItem('rms_doc_draft').then(draft => {
-      if (draft) {
-        setTitle(draft.title || 'Untitled Document');
-        setContent(draft.content || '');
-      }
-      setIsLoaded(true);
-    });
+    localforage.getItem('rms_doc_draft')
+      .then(draft => {
+        if (draft) {
+          setTitle(draft.title || 'Untitled Document');
+          setContent(draft.content || '');
+        }
+      })
+      .catch(err => console.error("Draft load failed:", err))
+      .finally(() => setIsLoaded(true));
   }, []);
 
   // Autosave when data changes sequentially
@@ -196,14 +198,23 @@ const RichTextEditor = () => {
           <h2 className="text-lg font-bold text-foreground">{title}</h2>
           <p className="text-[10px] text-muted-foreground font-mono mt-1">CSS Group Holding — Internal Document</p>
         </div>
-        <ReactQuill
-          theme="snow"
-          value={content}
-          onChange={setContent}
-          modules={quillModules}
-          placeholder="Start typing your document content here..."
-          className="rms-quill-editor relative z-10"
-        />
+        {typeof ReactQuill === 'function' ? (
+          <ReactQuill
+            theme="snow"
+            value={content}
+            onChange={setContent}
+            modules={quillModules}
+            placeholder="Start typing your document content here..."
+            className="rms-quill-editor relative z-10"
+          />
+        ) : (
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full h-[500px] p-4 border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none font-sans text-sm"
+            placeholder="Start typing your document content here..."
+          />
+        )}
       </div>
     </div>
   );
@@ -225,14 +236,16 @@ const SpreadsheetEditor = () => {
 
   // Load from offline storage
   useEffect(() => {
-    localforage.getItem('rms_sheet_draft').then(draft => {
-      if (draft) {
-        setTitle(draft.title || 'Untitled Spreadsheet');
-        setColumns(draft.columns || ['Item', 'Description', 'Quantity', 'Unit Price (₦)', 'Total (₦)']);
-        setRows(draft.rows || [['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']]);
-      }
-      setIsLoaded(true);
-    });
+    localforage.getItem('rms_sheet_draft')
+      .then(draft => {
+        if (draft) {
+          setTitle(draft.title || 'Untitled Spreadsheet');
+          setColumns(draft.columns || ['Item', 'Description', 'Quantity', 'Unit Price (₦)', 'Total (₦)']);
+          setRows(draft.rows || [['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']]);
+        }
+      })
+      .catch(err => console.error("Sheet draft load failed:", err))
+      .finally(() => setIsLoaded(true));
   }, []);
 
   // Autosave
