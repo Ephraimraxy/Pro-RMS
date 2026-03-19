@@ -10,15 +10,19 @@ if [ -n "$DATABASE_URL" ]; then
   DB_NAME=$(echo "$DATABASE_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
 fi
 
+# Official odoo:19 image has addons at /usr/lib/python3/dist-packages/odoo/addons
+# Custom addons go to /mnt/extra-addons (mounted in official image)
+ADDONS_PATH="/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons"
+
 exec odoo \
   --db_host="${DB_HOST:-localhost}" \
   --db_port="${DB_PORT:-5432}" \
   --db_user="${DB_USER:-odoo}" \
   --db_password="${DB_PASS:-odoo}" \
   --database="${DB_NAME:-RMS}" \
-  --addons-path="${ODOO_ADDONS_PATH:-/opt/odoo/odoo/addons,/opt/odoo/addons}" \
+  --addons-path="$ADDONS_PATH" \
   --http-port="${PORT:-8069}" \
   --http-interface="${HOST:-0.0.0.0}" \
   --proxy-mode \
   --workers="${ODOO_WORKERS:-0}" \
-  --without-demo=all
+  --without-demo
