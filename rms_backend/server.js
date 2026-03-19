@@ -31,31 +31,68 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    // In a real app, verify against DB. For now, matching the frontend's mock logic:
-    if (email === 'admin' && password === 'admin') {
-      const user = {
-        id: 1,
-        email: 'admin@cssgroup.local',
-        name: 'Administrator',
-        role: 'global_admin',
-        department: 'Operations',
-      };
-      
-      const token = jwt.sign(user, process.env.JWT_SECRET || 'fallback_secret_key', { expiresIn: '12h' });
-      return res.json({ token, user });
-    }
-    
-    // DB check (uncomment when DB is seeded)
-    /*
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ 
+      where: { email },
+      include: { department: true }
+    });
+
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role, department: user.departmentId }, process.env.JWT_SECRET, { expiresIn: '12h' });
-    return res.json({ token, user: { ...user, password: undefined } });
-    */
+    
+    const userData = { 
+      id: user.id, 
+      email: user.email, 
+      name: user.name, 
+      role: user.role, 
+      department: user.department?.name || 'General' 
+    };
 
-    res.status(401).json({ error: 'Invalid credentials' });
+    const token = jwt.sign(userData, process.env.JWT_SECRET || 'fallback_secret_key', { expiresIn: '12h' });
+    
+    await prisma.activityLog.create({
+      data: {
+        action: 'Logged In',
+        details: `${user.name} (Admin) authenticated`,
+        userId: user.id
+      }
+    });
+
+    return res.json({ token, user: userData });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/dept-login', async (req, res) => {
+  try {
+    const { departmentName, accessCode } = req.body;
+    
+    const dept = await prisma.department.findFirst({
+      where: { name: departmentName, accessCode }
+    });
+
+    if (!dept) return res.status(401).json({ error: 'Invalid Department or Access Code' });
+    
+    const userData = {
+      id: `dept_${dept.id}`,
+      name: dept.name,
+      role: 'department',
+      deptId: dept.id,
+      email: `${dept.name.toLowerCase().replace(/\s/g, '')}@cssgroup.local`
+    };
+
+    const token = jwt.sign(userData, process.env.JWT_SECRET || 'fallback_secret_key', { expiresIn: '12h' });
+    
+    await prisma.activityLog.create({
+      data: {
+        action: 'Dept Logged In',
+        details: `${dept.name} unit authenticated`,
+      }
+    });
+
+    return res.json({ token, user: userData });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -66,11 +103,10 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 });
 
 // ── DEPARTMENTS ROUTES ──
-app.get('/api/departments', authenticateToken, async (req, res) => {
+app.get('/api/departments', async (req, res) => {
   try {
-    // Return all 32 departments and their hierarchies
     const departments = await prisma.department.findMany({
-      include: { subDepartments: true }
+      orderBy: { name: 'asc' }
     });
     res.json(departments);
   } catch (error) {
@@ -82,19 +118,21 @@ app.get('/api/departments', authenticateToken, async (req, res) => {
 app.post('/api/requisitions', authenticateToken, async (req, res) => {
   try {
     const reqData = req.body;
-    // reqData might be a single requisition or an array of sync drafts
     const items = Array.isArray(reqData) ? reqData : [reqData];
+    
+    // Convert string creator ID from token to Int if it's not a department
+    const creatorId = typeof req.user.id === 'number' ? req.user.id : null;
     
     const created = await prisma.$transaction(
       items.map(item => prisma.requisition.create({
         data: {
-          title: item.title,
-          type: item.type,
-          amount: item.amount,
-          description: item.description,
+          title: item.title || item.description,
+          type: item.type || 'Cash',
+          amount: parseFloat(item.amount) || 0,
+          description: item.description || '',
           status: 'pending',
-          departmentId: item.departmentId,
-          creatorId: req.user.id
+          departmentId: item.departmentId || req.user.deptId || 1, // Fallback to user's dept
+          creatorId: creatorId || 1 // Fallback to system admin for dept logins for now
         }
       }))
     );
@@ -108,9 +146,27 @@ app.post('/api/requisitions', authenticateToken, async (req, res) => {
 app.get('/api/requisitions', authenticateToken, async (req, res) => {
   try {
     const records = await prisma.requisition.findMany({
+      include: { 
+        department: { select: { name: true } },
+        creator: { select: { name: true } }
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(records);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── AUDIT LOGS ──
+app.get('/api/audit-logs', authenticateToken, async (req, res) => {
+  try {
+    const logs = await prisma.activityLog.findMany({
+      include: { user: { select: { name: true } } },
+      orderBy: { timestamp: 'desc' },
+      take: 100
+    });
+    res.json(logs);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

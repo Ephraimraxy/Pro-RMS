@@ -19,20 +19,24 @@ model User {
   departmentId Int?
   department   Department?   @relation(fields: [departmentId], references: [id])
   requisitions Requisition[]
+  memos        Memo[]
+  activityLogs ActivityLog[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
 
 model Department {
   id             Int           @id @default(autoincrement())
-  code           String        @unique // e.g., "H" for Hatchery, "P" for Poultry
-  name           String
-  type           String        @default("Operational Unit") // "Strategic Control", "Operational Unit", "Special Project"
+  code           String?       @unique // Optional short code
+  name           String        @unique
+  type           String        @default("Operational") // "Strategic", "Operational"
+  accessCode     String?       // For departmental login
   parentId       Int?
   parent         Department?   @relation("Hierarchy", fields: [parentId], references: [id])
   subDepartments Department[]  @relation("Hierarchy")
   users          User[]
   requisitions   Requisition[]
+  memos          Memo[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 }
@@ -50,4 +54,26 @@ model Requisition {
   department   Department @relation(fields: [departmentId], references: [id])
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+model Memo {
+  id           Int        @id @default(autoincrement())
+  title        String
+  content      String     @db.Text
+  status       String     @default("draft") // "draft", "published", "archived"
+  creatorId    Int
+  creator      User       @relation(fields: [creatorId], references: [id])
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  details   String
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  timestamp DateTime @default(now())
 }
