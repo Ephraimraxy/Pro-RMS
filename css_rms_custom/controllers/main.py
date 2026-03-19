@@ -3,7 +3,7 @@ from odoo import http
 from odoo.http import request
 from odoo.modules.module import get_resource_path
 
-class RMS ReactPortal(http.Controller):
+class RMSReactPortal(http.Controller):
     # Intercept the root route and any arbitrary client-side React routes
     @http.route(['/', '/app', '/app/<path:path>'], type='http', auth="none", website=True, sitemap=False, priority=1)
     def serve_react_app(self, **kw):
