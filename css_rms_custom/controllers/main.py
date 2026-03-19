@@ -1,14 +1,13 @@
 import os
 from odoo import http
 from odoo.http import request
-from odoo.modules.module import get_module_resource
-
 class RMSReactPortal(http.Controller):
     # Intercept the root route and any arbitrary client-side React routes
     @http.route(['/', '/app', '/app/<path:path>'], type='http', auth="none", website=True, sitemap=False, priority=1)
     def serve_react_app(self, **kw):
-        # Locate the compiled React index.html within this module's static folder
-        index_path = get_module_resource('css_rms_custom', 'static', 'react', 'index.html')
+        # Dynamically compute path to avoid Odoo 19 import restructuring issues
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        index_path = os.path.join(base_dir, 'static', 'react', 'index.html')
         
         if not index_path or not os.path.exists(index_path):
             return request.redirect('/web') # Fallback to standard Odoo if React build is missing
