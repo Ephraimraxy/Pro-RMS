@@ -73,15 +73,25 @@ const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
   );
 };
 
+import { getWorkflows, updateWorkflows } from '../lib/store';
+import { toast } from 'react-hot-toast';
+
 const WorkflowBuilder = ({ onViewChange }) => {
   const { user } = useAuth();
-  const [stages, setStages] = useState([
-    { id: 1, sequence: 1, name: 'Admin Review', role: 'Admin', threshold: 0 },
-    { id: 2, sequence: 2, name: 'Internal Audit', role: 'Audit', threshold: 0 },
-    { id: 3, sequence: 3, name: 'Management Approval', role: 'GM', threshold: 500000 },
-  ]);
+  const [stages, setStages] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const addStage = () => {
+  const loadStages = async () => {
+    const data = await getWorkflows();
+    setStages(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadStages();
+  }, []);
+
+  const addStage = async () => {
     const newStage = {
       id: Date.now(),
       sequence: stages.length + 1,
@@ -89,16 +99,26 @@ const WorkflowBuilder = ({ onViewChange }) => {
       role: 'Admin',
       threshold: 0
     };
-    setStages([...stages, newStage]);
+    const updated = [...stages, newStage];
+    setStages(updated);
+    await updateWorkflows(updated);
+    toast.success('New stage added to workflow');
   };
 
-  const updateStage = (updatedStage) => {
-    setStages(stages.map(s => s.id === updatedStage.id ? updatedStage : s));
+  const updateStage = async (updatedStage) => {
+    const updated = stages.map(s => s.id === updatedStage.id ? updatedStage : s);
+    setStages(updated);
+    await updateWorkflows(updated);
   };
 
-  const deleteStage = (id) => {
-    setStages(stages.filter(s => s.id !== id).map((s, idx) => ({ ...s, sequence: idx + 1 })));
+  const deleteStage = async (id) => {
+    const updated = stages.filter(s => s.id !== id).map((s, idx) => ({ ...s, sequence: idx + 1 }));
+    setStages(updated);
+    await updateWorkflows(updated);
+    toast.error('Stage removed');
   };
+
+  if (loading) return <div className="p-20 text-center animate-pulse text-muted-foreground font-mono text-xs">Loading Workflow Governance...</div>;
 
   return (
     <Layout user={user} currentView="workflow_builder" onViewChange={onViewChange}>

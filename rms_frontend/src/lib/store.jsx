@@ -5,6 +5,8 @@ import React from 'react';
 // ── Configure storage namespaces ──
 const requisitionStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'requisitions' });
 const activityStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'activity' });
+const workflowStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'workflows' });
+const departmentStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'departments' });
 
 // ── Seed data (Empty for Real Live Usage) ──
 const SEED_REQUISITIONS = [];
@@ -13,13 +15,42 @@ const SEED_REQUISITIONS = [];
 let _initialized = false;
 async function ensureInitialized() {
   if (_initialized) return;
+
+  // CRITICAL: Clear out old mock data from previous sessions if they exist
+  const dbVersion = await localforage.getItem('rms_db_version');
+  if (dbVersion !== '2.0') {
+    await requisitionStore.clear();
+    await activityStore.clear();
+    await workflowStore.clear();
+    await departmentStore.clear();
+    await localforage.setItem('rms_db_version', '2.0');
+  }
+
   const existing = await requisitionStore.getItem('all');
   if (!existing || existing.length === 0) {
     await requisitionStore.setItem('all', SEED_REQUISITIONS);
   }
-  const existingActivity = await activityStore.getItem('log');
   if (!existingActivity) {
     await activityStore.setItem('log', []);
+  }
+  const existingWorkflows = await workflowStore.getItem('all');
+  if (!existingWorkflows) {
+    await workflowStore.setItem('all', [
+      { id: 1, sequence: 1, name: 'Admin Review', role: 'Admin', threshold: 0 },
+      { id: 2, sequence: 2, name: 'Internal Audit', role: 'Audit', threshold: 0 },
+      { id: 3, sequence: 3, name: 'Management Approval', role: 'GM', threshold: 500000 },
+    ]);
+  }
+  const existingDepts = await departmentStore.getItem('all');
+  if (!existingDepts) {
+    // Initial core departments
+    await departmentStore.setItem('all', [
+      { id: 1, name: 'Hatchery', type: 'Operational' },
+      { id: 2, name: 'Poultry', type: 'Operational' },
+      { id: 3, name: 'QA/QC', type: 'Strategic' },
+      { id: 4, name: 'Logistics', type: 'Operational' },
+      { id: 5, name: 'HR Department', type: 'Strategic' },
+    ]);
   }
   _initialized = true;
 }
@@ -93,4 +124,40 @@ export async function logActivity(action, detail) {
 export async function getActivityLog() {
   await ensureInitialized();
   return (await activityStore.getItem('log')) || [];
+}
+
+// ── Workflow CRUD ──
+export async function getWorkflows() {
+  await ensureInitialized();
+  return (await workflowStore.getItem('all')) || [];
+}
+
+export async function updateWorkflows(stages) {
+  await ensureInitialized();
+  await workflowStore.setItem('all', stages);
+  await logActivity('Workflow Updated', `Reconfigured approval chain with ${stages.length} stages`);
+}
+
+// ── Department CRUD ──
+export async function getDepartments() {
+  await ensureInitialized();
+  return (await departmentStore.getItem('all')) || [];
+}
+
+export async function addDepartment(dept) {
+  await ensureInitialized();
+  const all = await getDepartments();
+  const newDept = { id: Date.now(), ...dept };
+  all.push(newDept);
+  await departmentStore.setItem('all', all);
+  await logActivity('Department Added', `${newDept.name} added to ${newDept.type}`);
+  return newDept;
+}
+
+export async function deleteDepartment(id) {
+  await ensureInitialized();
+  const all = await getDepartments();
+  const filtered = all.filter(d => d.id !== id);
+  await departmentStore.setItem('all', filtered);
+  await logActivity('Department Deleted', `ID: ${id} removed from system`);
 }

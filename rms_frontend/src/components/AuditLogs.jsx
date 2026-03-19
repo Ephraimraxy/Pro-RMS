@@ -20,11 +20,11 @@ const AuditLogEntry = ({ user, action, type, details, date }) => {
       <div className="flex-1">
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
-            {user} <span className="text-muted-foreground font-medium font-sans">performed</span> {action}
+            {action}
           </p>
           <span className="text-[10px] text-muted-foreground font-mono flex items-center space-x-1 uppercase">
             <Clock size={10} />
-            <span>{date}</span>
+            <span>{new Date(date).toLocaleString()}</span>
           </span>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">{details}</p>
@@ -33,16 +33,23 @@ const AuditLogEntry = ({ user, action, type, details, date }) => {
   );
 };
 
+import { getActivityLog } from '../lib/store';
+
 const AuditLogs = ({ onViewChange }) => {
   const { user } = useAuth();
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const logs = [
-    { user: 'Admin Account', action: 'Policy Update', type: 'security', details: 'Updated the GM approval threshold from ₦500,000 to ₦1,000,000.', date: 'Today, 10:45 AM' },
-    { user: 'Auditor (wuseberger@gmail.com)', action: 'Requisition Approval', type: 'approval', details: 'Approved REQ-2026-001 with comments: "Necessary for operation."', date: 'Today, 09:12 AM' },
-    { user: 'System', action: 'Session Cleared', type: 'system', details: 'Auto-expired 4 sessions older than 24 hours.', date: 'Today, 00:01 AM' },
-    { user: 'GM (Director)', action: 'High-Value Rejection', type: 'rejection', details: 'Rejected REQ-2026-005. Reason: "Exceeds monthly departmental budget."', date: 'Yesterday, 14:20 PM' },
-    { user: 'Security Module', action: 'MFA Success', type: 'security', details: 'Global Admin successfully authenticated via MFA.', date: 'Yesterday, 08:00 AM' },
-  ];
+  useEffect(() => {
+    const loadLogs = async () => {
+      const data = await getActivityLog();
+      setLogs(data);
+      setLoading(false);
+    };
+    loadLogs();
+  }, []);
+
+  if (loading) return <div className="p-20 text-center animate-pulse text-muted-foreground font-mono text-xs">Accessing Immutable Ledger...</div>;
 
   return (
     <Layout user={user} currentView="audit_logs" onViewChange={onViewChange}>
@@ -61,8 +68,10 @@ const AuditLogs = ({ onViewChange }) => {
         </div>
 
         <div className="glass bg-white/60 rounded-3xl border border-border/50 overflow-hidden shadow-md divide-y divide-border/50">
-          {logs.map((log, idx) => (
-            <AuditLogEntry key={idx} {...log} />
+          {logs.length === 0 ? (
+            <div className="p-12 text-center text-muted-foreground text-sm font-medium italic">No activity recorded yet.</div>
+          ) : logs.map((log, idx) => (
+            <AuditLogEntry key={idx} action={log.action} type="system" details={log.detail} date={log.timestamp} />
           ))}
         </div>
         

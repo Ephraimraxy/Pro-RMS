@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Layout from './Layout';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+// Removed react-quill due to React 19 findDOMNode compatibility issues
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
@@ -193,28 +192,28 @@ const RichTextEditor = () => {
       </div>
 
       {/* Printable Area */}
-      <div ref={printRef} className="glass bg-white border border-border/50 rounded-2xl p-8 min-h-[600px] shadow-sm relative z-10">
-        <div className="mb-6 pb-4 border-b border-border/50">
-          <h2 className="text-lg font-bold text-foreground">{title}</h2>
-          <p className="text-[10px] text-muted-foreground font-mono mt-1">CSS Group Holding — Internal Document</p>
+      <div ref={printRef} className="glass bg-white border border-border/50 rounded-2xl p-0 min-h-[600px] shadow-sm relative z-10 overflow-hidden flex flex-col">
+        {/* Simple Toolbar */}
+        <div className="bg-muted/30 border-b border-border/50 p-2 flex items-center space-x-2">
+          <div className="px-3 py-1 bg-white rounded-md text-[10px] font-bold text-muted-foreground border border-border/50">Normal Text</div>
+          <div className="w-px h-4 bg-border mx-1"></div>
+          <button className="p-1 px-2 hover:bg-white rounded text-xs font-bold font-serif">B</button>
+          <button className="p-1 px-2 hover:bg-white rounded text-xs italic font-serif">I</button>
+          <button className="p-1 px-2 hover:bg-white rounded text-xs underline font-serif">U</button>
         </div>
-        {typeof ReactQuill === 'function' ? (
-          <ReactQuill
-            theme="snow"
-            value={content}
-            onChange={setContent}
-            modules={quillModules}
-            placeholder="Start typing your document content here..."
-            className="rms-quill-editor relative z-10"
-          />
-        ) : (
+        
+        <div className="p-8 flex-1 flex flex-col">
+          <div className="mb-6 pb-4 border-b border-border/50">
+            <h2 className="text-lg font-bold text-foreground">{title}</h2>
+            <p className="text-[10px] text-muted-foreground font-mono mt-1">CSS Group Holding — Internal Document</p>
+          </div>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full h-[500px] p-4 border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none font-sans text-sm"
             placeholder="Start typing your document content here..."
+            className="w-full flex-1 bg-transparent border-none outline-none resize-none font-sans text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/30"
           />
-        )}
+        </div>
       </div>
     </div>
   );

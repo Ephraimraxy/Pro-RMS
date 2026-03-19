@@ -28,16 +28,46 @@ const DeptItem = ({ name, type, onDelete }) => (
   </div>
 );
 
+import { getDepartments, addDepartment, deleteDepartment } from '../lib/store';
+import { toast } from 'react-hot-toast';
+
 const DepartmentManager = ({ onViewChange }) => {
   const { user } = useAuth();
-  const [strategic, setStrategic] = useState(CORPORATE_HIERARCHY.strategic);
-  const [operational, setOperational] = useState(CORPORATE_HIERARCHY.operational);
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const deleteDept = (name, type) => {
-    if (type === 'Strategic') setStrategic(strategic.filter(d => d !== name));
-    else setOperational(operational.filter(d => d !== name));
+  const loadDepts = async () => {
+    const data = await getDepartments();
+    setDepartments(data);
+    setLoading(false);
   };
+
+  useEffect(() => {
+    loadDepts();
+  }, []);
+
+  const handleAdd = async () => {
+    const name = prompt("Enter Department Name:");
+    if (!name) return;
+    const type = confirm("Is this a Strategic department? (Cancel for Operational)") ? "Strategic" : "Operational";
+    
+    await addDepartment({ name, type });
+    await loadDepts();
+    toast.success(`${name} Department added`);
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!confirm(`Are you sure you want to delete the ${name} department?`)) return;
+    await deleteDepartment(id);
+    await loadDepts();
+    toast.error(`${name} Department removed`);
+  };
+
+  const strategic = departments.filter(d => d.type === 'Strategic');
+  const operational = departments.filter(d => d.type === 'Operational');
+
+  if (loading) return <div className="p-20 text-center animate-pulse text-muted-foreground font-mono text-xs">Syncing Corporate Hierarchy...</div>;
 
   return (
     <Layout user={user} currentView="department_manager" onViewChange={onViewChange}>
@@ -64,7 +94,10 @@ const DepartmentManager = ({ onViewChange }) => {
                 className="bg-white/80 border border-border/50 rounded-xl py-3 pl-12 pr-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 w-64 shadow-sm transition-all"
               />
             </div>
-            <button className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center space-x-2">
+            <button 
+              onClick={handleAdd}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center space-x-2"
+            >
               <Plus size={18} />
               <span>Add Department</span>
             </button>
@@ -79,8 +112,8 @@ const DepartmentManager = ({ onViewChange }) => {
                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{strategic.length} Total</span>
             </div>
             <div className="grid gap-4">
-              {strategic.filter(d => d.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                <DeptItem key={dept} name={dept} type="Strategic" onDelete={() => deleteDept(dept, 'Strategic')} />
+              {strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
+                <DeptItem key={dept.id} name={dept.name} type="Strategic" onDelete={() => handleDelete(dept.id, dept.name)} />
               ))}
             </div>
           </div>
@@ -92,8 +125,8 @@ const DepartmentManager = ({ onViewChange }) => {
                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{operational.length} Total</span>
             </div>
             <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-              {operational.filter(d => d.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                <DeptItem key={dept} name={dept} type="Operational" onDelete={() => deleteDept(dept, 'Operational')} />
+              {operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
+                <DeptItem key={dept.id} name={dept.name} type="Operational" onDelete={() => handleDelete(dept.id, dept.name)} />
               ))}
             </div>
           </div>
