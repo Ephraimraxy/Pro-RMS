@@ -82,7 +82,7 @@ const Login = () => {
 
           <div className="mb-7">
             <h2 className="text-lg font-semibold text-foreground">Welcome back</h2>
-            <p className="text-sm text-muted-foreground mt-1">Authenticate to access your portal</p>
+            <p className="text-sm text-muted-foreground mt-1">Authenticate to access your Dashboard</p>
           </div>
 
           {error && (

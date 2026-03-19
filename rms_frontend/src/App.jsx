@@ -22,11 +22,16 @@ const NetworkProvider = ({ children }) => {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      toast.success('Connection Restored. Syncing drafts...', { icon: '🟢' });
+      toast.success('Connection Restored. Syncing drafts...', { 
+        icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" /> 
+      });
     };
     const handleOffline = () => {
       setIsOnline(false);
-      toast.error('Offline Mode Active. Drafts will save locally.', { icon: '🟡', duration: 4000 });
+      toast.error('Offline Mode Active. Drafts will save locally.', { 
+        icon: <img src="/favicon.png" className="w-5 h-5 object-contain grayscale opacity-50" alt="" />, 
+        duration: 4000 
+      });
     };
 
     window.addEventListener('online', handleOnline);

@@ -1,5 +1,6 @@
 import localforage from 'localforage';
 import { toast } from 'react-hot-toast';
+import React from 'react';
 
 // ── Configure storage namespaces ──
 const requisitionStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'requisitions' });
@@ -56,7 +57,9 @@ export async function addRequisition(data) {
   all.unshift(newReq);
   await requisitionStore.setItem('all', all);
   await logActivity(data.isDraft ? 'Saved Draft' : 'Submitted Requisition', `${newReq.id} — ${newReq.title}`);
-  toast.success(data.isDraft ? `Draft ${newReq.id} saved locally` : `Requisition ${newReq.id} submitted for approval`);
+  toast.success(data.isDraft ? `Draft ${newReq.id} saved locally` : `Requisition ${newReq.id} submitted for approval`, {
+    icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" />
+  });
   return newReq;
 }
 
@@ -67,7 +70,9 @@ export async function updateRequisitionStatus(id, newStatus) {
   all[idx].status = newStatus;
   await requisitionStore.setItem('all', all);
   await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
-  toast.success(`${id} has been ${newStatus}`);
+  toast.success(`${id} has been ${newStatus}`, {
+    icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" />
+  });
 }
 
 // ── Stats Computation ──
