@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import RequisitionForm from './RequisitionForm';
 import ApprovalQueue from './ApprovalQueue';
 import { useAuth } from '../context/AuthContext';
-import { CORPORATE_HIERARCHY } from '../constants/departments';
-import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter } from 'lucide-react';
+import odoo from '../lib/odoo';
+import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color }) => (
   <div className="glass p-6 rounded-2xl border border-white/5 relative overflow-hidden group hover:border-blue-500/20 transition-all cursor-pointer">
@@ -39,6 +39,34 @@ const DepartmentCard = ({ name, type }) => (
 const Dashboard = ({ onViewChange }) => {
   const { user } = useAuth();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [departments, setDepartments] = useState([]);
+  const [loadingDepts, setLoadingDepts] = useState(true);
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        setLoadingDepts(true);
+        // Fetch strictly from the live Odoo database
+        const depts = await odoo.call('hr.department', 'search_read', [[]], {
+          fields: ['id', 'name', 'parent_id']
+        });
+        setDepartments(depts || []);
+      } catch (error) {
+        console.error("Failed to fetch live Odoo departments:", error);
+      } finally {
+        setLoadingDepts(false);
+      }
+    };
+    
+    if (user) {
+      fetchDepartments();
+    }
+  }, [user]);
+
+  // Dynamically group Odoo departments into Strategic vs Operational 
+  // Odoo structure uses parent_id to establish hierarchy.
+  const strategicDepts = departments.filter(d => !d.parent_id);
+  const operationalDepts = departments.filter(d => d.parent_id);
 
   return (
     <Layout user={user} currentView="dashboard" onViewChange={onViewChange}>
@@ -52,7 +80,7 @@ const Dashboard = ({ onViewChange }) => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white tracking-tight">Oversight <span className="text-blue-500">Dashboard</span></h1>
-            <p className="text-zinc-400 text-sm mt-1 font-medium">Welcome back, {user?.name}. Monitoring CSS Group operations.</p>
+            <p className="text-zinc-400 text-sm mt-1 font-medium">Welcome back, {user?.name}. Monitoring live Odoo operations.</p>
           </div>
           <button 
             onClick={() => setIsFormOpen(true)}
@@ -86,23 +114,38 @@ const Dashboard = ({ onViewChange }) => {
 
         <div className="space-y-6">
           <div className="flex items-center space-x-4 border-b border-white/5 pb-4 pt-4">
-            <h3 className="text-lg font-bold text-white">Strategic Control</h3>
-            <span className="bg-blue-600/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">Core</span>
+            <h3 className="text-lg font-bold text-white hover:text-blue-400 transition-colors flex items-center gap-2"><ShieldAlert size={20}/> Strategic Management</h3>
+            <span className="bg-blue-600/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase border border-blue-500/20">Live Odoo Data</span>
           </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {CORPORATE_HIERARCHY.strategic.map(dept => (
-              <DepartmentCard key={dept} name={dept} type="Strategic" />
-            ))}
+            {loadingDepts ? (
+               <div className="text-zinc-500 text-sm">Synchronizing with Postgres...</div>
+            ) : strategicDepts.length > 0 ? (
+               strategicDepts.map(dept => (
+                 <DepartmentCard key={dept.id} name={dept.name} type="Strategic Wing" />
+               ))
+            ) : (
+               <div className="text-zinc-500 text-sm">No strategic departments found in database.</div>
+            )}
           </div>
 
-          <div className="flex items-center space-x-4 border-b border-white/5 pb-4 pt-4">
-            <h3 className="text-lg font-bold text-white">Operational Units</h3>
-            <span className="bg-zinc-800 text-zinc-400 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">{CORPORATE_HIERARCHY.operational.length} Units</span>
+          <div className="flex items-center space-x-4 border-b border-white/5 pb-4 pt-4 mt-8">
+            <h3 className="text-lg font-bold text-white hover:text-emerald-400 transition-colors flex items-center gap-2"><Boxes size={20}/> Operational Units</h3>
+            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">Live Odoo Data</span>
+            <span className="text-zinc-500 text-xs font-medium">{operationalDepts.length} active database units</span>
           </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {CORPORATE_HIERARCHY.operational.map(dept => (
-              <DepartmentCard key={dept} name={dept} type="Operations" />
-            ))}
+            {loadingDepts ? (
+               <div className="text-zinc-500 text-sm">Synchronizing with Postgres...</div>
+            ) : operationalDepts.length > 0 ? (
+               operationalDepts.map(dept => (
+                 <DepartmentCard key={dept.id} name={dept.name} type="Operations" />
+               ))
+            ) : (
+               <div className="text-zinc-500 text-sm">No operational units found in database.</div>
+            )}
           </div>
         </div>
       </div>
