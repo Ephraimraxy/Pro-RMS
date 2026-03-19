@@ -1,37 +1,36 @@
-# Odoo
+# CSS-RMS: Enterprise Requisition Management System
 
-[![Build Status](https://runbot.odoo.com/runbot/badge/flat/1/master.svg)](https://runbot.odoo.com/runbot)
-[![Tech Doc](https://img.shields.io/badge/master-docs-875A7B.svg?style=flat&colorA=8F8F8F)](https://www.odoo.com/documentation/master)
-[![Help](https://img.shields.io/badge/master-help-875A7B.svg?style=flat&colorA=8F8F8F)](https://www.odoo.com/forum/help-1)
-[![Nightly Builds](https://img.shields.io/badge/master-nightly-875A7B.svg?style=flat&colorA=8F8F8F)](https://nightly.odoo.com/)
+A premium, "Zero-Hardcoding" internal workflow platform for CSS Group. This project features a high-fidelity React frontend (Aura Design System) that interfaces with a headless Odoo backend.
 
-Odoo is a suite of web based open source business apps.
+## Project Structure
 
-The main Odoo Apps include an [Open Source CRM](https://www.odoo.com/page/crm),
-[Website Builder](https://www.odoo.com/app/website),
-[eCommerce](https://www.odoo.com/app/ecommerce),
-[Warehouse Management](https://www.odoo.com/app/inventory),
-[Project Management](https://www.odoo.com/app/project),
-[Billing &amp; Accounting](https://www.odoo.com/app/accounting),
-[Point of Sale](https://www.odoo.com/app/point-of-sale-shop),
-[Human Resources](https://www.odoo.com/app/employees),
-[Marketing](https://www.odoo.com/app/social-marketing),
-[Manufacturing](https://www.odoo.com/app/manufacturing),
-[...](https://www.odoo.com/)
+```bash
+├── rms_frontend/       # Premium React + Vite + Tailwind + Framer Motion
+└── css_rms_custom/     # Custom Odoo 19 Backend Module (Logic & Data)
+```
 
-Odoo Apps can be used as stand-alone applications, but they also integrate seamlessly so you get
-a full-featured [Open Source ERP](https://www.odoo.com) when you install several Apps.
+## Key Features
 
-## Getting started with Odoo
+- **Auth-Guarded Portal**: Secure Odoo session integration with glassmorphic visuals.
+- **Adaptive Form Engine**: Dynamic requisition forms for Material, Cash, and Memos.
+- **Workflow & Audit**: Multi-stage approval timeline with automated threshold routing.
+- **Admin Governance**:
+  - **Workflow Builder**: Define approval stages and currency limits via UI.
+  - **Department Manager**: Manage the 32-department corporate hierarchy.
+  - **Audit Ledger**: Immutable history of all system activities.
 
-For a standard installation please follow the [Setup instructions](https://www.odoo.com/documentation/master/administration/install/install.html)
-from the documentation.
+## Development
 
-To learn the software, we recommend the [Odoo eLearning](https://www.odoo.com/slides),
-or [Scale-up, the business game](https://www.odoo.com/page/scale-up-business-game).
-Developers can start with [the developer tutorials](https://www.odoo.com/documentation/master/developer/howtos.html).
+### Frontend (React)
+```bash
+cd rms_frontend
+npm install
+npm run dev    # For internal development
+npm run build  # For production deployment
+```
 
-## Security
+### Backend (Odoo)
+The backend is hosted on Railway: `pro-rms-production.up.railway.app`. Use the `css_rms_custom` module for local reference or future logic updates.
 
-If you believe you have found a security issue, check our [Responsible Disclosure page](https://www.odoo.com/security-report)
-for details and get in touch with us via email.
+---
+*Built with excellence by Antigravity*
