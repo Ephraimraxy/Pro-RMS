@@ -1,10 +1,15 @@
 #!/bin/bash
 set -e
 
-# Railway injects ODOO_ADDONS_PATH="/opt/odoo/odoo/addons,/opt/odoo/addons" 
-# which causes fatal warnings in the official Docker image. We must unset it.
+# Railway mounts data volumes as root. We must take ownership of the Odoo data directory
+# so the 'odoo' user can write sessions and attachments.
+mkdir -p /var/lib/odoo/sessions
+chown -R odoo:odoo /var/lib/odoo
+
+# Railway injects invalid addon paths. Unset them.
 unset ODOO_ADDONS_PATH
 
+# Parse Database URL
 if [ -n "$DATABASE_URL" ]; then
   DB_USER=$(echo "$DATABASE_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
   DB_PASS=$(echo "$DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
@@ -13,18 +18,26 @@ if [ -n "$DATABASE_URL" ]; then
   DB_NAME=$(echo "$DATABASE_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
 fi
 
-# The official odoo:19 image has standard addons here. Custom addons go to /mnt/extra-addons.
-export ADDONS_PATH="/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons"
+ADDONS_PATH="/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons"
 
-exec odoo \
-  --db_host="${DB_HOST:-localhost}" \
-  --db_port="${DB_PORT:-5432}" \
-  --db_user="${DB_USER:-odoo}" \
-  --db_password="${DB_PASS:-odoo}" \
-  --database="${DB_NAME:-RMS}" \
-  --addons-path="$ADDONS_PATH" \
-  --http-port="${PORT:-8069}" \
-  --http-interface="${HOST:-0.0.0.0}" \
-  --proxy-mode \
-  --workers="${ODOO_WORKERS:-0}" \
+# Generate the Odoo execution script with hardcoded variables
+cat << EOF > /tmp/run_odoo.sh
+#!/bin/bash
+exec odoo \\
+  --db_host="${DB_HOST:-localhost}" \\
+  --db_port="${DB_PORT:-5432}" \\
+  --db_user="${DB_USER:-odoo}" \\
+  --db_password="${DB_PASS:-odoo}" \\
+  --database="${DB_NAME:-RMS}" \\
+  --addons-path="${ADDONS_PATH}" \\
+  --http-port="${PORT:-8069}" \\
+  --http-interface="${HOST:-0.0.0.0}" \\
+  --proxy-mode \\
+  --workers="${ODOO_WORKERS:-0}" \\
   --without-demo=True
+EOF
+
+chmod +x /tmp/run_odoo.sh
+
+# Safely drop privileges to the 'odoo' user and execute the generated script
+exec su -p odoo -c /tmp/run_odoo.sh
