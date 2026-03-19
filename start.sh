@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-# Parse DATABASE_URL into Odoo-compatible flags
+# Railway injects ODOO_ADDONS_PATH="/opt/odoo/odoo/addons,/opt/odoo/addons" 
+# which causes fatal warnings in the official Docker image. We must unset it.
+unset ODOO_ADDONS_PATH
+
 if [ -n "$DATABASE_URL" ]; then
   DB_USER=$(echo "$DATABASE_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
   DB_PASS=$(echo "$DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
@@ -10,9 +13,8 @@ if [ -n "$DATABASE_URL" ]; then
   DB_NAME=$(echo "$DATABASE_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
 fi
 
-# Official odoo:19 image has addons at /usr/lib/python3/dist-packages/odoo/addons
-# Custom addons go to /mnt/extra-addons (mounted in official image)
-ADDONS_PATH="/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons"
+# The official odoo:19 image has standard addons here. Custom addons go to /mnt/extra-addons.
+export ADDONS_PATH="/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons"
 
 exec odoo \
   --db_host="${DB_HOST:-localhost}" \
@@ -25,4 +27,4 @@ exec odoo \
   --http-interface="${HOST:-0.0.0.0}" \
   --proxy-mode \
   --workers="${ODOO_WORKERS:-0}" \
-  --without-demo
+  --without-demo=True
