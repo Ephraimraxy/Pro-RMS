@@ -99,7 +99,7 @@ app.get('/api/audit-logs', authenticateToken, async (req, res) => {
 const distPath = path.join(__dirname, 'rms_frontend', 'dist');
 app.use(express.static(distPath));
 
-app.get('(.*)', (req, res) => {
+app.use((req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API route not found' });
   res.sendFile(path.join(distPath, 'index.html'));
 });
