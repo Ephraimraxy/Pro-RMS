@@ -26,9 +26,9 @@ const Navbar = ({ user }) => (
     </div>
 
     <div className="flex items-center space-x-4 lg:space-x-6">
-      <div className="hidden lg:flex items-center space-x-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-muted px-3 py-1.5 rounded-full border border-border/50">
-        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-        <span>Production Cluster</span>
+      <div className="hidden lg:flex items-center space-x-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-muted/50 px-3 py-1.5 rounded-full border border-border/50 hover:bg-muted transition-colors cursor-default group">
+        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse group-hover:scale-125 transition-transform"></div>
+        <span className="group-hover:text-foreground transition-colors">RMS NODE: ONLINE</span>
       </div>
       
       <button className="relative text-muted-foreground hover:text-primary transition-colors">
@@ -38,8 +38,15 @@ const Navbar = ({ user }) => (
 
       <div className="flex items-center space-x-3 pl-4 lg:pl-6 border-l border-border/50">
         <div className="text-right hidden sm:block">
-          <p className="text-xs font-bold text-foreground leading-none">{user?.name || 'Administrator'}</p>
-          <p className="text-[10px] text-primary font-bold mt-1 uppercase tracking-widest">{user?.role === 'department' ? 'Unit Controller' : (user?.role || 'Global Admin')}</p>
+          <p className="text-xs font-bold text-foreground leading-none flex items-center justify-end space-x-1.5">
+            <span>{user?.name || 'Administrator'}</span>
+            {user?.role !== 'department' && (
+              <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[8px] uppercase tracking-tighter border border-primary/20">ROOT</span>
+            )}
+          </p>
+          <p className="text-[10px] text-primary font-bold mt-1 uppercase tracking-widest opacity-70">
+            {user?.role === 'department' ? 'Unit Controller' : (user?.role || 'Global Admin')}
+          </p>
         </div>
         <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-xl bg-muted border border-border/50 flex items-center justify-center text-primary">
            <UserIcon size={18} className="lg:w-5 lg:h-5" />

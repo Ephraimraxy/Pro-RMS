@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { CORPORATE_HIERARCHY } from '../constants/departments';
-import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical } from 'lucide-react';
+import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical, ChevronDown, ChevronRight } from 'lucide-react';
 
 const DeptItem = ({ name, type, onDelete }) => (
   <div className="glass bg-white/80 p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
@@ -46,6 +46,15 @@ const DepartmentManager = ({ onViewChange }) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [pendingDept, setPendingDept] = useState(null);
   const [newDeptData, setNewDeptData] = useState({ name: '', type: 'Operational', accessCode: '' });
+
+  // Section states
+  const [isStrategicOpen, setIsStrategicOpen] = useState(true);
+  const [isOperationalOpen, setIsOperationalOpen] = useState(true);
+
+  const openAddModal = (type = 'Operational') => {
+    setNewDeptData({ name: '', type, accessCode: '' });
+    setIsAddModalOpen(true);
+  };
 
   const loadDepts = async () => {
     const data = await getDepartments();
@@ -141,27 +150,71 @@ const DepartmentManager = ({ onViewChange }) => {
           {/* Strategic Column */}
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-border/50 pb-4">
-               <h3 className="text-lg font-bold text-foreground">Strategic Control</h3>
-               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{strategic.length} Total</span>
+               <button 
+                 onClick={() => setIsStrategicOpen(!isStrategicOpen)}
+                 className="flex items-center space-x-2 text-lg font-bold text-foreground hover:text-primary transition-colors group"
+               >
+                 {isStrategicOpen ? <ChevronDown size={20} className="text-primary"/> : <ChevronRight size={20} />}
+                 <span>Strategic Control</span>
+               </button>
+               <div className="flex items-center space-x-4">
+                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{strategic.length} Total</span>
+                 <button 
+                   onClick={() => openAddModal('Strategic')}
+                   className="p-1 px-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all flex items-center space-x-1"
+                 >
+                   <Plus size={14} />
+                   <span className="text-[10px] font-bold uppercase">Add</span>
+                 </button>
+               </div>
             </div>
-            <div className="grid gap-4">
-              {strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                <DeptItem key={dept.id} name={dept.name} type="Strategic" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
-              ))}
-            </div>
+            
+            {isStrategicOpen && (
+              <div className="grid gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                {strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic p-4 text-center">No strategic units found</p>
+                ) : (
+                  strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
+                    <DeptItem key={dept.id} name={dept.name} type="Strategic" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           {/* Operational Column */}
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-border/50 pb-4">
-               <h3 className="text-lg font-bold text-foreground">Operational Units</h3>
-               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{operational.length} Total</span>
+               <button 
+                 onClick={() => setIsOperationalOpen(!isOperationalOpen)}
+                 className="flex items-center space-x-2 text-lg font-bold text-foreground hover:text-primary transition-colors group"
+               >
+                 {isOperationalOpen ? <ChevronDown size={20} className="text-primary"/> : <ChevronRight size={20} />}
+                 <span>Operational Units</span>
+               </button>
+               <div className="flex items-center space-x-4">
+                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{operational.length} Total</span>
+                 <button 
+                   onClick={() => openAddModal('Operational')}
+                   className="p-1 px-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all flex items-center space-x-1"
+                 >
+                   <Plus size={14} />
+                   <span className="text-[10px] font-bold uppercase">Add</span>
+                 </button>
+               </div>
             </div>
-            <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-              {operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                <DeptItem key={dept.id} name={dept.name} type="Operational" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
-              ))}
-            </div>
+            
+            {isOperationalOpen && (
+              <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar animate-in fade-in slide-in-from-top-2 duration-300">
+                {operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic p-4 text-center">No operational units found</p>
+                ) : (
+                  operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
+                    <DeptItem key={dept.id} name={dept.name} type="Operational" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
