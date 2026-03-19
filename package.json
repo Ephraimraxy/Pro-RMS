@@ -3,12 +3,25 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "cd rms_frontend && npm install --legacy-peer-deps",
+    "postinstall": "prisma generate && cd rms_frontend && npm install --legacy-peer-deps",
     "build": "cd rms_frontend && npm run build",
-    "start": "node serve.js"
+    "start": "node serve.js",
+    "seed": "node rms_backend/prisma/seed.js"
   },
   "dependencies": {
-    "express": "^4.21.0"
+    "@prisma/client": "^7.5.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "pg": "^8.20.0",
+    "prisma": "^7.5.0"
+  },
+  "prisma": {
+    "schema": "rms_backend/prisma/schema.prisma",
+    "seed": "node rms_backend/prisma/seed.js"
   },
   "engines": {
     "node": ">=18"
