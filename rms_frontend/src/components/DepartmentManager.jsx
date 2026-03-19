@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { CORPORATE_HIERARCHY } from '../constants/departments';

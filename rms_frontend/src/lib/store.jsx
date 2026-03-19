@@ -30,6 +30,7 @@ async function ensureInitialized() {
   if (!existing || existing.length === 0) {
     await requisitionStore.setItem('all', SEED_REQUISITIONS);
   }
+  const existingActivity = await activityStore.getItem('log');
   if (!existingActivity) {
     await activityStore.setItem('log', []);
   }

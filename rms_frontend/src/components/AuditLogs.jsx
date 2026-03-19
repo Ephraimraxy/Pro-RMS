@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { Activity, ShieldCheck, User, Clock, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
