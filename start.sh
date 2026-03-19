@@ -34,7 +34,8 @@ exec odoo \\
   --http-interface="${HOST:-0.0.0.0}" \\
   --proxy-mode \\
   --workers="${ODOO_WORKERS:-0}" \\
-  --without-demo=True
+  --without-demo=True \\
+  -u css_rms_custom
 EOF
 
 chmod +x /tmp/run_odoo.sh

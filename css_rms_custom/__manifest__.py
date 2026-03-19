@@ -19,6 +19,7 @@
         'data/rms_stage_data.xml',
         'data/res_users_data.xml',
         'views/requisition_views.xml',
+        'views/web_login_override.xml',
     ],
     'installable': True,
     'application': True,
