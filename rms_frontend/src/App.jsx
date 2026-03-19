@@ -48,12 +48,25 @@ const NetworkProvider = ({ children }) => {
   return (
     <NetworkContext.Provider value={{ isOnline }}>
       {children}
-      {!isOnline && (
-        <div className="fixed bottom-20 lg:bottom-6 right-6 z-[100] bg-destructive/10 border border-destructive text-destructive px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 backdrop-blur-md">
-          <WifiOff size={16} className="animate-pulse" />
-          <span className="text-sm font-bold tracking-tight">Offline Mode</span>
-        </div>
-      )}
+    <NetworkContext.Provider value={{ isOnline }}>
+      {children}
+      <div className={`fixed bottom-20 lg:bottom-6 right-6 z-[100] px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 backdrop-blur-md border transition-all duration-500 ${
+        isOnline 
+          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
+          : 'bg-destructive/10 border-destructive text-destructive'
+      }`}>
+        {isOnline ? (
+          <>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest">RMS Global: Online</span>
+          </>
+        ) : (
+          <>
+            <WifiOff size={14} className="animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Offline Mode Active</span>
+          </>
+        )}
+      </div>
     </NetworkContext.Provider>
   );
 };
