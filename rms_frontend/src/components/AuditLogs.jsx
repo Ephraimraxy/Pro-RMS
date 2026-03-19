@@ -5,29 +5,29 @@ import { Activity, ShieldCheck, User, Clock, CheckCircle2, XCircle, AlertTriangl
 
 const AuditLogEntry = ({ user, action, type, details, date }) => {
   const icons = {
-    approval: <CheckCircle2 size={14} className="text-emerald-400" />,
-    rejection: <XCircle size={14} className="text-red-400" />,
-    security: <ShieldCheck size={14} className="text-blue-400" />,
-    system: <Activity size={14} className="text-zinc-400" />,
-    warning: <AlertTriangle size={14} className="text-amber-400" />
+    approval: <CheckCircle2 size={14} className="text-emerald-500" />,
+    rejection: <XCircle size={14} className="text-destructive" />,
+    security: <ShieldCheck size={14} className="text-primary" />,
+    system: <Activity size={14} className="text-muted-foreground" />,
+    warning: <AlertTriangle size={14} className="text-amber-500" />
   };
 
   return (
-    <div className="flex items-start space-x-4 p-4 border-b border-white/5 hover:bg-white/[0.01] transition-all group">
-      <div className={`mt-1 p-2 rounded-lg bg-white/5 border border-white/5`}>
+    <div className="flex items-start space-x-4 p-4 border-b border-border/50 hover:bg-muted/50 transition-all group">
+      <div className={`mt-1 p-2 rounded-lg bg-muted border border-border/50 shadow-sm`}>
         {icons[type] || icons.system}
       </div>
       <div className="flex-1">
         <div className="flex items-center justify-between mb-1">
-          <p className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
-            {user} <span className="text-zinc-500 font-medium font-sans">performed</span> {action}
+          <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
+            {user} <span className="text-muted-foreground font-medium font-sans">performed</span> {action}
           </p>
-          <span className="text-[10px] text-zinc-500 font-mono flex items-center space-x-1 uppercase">
+          <span className="text-[10px] text-muted-foreground font-mono flex items-center space-x-1 uppercase">
             <Clock size={10} />
             <span>{date}</span>
           </span>
         </div>
-        <p className="text-xs text-zinc-400 leading-relaxed max-w-2xl">{details}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">{details}</p>
       </div>
     </div>
   );
@@ -47,27 +47,27 @@ const AuditLogs = ({ onViewChange }) => {
   return (
     <Layout user={user} currentView="audit_logs" onViewChange={onViewChange}>
       <div className="max-w-4xl mx-auto space-y-8 pb-20">
-        <div className="flex items-center justify-between border-b border-white/10 pb-6">
+        <div className="flex items-center justify-between border-b border-border/50 pb-6">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center space-x-3">
-              <Activity className="text-blue-500" />
-              <span>Audit <span className="text-blue-500">Logs</span></span>
+            <h1 className="text-3xl font-bold text-foreground tracking-tight flex items-center space-x-3">
+              <Activity className="text-primary" />
+              <span>Audit <span className="text-primary">Logs</span></span>
             </h1>
-            <p className="text-zinc-500 text-sm mt-1 font-medium italic">Immutable ledger of all system decisions and security actions.</p>
+            <p className="text-muted-foreground text-sm mt-1 font-medium italic">Immutable ledger of all system decisions and security actions.</p>
           </div>
-          <div className="bg-blue-600/10 border border-blue-500/20 px-4 py-2 rounded-xl text-blue-400 text-xs font-bold uppercase tracking-widest">
+          <div className="bg-primary/10 border border-primary/20 px-4 py-2 rounded-xl text-primary text-xs font-bold uppercase tracking-widest shadow-sm">
             Audit Mode Active
           </div>
         </div>
 
-        <div className="glass rounded-3xl border border-white/5 overflow-hidden shadow-2xl divide-y divide-white/5">
+        <div className="glass bg-white/60 rounded-3xl border border-border/50 overflow-hidden shadow-md divide-y divide-border/50">
           {logs.map((log, idx) => (
             <AuditLogEntry key={idx} {...log} />
           ))}
         </div>
         
         <div className="text-center py-8">
-           <button className="text-xs font-bold text-zinc-500 hover:text-white transition-all bg-white/5 px-6 py-2.5 rounded-xl border border-white/5">
+           <button className="text-xs font-bold text-muted-foreground hover:text-foreground transition-all bg-white/80 px-6 py-2.5 rounded-xl border border-border shadow-sm hover:shadow-md">
              Load More Activity
            </button>
         </div>

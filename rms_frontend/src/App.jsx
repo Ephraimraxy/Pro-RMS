@@ -7,6 +7,7 @@ import AuditLogs from './components/AuditLogs'
 import DocumentStudio from './components/DocumentStudio'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Wifi, WifiOff } from 'lucide-react'
+import { Toaster, toast } from 'react-hot-toast'
 
 // Network Context for PWA Offline Functionality
 const NetworkContext = createContext({ isOnline: true });
@@ -16,8 +17,14 @@ const NetworkProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Connection Restored. Syncing drafts...', { icon: '🟢' });
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.error('Offline Mode Active. Drafts will save locally.', { icon: '🟡', duration: 4000 });
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -33,7 +40,7 @@ const NetworkProvider = ({ children }) => {
       {children}
       {/* Universal Network Indicator Badge */}
       {!isOnline && (
-        <div className="fixed bottom-6 right-6 z-[100] bg-destructive/10 border border-destructive text-destructive px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 backdrop-blur-md">
+        <div className="fixed bottom-20 lg:bottom-6 right-6 z-[100] bg-destructive/10 border border-destructive text-destructive px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 backdrop-blur-md">
           <WifiOff size={16} className="animate-pulse" />
           <span className="text-sm font-bold tracking-tight">Offline Mode</span>
         </div>
@@ -79,6 +86,20 @@ const AppContent = () => {
 function App() {
   return (
     <NetworkProvider>
+      <Toaster 
+        position="top-center" 
+        toastOptions={{ 
+          style: { 
+            background: 'hsl(var(--card))', 
+            color: 'hsl(var(--foreground))', 
+            border: '1px solid hsl(var(--border))', 
+            borderRadius: '12px', 
+            fontSize: '14px', 
+            fontWeight: '600',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
+          } 
+        }} 
+      />
       <AuthProvider>
         <AppContent />
       </AuthProvider>

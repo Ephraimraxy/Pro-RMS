@@ -1,15 +1,22 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Layout from './Layout';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
+import localforage from 'localforage';
 import { 
   FileText, Table, Download, Plus, Trash2, Save, 
   FileSpreadsheet, FileImage, File, ChevronDown,
-  Bold, Italic, AlignLeft, Type, Columns
+  Columns, CloudOff, Cloud
 } from 'lucide-react';
+
+// Configure LocalForage
+localforage.config({
+  name: 'CSS_RMS_Offline',
+  storeName: 'drafts'
+});
 
 // ── Tab Button ──
 const TabButton = ({ icon: Icon, label, active, onClick }) => (
@@ -17,8 +24,8 @@ const TabButton = ({ icon: Icon, label, active, onClick }) => (
     onClick={onClick}
     className={`flex items-center space-x-2 px-5 py-3 rounded-xl text-sm font-bold transition-all ${
       active 
-        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20 shadow-lg shadow-blue-500/10' 
-        : 'text-zinc-500 hover:text-white hover:bg-white/5'
+        ? 'bg-primary/20 text-primary border border-primary/20 shadow-lg shadow-primary/10' 
+        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
     }`}
   >
     <Icon size={18} />
@@ -30,24 +37,24 @@ const TabButton = ({ icon: Icon, label, active, onClick }) => (
 const ExportMenu = ({ onExport, formats }) => {
   const [open, setOpen] = useState(false);
   return (
-    <div className="relative">
+    <div className="relative z-50">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-5 py-3 rounded-xl transition-all shadow-lg shadow-blue-600/20"
+        className="flex items-center space-x-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm px-5 py-3 rounded-xl transition-all shadow-lg shadow-primary/20"
       >
         <Download size={16} />
         <span>Export</span>
         <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-56 glass border border-white/10 rounded-2xl p-2 z-50 shadow-2xl">
+        <div className="absolute right-0 mt-2 w-56 glass bg-white/90 border border-border/50 rounded-2xl p-2 z-50 shadow-xl">
           {formats.map(f => (
             <button
               key={f.type}
               onClick={() => { onExport(f.type); setOpen(false); }}
-              className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-all"
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm text-foreground hover:bg-muted hover:text-primary transition-all"
             >
-              <f.icon size={16} className="text-blue-400" />
+              <f.icon size={16} className="text-primary" />
               <span>{f.label}</span>
             </button>
           ))}
@@ -57,13 +64,53 @@ const ExportMenu = ({ onExport, formats }) => {
   );
 };
 
+// ── Save Indicator ──
+const SaveIndicator = ({ saving, lastSaved }) => (
+  <div className="flex items-center space-x-2 text-[10px] font-mono font-bold text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-full">
+    {saving ? (
+      <>
+        <CloudOff size={12} className="animate-pulse" />
+        <span>Saving Draft Locally...</span>
+      </>
+    ) : (
+      <>
+        <Cloud size={12} className="text-emerald-500" />
+        <span>Saved Securely Locally</span>
+      </>
+    )}
+  </div>
+);
+
 // ══════════════════════════════════════════════
 // ── RICH TEXT EDITOR (Docs / Memos) ──────────
 // ══════════════════════════════════════════════
 const RichTextEditor = () => {
   const [title, setTitle] = useState('Untitled Document');
   const [content, setContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const printRef = useRef();
+
+  // Load from offline storage sequentially
+  useEffect(() => {
+    localforage.getItem('rms_doc_draft').then(draft => {
+      if (draft) {
+        setTitle(draft.title || 'Untitled Document');
+        setContent(draft.content || '');
+      }
+      setIsLoaded(true);
+    });
+  }, []);
+
+  // Autosave when data changes sequentially
+  useEffect(() => {
+    if (!isLoaded) return;
+    setSaving(true);
+    const timer = setTimeout(() => {
+      localforage.setItem('rms_doc_draft', { title, content }).then(() => setSaving(false));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [title, content, isLoaded]);
 
   const quillModules = {
     toolbar: [
@@ -82,7 +129,7 @@ const RichTextEditor = () => {
     if (!el) return;
 
     if (type === 'pdf') {
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#0a0a0f' });
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -92,7 +139,7 @@ const RichTextEditor = () => {
     }
 
     if (type === 'png') {
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#0a0a0f' });
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
       const link = document.createElement('a');
       link.download = `${title}.png`;
       link.href = canvas.toDataURL('image/png');
@@ -100,7 +147,7 @@ const RichTextEditor = () => {
     }
 
     if (type === 'html') {
-      const blob = new Blob([`<html><head><title>${title}</title></head><body>${content}</body></html>`], { type: 'text/html' });
+      const blob = new Blob([`<html><head><title>${title}</title><style>body{font-family:sans-serif;color:#333;}</style></head><body>${content}</body></html>`], { type: 'text/html' });
       const link = document.createElement('a');
       link.download = `${title}.html`;
       link.href = URL.createObjectURL(blob);
@@ -126,23 +173,28 @@ const RichTextEditor = () => {
     { type: 'txt', label: 'Export as Plain Text', icon: FileText },
   ];
 
+  if (!isLoaded) return <div className="p-8 text-center text-muted-foreground animate-pulse font-mono tracking-widest text-xs">Loading Offline Draft Cache...</div>;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="text-2xl font-black text-white bg-transparent outline-none border-b-2 border-transparent focus:border-blue-500/50 transition-all pb-1 w-full max-w-lg"
-          placeholder="Document Title..."
-        />
+        <div className="space-y-2 w-full max-w-lg">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="text-2xl font-black text-foreground bg-transparent outline-none border-b-2 border-transparent focus:border-primary/50 transition-all pb-1 w-full"
+            placeholder="Document Title..."
+          />
+          <SaveIndicator saving={saving} />
+        </div>
         <ExportMenu onExport={handleExport} formats={exportFormats} />
       </div>
 
       {/* Printable Area */}
-      <div ref={printRef} className="glass border border-white/10 rounded-2xl p-8 min-h-[600px]">
-        <div className="mb-6 pb-4 border-b border-white/5">
-          <h2 className="text-lg font-bold text-white">{title}</h2>
-          <p className="text-[10px] text-zinc-600 font-mono mt-1">CSS Group Holding — Internal Document</p>
+      <div ref={printRef} className="glass bg-white border border-border/50 rounded-2xl p-8 min-h-[600px] shadow-sm relative z-10">
+        <div className="mb-6 pb-4 border-b border-border/50">
+          <h2 className="text-lg font-bold text-foreground">{title}</h2>
+          <p className="text-[10px] text-muted-foreground font-mono mt-1">CSS Group Holding — Internal Document</p>
         </div>
         <ReactQuill
           theme="snow"
@@ -150,7 +202,7 @@ const RichTextEditor = () => {
           onChange={setContent}
           modules={quillModules}
           placeholder="Start typing your document content here..."
-          className="rms-quill-editor"
+          className="rms-quill-editor relative z-10"
         />
       </div>
     </div>
@@ -168,6 +220,30 @@ const SpreadsheetEditor = () => {
     ['', '', '', '', ''],
     ['', '', '', '', ''],
   ]);
+  const [saving, setSaving] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load from offline storage
+  useEffect(() => {
+    localforage.getItem('rms_sheet_draft').then(draft => {
+      if (draft) {
+        setTitle(draft.title || 'Untitled Spreadsheet');
+        setColumns(draft.columns || ['Item', 'Description', 'Quantity', 'Unit Price (₦)', 'Total (₦)']);
+        setRows(draft.rows || [['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']]);
+      }
+      setIsLoaded(true);
+    });
+  }, []);
+
+  // Autosave
+  useEffect(() => {
+    if (!isLoaded) return;
+    setSaving(true);
+    const timer = setTimeout(() => {
+      localforage.setItem('rms_sheet_draft', { title, columns, rows }).then(() => setSaving(false));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [title, columns, rows, isLoaded]);
 
   const updateCell = (rowIdx, colIdx, value) => {
     const updated = rows.map((r, ri) => ri === rowIdx ? r.map((c, ci) => ci === colIdx ? value : c) : r);
@@ -205,8 +281,8 @@ const SpreadsheetEditor = () => {
       const cellH = 10;
 
       // Header
-      pdf.setFillColor(30, 30, 50);
-      pdf.setTextColor(100, 150, 255);
+      pdf.setFillColor(240, 240, 245);
+      pdf.setTextColor(30, 30, 40);
       pdf.setFontSize(9);
       columns.forEach((col, ci) => {
         pdf.rect(14 + ci * cellW, startY, cellW, cellH, 'F');
@@ -214,7 +290,7 @@ const SpreadsheetEditor = () => {
       });
 
       // Body
-      pdf.setTextColor(200, 200, 210);
+      pdf.setTextColor(60, 60, 70);
       pdf.setFontSize(8);
       rows.forEach((row, ri) => {
         row.forEach((cell, ci) => {
@@ -233,37 +309,42 @@ const SpreadsheetEditor = () => {
     { type: 'pdf', label: 'Export as PDF', icon: File },
   ];
 
+  if (!isLoaded) return <div className="p-8 text-center text-muted-foreground animate-pulse font-mono tracking-widest text-xs">Loading Offline Draft Cache...</div>;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="text-2xl font-black text-white bg-transparent outline-none border-b-2 border-transparent focus:border-blue-500/50 transition-all pb-1 w-full max-w-lg"
-          placeholder="Spreadsheet Title..."
-        />
+        <div className="space-y-2 w-full max-w-lg">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="text-2xl font-black text-foreground bg-transparent outline-none border-b-2 border-transparent focus:border-primary/50 transition-all pb-1 w-full max-w-lg"
+            placeholder="Spreadsheet Title..."
+          />
+          <SaveIndicator saving={saving} />
+        </div>
         <ExportMenu onExport={handleExport} formats={exportFormats} />
       </div>
 
-      <div className="glass border border-white/10 rounded-2xl overflow-hidden">
+      <div className="glass bg-white/70 border border-border/50 rounded-2xl overflow-hidden shadow-sm">
         {/* Toolbar */}
-        <div className="flex items-center space-x-2 p-3 border-b border-white/5">
-          <button onClick={addRow} className="flex items-center space-x-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg transition-all">
+        <div className="flex items-center space-x-2 p-3 border-b border-border/50 bg-white/50 relative z-20">
+          <button onClick={addRow} className="flex items-center space-x-1.5 text-xs font-bold text-muted-foreground hover:text-foreground bg-white/80 hover:bg-muted shadow-sm px-3 py-2 rounded-lg transition-all border border-border/50">
             <Plus size={14} /> <span>Add Row</span>
           </button>
-          <button onClick={addColumn} className="flex items-center space-x-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg transition-all">
+          <button onClick={addColumn} className="flex items-center space-x-1.5 text-xs font-bold text-muted-foreground hover:text-foreground bg-white/80 hover:bg-muted shadow-sm px-3 py-2 rounded-lg transition-all border border-border/50">
             <Columns size={14} /> <span>Add Column</span>
           </button>
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto custom-scrollbar">
+        <div className="overflow-x-auto custom-scrollbar relative z-10">
           <table className="w-full text-sm">
             <thead>
               <tr>
-                <th className="w-10 p-3 text-zinc-600 text-[10px] font-mono">#</th>
+                <th className="w-10 p-3 text-muted-foreground text-[10px] font-mono bg-muted/30">#</th>
                 {columns.map((col, ci) => (
-                  <th key={ci} className="p-0 border-l border-white/5">
+                  <th key={ci} className="p-0 border-l border-border/50 bg-muted/30">
                     <input
                       value={col}
                       onChange={(e) => {
@@ -271,29 +352,29 @@ const SpreadsheetEditor = () => {
                         updated[ci] = e.target.value;
                         setColumns(updated);
                       }}
-                      className="w-full bg-blue-600/5 text-blue-400 text-xs font-bold px-4 py-3 outline-none focus:bg-blue-600/10 transition-all"
+                      className="w-full bg-transparent text-primary text-xs font-bold px-4 py-3 outline-none focus:bg-white/80 transition-all text-center"
                     />
                   </th>
                 ))}
-                <th className="w-10"></th>
+                <th className="w-10 bg-muted/30"></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, ri) => (
-                <tr key={ri} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
-                  <td className="p-3 text-zinc-700 text-[10px] font-mono text-center">{ri + 1}</td>
+                <tr key={ri} className="border-t border-border/50 hover:bg-white transition-colors bg-white/40">
+                  <td className="p-3 text-muted-foreground text-[10px] font-mono text-center">{ri + 1}</td>
                   {row.map((cell, ci) => (
-                    <td key={ci} className="p-0 border-l border-white/5">
+                    <td key={ci} className="p-0 border-l border-border/50">
                       <input
                         value={cell}
                         onChange={(e) => updateCell(ri, ci, e.target.value)}
-                        className="w-full bg-transparent text-zinc-300 text-sm px-4 py-3 outline-none focus:bg-white/5 transition-all"
+                        className="w-full bg-transparent text-foreground text-sm px-4 py-3 outline-none focus:bg-white/90 transition-all"
                         placeholder="—"
                       />
                     </td>
                   ))}
-                  <td className="p-2 text-center">
-                    <button onClick={() => removeRow(ri)} className="text-zinc-700 hover:text-red-400 transition-colors p-1">
+                  <td className="p-2 text-center border-l border-border/50">
+                    <button onClick={() => removeRow(ri)} className="text-muted-foreground hover:text-destructive transition-colors p-1 bg-white/80 rounded-md border border-border/50 shadow-sm">
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -315,17 +396,17 @@ const DocumentStudio = ({ user, onViewChange }) => {
 
   return (
     <Layout user={user} currentView="document_studio" onViewChange={onViewChange}>
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-8 pb-20">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">
-            Document <span className="text-blue-500 italic">Studio</span>
+          <h1 className="text-3xl font-black text-foreground tracking-tight">
+            Document <span className="text-primary italic">Studio</span>
           </h1>
-          <p className="text-sm text-zinc-500 mt-1">Create, edit, and export documents and spreadsheets without leaving the portal.</p>
+          <p className="text-sm text-muted-foreground mt-1">Create, edit, and export documents and spreadsheets effortlessly with <span className="text-emerald-500 font-bold">Offline Auto-Save</span>.</p>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center space-x-3 p-1.5 glass border border-white/5 rounded-2xl w-fit">
+        <div className="flex items-center space-x-3 p-1.5 glass bg-white/80 border border-border/50 rounded-2xl w-fit shadow-sm">
           <TabButton icon={FileText} label="Document Editor" active={activeTab === 'doc'} onClick={() => setActiveTab('doc')} />
           <TabButton icon={Table} label="Spreadsheet" active={activeTab === 'sheet'} onClick={() => setActiveTab('sheet')} />
         </div>

@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  email        String        @unique
+  name         String
+  password     String
+  role         String        @default("staff") // "global_admin", "director", "staff"
+  departmentId Int?
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  requisitions Requisition[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Department {
+  id             Int           @id @default(autoincrement())
+  code           String        @unique // e.g., "H" for Hatchery, "P" for Poultry
+  name           String
+  type           String        @default("Operational Unit") // "Strategic Control", "Operational Unit", "Special Project"
+  parentId       Int?
+  parent         Department?   @relation("Hierarchy", fields: [parentId], references: [id])
+  subDepartments Department[]  @relation("Hierarchy")
+  users          User[]
+  requisitions   Requisition[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Requisition {
+  id           Int        @id @default(autoincrement())
+  title        String
+  type         String     // "Cash", "Material", "Memo"
+  amount       Float?
+  description  String?
+  status       String     @default("pending") // "pending", "approved", "rejected"
+  creatorId    Int
+  creator      User       @relation(fields: [creatorId], references: [id])
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}

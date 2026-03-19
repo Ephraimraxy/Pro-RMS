@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import odoo from '../lib/odoo';
+import { authAPI } from '../lib/api';
 
 const AuthContext = createContext(null);
 
@@ -8,10 +8,9 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if session exists on load
     const checkAuth = async () => {
       try {
-        const session = await odoo.checkSession();
+        const session = await authAPI.checkSession();
         if (session && session.uid) {
           setUser(session);
         }
@@ -25,14 +24,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (systemId, password) => {
-    const db = import.meta.env.VITE_ODOO_DB || 'RMS';
-    const result = await odoo.login(db, systemId, password);
+    const result = await authAPI.login(systemId, password);
     setUser(result);
     return result;
   };
 
-  const logout = () => {
-    // TODO: Implement Odoo logout RPC
+  const logout = async () => {
+    await authAPI.logout();
     setUser(null);
   };
 
