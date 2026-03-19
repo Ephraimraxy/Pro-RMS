@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard'
 import WorkflowBuilder from './components/WorkflowBuilder'
 import DepartmentManager from './components/DepartmentManager'
 import AuditLogs from './components/AuditLogs'
+import DocumentStudio from './components/DocumentStudio'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
 const AppContent = () => {
@@ -33,7 +34,8 @@ const AppContent = () => {
     dashboard: <Dashboard onViewChange={setCurrentView} />,
     workflow_builder: <WorkflowBuilder onViewChange={setCurrentView} />,
     department_manager: <DepartmentManager onViewChange={setCurrentView} />,
-    audit_logs: <AuditLogs onViewChange={setCurrentView} />
+    audit_logs: <AuditLogs onViewChange={setCurrentView} />,
+    document_studio: <DocumentStudio user={user} onViewChange={setCurrentView} />
   };
 
   return views[currentView] || views.dashboard;

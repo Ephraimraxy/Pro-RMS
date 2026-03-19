@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FileText, ClipboardCheck, History, Settings, LogOut, Bell, Briefcase, Activity, User as UserIcon } from 'lucide-react';
+import { LayoutDashboard, FileText, ClipboardCheck, History, Settings, LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick }) => (
   <div 
@@ -68,6 +68,12 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
             <SidebarItem icon={FileText} label="Memo Management" />
             <SidebarItem icon={ClipboardCheck} label="Requisitions" />
             <SidebarItem icon={History} label="My Activity" />
+            <SidebarItem 
+               icon={PenTool} 
+               label="Document Studio" 
+               active={currentView === 'document_studio'} 
+               onClick={() => onViewChange('document_studio')} 
+            />
           </div>
 
           <div className="mt-8 space-y-1">

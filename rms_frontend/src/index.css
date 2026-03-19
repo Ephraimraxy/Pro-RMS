@@ -47,3 +47,53 @@
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* ── Custom Scrollbar ── */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+
+/* ── Quill Editor Aura Theme ── */
+.rms-quill-editor .ql-toolbar {
+  border: none !important;
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+  background: rgba(255,255,255,0.02);
+  border-radius: 12px 12px 0 0;
+}
+.rms-quill-editor .ql-toolbar .ql-stroke { stroke: #71717a !important; }
+.rms-quill-editor .ql-toolbar .ql-fill { fill: #71717a !important; }
+.rms-quill-editor .ql-toolbar .ql-picker-label { color: #71717a !important; }
+.rms-quill-editor .ql-toolbar button:hover .ql-stroke { stroke: #60a5fa !important; }
+.rms-quill-editor .ql-toolbar button:hover .ql-fill { fill: #60a5fa !important; }
+.rms-quill-editor .ql-toolbar button.ql-active .ql-stroke { stroke: #3b82f6 !important; }
+.rms-quill-editor .ql-toolbar button.ql-active .ql-fill { fill: #3b82f6 !important; }
+.rms-quill-editor .ql-container {
+  border: none !important;
+  font-size: 15px;
+  color: #e4e4e7;
+  min-height: 400px;
+}
+.rms-quill-editor .ql-editor {
+  padding: 24px 0;
+  line-height: 1.8;
+}
+.rms-quill-editor .ql-editor.ql-blank::before {
+  color: #3f3f46;
+  font-style: normal;
+}
+.rms-quill-editor .ql-editor h1 { color: #fff; font-size: 28px; font-weight: 900; }
+.rms-quill-editor .ql-editor h2 { color: #e4e4e7; font-size: 22px; font-weight: 700; }
+.rms-quill-editor .ql-editor h3 { color: #a1a1aa; font-size: 18px; font-weight: 600; }
+.rms-quill-editor .ql-editor blockquote {
+  border-left: 3px solid #3b82f6;
+  padding-left: 16px;
+  color: #a1a1aa;
+}
+.rms-quill-editor .ql-picker-options {
+  background: #18181b !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 12px !important;
+  padding: 8px !important;
+}
+.rms-quill-editor .ql-picker-item { color: #a1a1aa !important; }
+.rms-quill-editor .ql-picker-item:hover { color: #fff !important; }
