@@ -1,0 +1,16 @@
+{
+  "name": "css-rms",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "cd rms_frontend && npm install --legacy-peer-deps",
+    "build": "cd rms_frontend && npm run build",
+    "start": "node serve.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
