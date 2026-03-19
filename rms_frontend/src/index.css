@@ -4,26 +4,36 @@
 
 @layer base {
   :root {
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
-    --muted: 223 47% 11%;
-    --muted-foreground: 215.4 16.3% 56.9%;
-    --accent: 216 34% 17%;
-    --accent-foreground: 210 40% 98%;
-    --popover: 224 71% 4%;
-    --popover-foreground: 215 20.2% 65.1%;
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --card: 224 71% 4%;
-    --card-foreground: 213 31% 91%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 1.2%;
-    --secondary: 222.2 47.4% 11.2%;
-    --secondary-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --ring: 216 34% 17%;
-    --radius: 0.5rem;
+    /* Pristine White Background */
+    --background: 36 33% 98%; /* #FAF9F6 - Off white warm cream */
+    --foreground: 25 40% 15%; /* Dark Chocolate Text */
+    
+    --muted: 30 20% 92%; /* Very Light Mocha */
+    --muted-foreground: 25 20% 45%; 
+    
+    --accent: 25 35% 55%; /* Milk Chocolate Accent */
+    --accent-foreground: 0 0% 100%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 40% 15%;
+    
+    --border: 30 20% 85%;
+    --input: 30 20% 85%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 25 40% 15%;
+    
+    --primary: 22 50% 28%; /* CSS Deep Chocolate #6A3A22 */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 30 30% 90%; 
+    --secondary-foreground: 22 50% 28%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --ring: 22 50% 28%;
+    --radius: 0.75rem;
   }
 }
 
@@ -34,18 +44,18 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     background-image: 
-      radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-      radial-gradient(at 50% 0%, hsla(225,39%,30%,0.15) 0, transparent 50%), 
-      radial-gradient(at 100% 0%, hsla(339,49%,30%,0.15) 0, transparent 50%);
+      radial-gradient(at 0% 0%, hsla(30, 40%, 95%, 1) 0, transparent 50%), 
+      radial-gradient(at 100% 0%, hsla(25, 30%, 92%, 0.5) 0, transparent 50%);
     background-attachment: fixed;
   }
 }
 
 .glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(139, 90, 43, 0.1); /* Chocolate tinted border */
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
 }
 
 /* ── Custom Scrollbar ── */
