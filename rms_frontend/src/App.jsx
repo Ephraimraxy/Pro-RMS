@@ -12,7 +12,8 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { Wifi, WifiOff } from 'lucide-react'
 import { Toaster, toast } from 'react-hot-toast'
 
-// Network Context for PWA Offline Functionality
+import { flushSyncQueue } from './lib/store';
+
 const NetworkContext = createContext({ isOnline: true });
 export const useNetwork = () => useContext(NetworkContext);
 
@@ -25,6 +26,7 @@ const NetworkProvider = ({ children }) => {
       toast.success('Connection Restored. Syncing drafts...', { 
         icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" /> 
       });
+      flushSyncQueue();
     };
     const handleOffline = () => {
       setIsOnline(false);

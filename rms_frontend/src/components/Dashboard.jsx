@@ -49,17 +49,15 @@ const Dashboard = ({ onViewChange }) => {
     setStats(s);
     const all = await getRequisitions();
     setRecentPending(all.filter(r => r.status === 'pending').slice(0, 5));
+    
+    setLoadingDepts(true);
+    const depts = await getDepartments();
+    setDepartments(depts);
+    setLoadingDepts(false);
   };
 
   useEffect(() => {
     loadDashboard();
-    // Departments from static hierarchy (backend not live yet)
-    setDepartments([...CORPORATE_HIERARCHY.strategic, ...CORPORATE_HIERARCHY.operational].map((d, i) => ({
-      id: i + 1,
-      name: d,
-      parentId: CORPORATE_HIERARCHY.strategic.includes(d) ? null : 1
-    })));
-    setLoadingDepts(false);
   }, []);
 
   const formatCurrency = (val) => {
@@ -68,8 +66,8 @@ const Dashboard = ({ onViewChange }) => {
     return `₦${val.toLocaleString()}`;
   };
 
-  const strategicDepts = departments.filter(d => !d.parentId);
-  const operationalDepts = departments.filter(d => d.parentId);
+  const strategicDepts = departments.filter(d => d.type === 'Strategic');
+  const operationalDepts = departments.filter(d => d.type === 'Operational');
 
   return (
     <Layout user={user} currentView="dashboard" onViewChange={onViewChange}>

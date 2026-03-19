@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
 import { X, Upload, Send, Save, CreditCard, Package, FileText } from 'lucide-react';
-import { addRequisition } from '../lib/store';
+import { addRequisition, getDepartments } from '../lib/store';
+import { useEffect } from 'react';
 
 const RequisitionForm = ({ isOpen, onClose, user }) => {
   const [type, setType] = useState('cash'); // cash, material, memo
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
-    department: user?.role === 'department' ? user.name : 'General',
+    departmentId: user?.deptId || '',
     notes: '',
     urgency: 'normal'
   });
+  const [departments, setDepartments] = useState([]);
   const [files, setFiles] = useState([]);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const all = await getDepartments();
+      setDepartments(all);
+      if (user?.role !== 'department' && !formData.departmentId && all.length > 0) {
+        setFormData(prev => ({ ...prev, departmentId: all[0].id }));
+      }
+    };
+    fetch();
+  }, []);
 
   if (!isOpen) return null;
 
@@ -93,13 +106,24 @@ const RequisitionForm = ({ isOpen, onClose, user }) => {
               
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Assigned Unit / Dept</label>
-                <input
-                  type="text"
-                  value={formData.department}
-                  readOnly={user?.role === 'department'}
-                  onChange={e => setFormData({...formData, department: e.target.value})}
-                  className={`w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all ${user?.role === 'department' ? 'opacity-70 cursor-not-allowed bg-muted/20' : ''}`}
-                />
+                {user?.role === 'department' ? (
+                  <input
+                    type="text"
+                    value={user.name}
+                    readOnly
+                    className="w-full bg-muted/20 border border-border rounded-2xl p-4 text-foreground opacity-70 cursor-not-allowed transition-all"
+                  />
+                ) : (
+                  <select
+                    value={formData.departmentId}
+                    onChange={e => setFormData({...formData, departmentId: parseInt(e.target.value)})}
+                    className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none cursor-pointer"
+                  >
+                    {departments.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="space-y-2">

@@ -70,9 +70,24 @@ const AuditLogs = ({ onViewChange }) => {
         <div className="glass bg-white/60 rounded-3xl border border-border/50 overflow-hidden shadow-md divide-y divide-border/50">
           {logs.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground text-sm font-medium italic">No activity recorded yet.</div>
-          ) : logs.map((log, idx) => (
-            <AuditLogEntry key={idx} action={log.action} type="system" details={log.detail} date={log.timestamp} />
-          ))}
+          ) : logs.map((log, idx) => {
+            const getIconType = (action) => {
+              if (action.includes('Login')) return 'security';
+              if (action.includes('Requisition')) return 'approval';
+              if (action.includes('Deleted')) return 'rejection';
+              if (action.includes('error')) return 'warning';
+              return 'system';
+            };
+            return (
+              <AuditLogEntry 
+                key={log.id || idx} 
+                action={log.action} 
+                type={getIconType(log.action)} 
+                details={log.details || log.detail} 
+                date={log.createdAt || log.timestamp} 
+              />
+            );
+          })}
         </div>
         
         <div className="text-center py-8">

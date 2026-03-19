@@ -1,12 +1,14 @@
 import localforage from 'localforage';
 import { toast } from 'react-hot-toast';
 import React from 'react';
+import { deptAPI, reqAPI } from './api';
 
 // ── Configure storage namespaces ──
 const requisitionStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'requisitions' });
 const activityStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'activity' });
 const workflowStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'workflows' });
 const departmentStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'departments' });
+const syncQueueStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'sync_queue' });
 
 // ── Seed data (Empty for Real Live Usage) ──
 const SEED_REQUISITIONS = [];
@@ -56,35 +58,62 @@ async function ensureInitialized() {
   _initialized = true;
 }
 
-// ── Requisition CRUD ──
+// ── Requisition Logic ──
 export async function getRequisitions() {
   await ensureInitialized();
-  return (await requisitionStore.getItem('all')) || [];
+  try {
+    const remote = await reqAPI.getRequisitions();
+    await requisitionStore.setItem('all', remote);
+    return remote;
+  } catch (err) {
+    console.warn("Offline: Fetching cached requisitions", err);
+    const local = await requisitionStore.getItem('all');
+    return local || [];
+  }
 }
 
 export async function addRequisition(data) {
   await ensureInitialized();
-  const all = await getRequisitions();
-  const nextNum = String(all.length + 1).padStart(3, '0');
+  
   const newReq = {
-    id: `REQ-2026-${nextNum}`,
-    type: data.type || 'Cash',
     title: data.description || 'Untitled',
-    amount: data.amount ? parseFloat(data.amount) : null,
-    department: data.department || 'General',
-    status: data.isDraft ? 'draft' : 'pending',
-    urgency: data.urgency || 'normal',
+    type: data.type || 'Cash',
+    amount: data.amount ? parseFloat(data.amount) : 0,
     description: data.notes || data.description || '',
-    createdBy: data.createdBy || 'Administrator',
-    createdAt: new Date().toISOString(),
+    departmentId: data.departmentId || null,
+    isDraft: data.isDraft || false,
+    createdAt: new Date().toISOString()
   };
-  all.unshift(newReq);
-  await requisitionStore.setItem('all', all);
-  await logActivity(data.isDraft ? 'Saved Draft' : 'Submitted Requisition', `${newReq.id} — ${newReq.title}`);
-  toast.success(data.isDraft ? `Draft ${newReq.id} saved locally` : `Requisition ${newReq.id} submitted for approval`, {
-    icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" />
-  });
-  return newReq;
+
+  try {
+    if (!navigator.onLine) throw new Error("Offline");
+    const result = await reqAPI.addRequisition(newReq);
+    toast.success("Successfully submitted to server");
+    return result;
+  } catch (err) {
+    console.warn("Sync Queue: Saving offline draft", err);
+    const queue = (await syncQueueStore.getItem('pending')) || [];
+    queue.push(newReq);
+    await syncQueueStore.setItem('pending', queue);
+    
+    toast.success("Saved to local sync queue (Offline mode)", {
+      icon: '☁️'
+    });
+    return newReq;
+  }
+}
+
+export async function flushSyncQueue() {
+  const queue = (await syncQueueStore.getItem('pending')) || [];
+  if (queue.length === 0) return;
+
+  try {
+    await reqAPI.addRequisition(queue);
+    await syncQueueStore.setItem('pending', []);
+    toast.success(`Synced ${queue.length} offline records to server!`);
+  } catch (err) {
+    console.error("Sync failed:", err);
+  }
 }
 
 export async function updateRequisitionStatus(id, newStatus) {
@@ -124,7 +153,14 @@ export async function logActivity(action, detail) {
 
 export async function getActivityLog() {
   await ensureInitialized();
-  return (await activityStore.getItem('log')) || [];
+  try {
+    const remote = await api.get('/audit-logs');
+    await activityStore.setItem('log', remote);
+    return remote;
+  } catch (err) {
+    console.warn("Offline: Fetching cached activity log", err);
+    return (await activityStore.getItem('log')) || [];
+  }
 }
 
 // ── Workflow CRUD ──
@@ -139,28 +175,46 @@ export async function updateWorkflows(stages) {
   await logActivity('Workflow Updated', `Reconfigured approval chain with ${stages.length} stages`);
 }
 
-// ── Department CRUD ──
+// ── Department Logic ──
 export async function getDepartments() {
   await ensureInitialized();
-  return (await departmentStore.getItem('all')) || [];
+  try {
+    const remote = await deptAPI.getDepartments();
+    await departmentStore.setItem('all', remote);
+    return remote;
+  } catch (err) {
+    console.warn("Offline: Fetching cached departments", err);
+    return (await departmentStore.getItem('all')) || [];
+  }
 }
 
 export async function addDepartment(dept) {
   await ensureInitialized();
-  const all = await getDepartments();
-  const newDept = { id: Date.now(), ...dept };
-  all.push(newDept);
-  await departmentStore.setItem('all', all);
-  await logActivity('Department Added', `${newDept.name} added to ${newDept.type}`);
-  return newDept;
+  try {
+    const result = await api.post('/departments', dept);
+    toast.success(`${dept.name} added to cloud`);
+    return result;
+  } catch (err) {
+    console.warn("Offline: Department saved locally ONLY", err);
+    const all = await getDepartments();
+    const newDept = { id: Date.now(), ...dept };
+    all.push(newDept);
+    await departmentStore.setItem('all', all);
+    return newDept;
+  }
 }
 
 export async function deleteDepartment(id) {
   await ensureInitialized();
-  const all = await getDepartments();
-  const filtered = all.filter(d => d.id !== id);
-  await departmentStore.setItem('all', filtered);
-  await logActivity('Department Deleted', `ID: ${id} removed from system`);
+  try {
+    await api.delete(`/departments/${id}`);
+    toast.success("Department removed from cloud");
+  } catch (err) {
+    console.warn("Offline: Department removed locally ONLY", err);
+    const all = await getDepartments();
+    const filtered = all.filter(d => d.id !== id);
+    await departmentStore.setItem('all', filtered);
+  }
 }
 
 export async function validateDepartmentLogin(deptName, code) {
