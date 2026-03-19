@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Shield, Lock, ArrowRight, CheckCircle2, Building2, UserCircle2 } from 'lucide-react';
+import { getDepartments } from '../lib/store';
 
 const Login = () => {
+  const [loginMode, setLoginMode] = useState('admin'); // 'admin' or 'dept'
   const [systemId, setSystemId] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedDept, setSelectedDept] = useState('');
+  const [accessCode, setAccessCode] = useState('');
+  const [departments, setDepartments] = useState([]);
+  
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login } = useAuth();
+  const { login, deptLogin } = useAuth();
+
+  useEffect(() => {
+    const fetchDepts = async () => {
+      const depts = await getDepartments();
+      setDepartments(depts);
+    };
+    fetchDepts();
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -15,9 +29,16 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      await login(systemId, password);
+      if (loginMode === 'admin') {
+        await login(systemId, password);
+      } else {
+        if (!selectedDept) {
+          throw new Error("Please select a department");
+        }
+        await deptLogin(selectedDept, accessCode);
+      }
     } catch (err) {
-      setError(err.message || "Invalid System ID or Password");
+      setError(err.message || "Invalid Authentication Details");
       setIsSubmitting(false);
     }
   };
@@ -82,7 +103,29 @@ const Login = () => {
 
           <div className="mb-7">
             <h2 className="text-lg font-semibold text-foreground">Welcome back</h2>
-            <p className="text-sm text-muted-foreground mt-1">Authenticate to access your Dashboard</p>
+            <p className="text-sm text-muted-foreground mt-1">Authenticate to access the RMS portal</p>
+          </div>
+
+          {/* ── Login Mode Toggle ── */}
+          <div className="flex bg-muted/50 p-1 rounded-xl mb-8 border border-border/40">
+            <button 
+              onClick={() => { setLoginMode('admin'); setError(''); }}
+              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                loginMode === 'admin' ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Shield size={14} />
+              <span>Administrator</span>
+            </button>
+            <button 
+              onClick={() => { setLoginMode('dept'); setError(''); }}
+              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                loginMode === 'dept' ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Building2 size={14} />
+              <span>Department</span>
+            </button>
           </div>
 
           {error && (
@@ -93,53 +136,94 @@ const Login = () => {
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">System Identifier</label>
-              <div className="relative">
-                <Shield className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
-                <input
-                  type="text"
-                  value={systemId}
-                  onChange={(e) => setSystemId(e.target.value)}
-                  disabled={isSubmitting}
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50"
-                  placeholder="you@cssgroup.com"
-                  required
-                />
-              </div>
-            </div>
+            {loginMode === 'admin' ? (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">System Identifier</label>
+                  <div className="relative">
+                    <UserCircle2 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
+                    <input
+                      type="text"
+                      value={systemId}
+                      onChange={(e) => setSystemId(e.target.value)}
+                      disabled={isSubmitting}
+                      className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50"
+                      placeholder="you@cssgroup.local"
+                      required
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Password</label>
-                <button type="button" className="text-[11px] text-muted-foreground hover:text-primary transition-colors">Forgot?</button>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                  className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-            </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Password</label>
+                    <button type="button" className="text-[11px] text-muted-foreground hover:text-primary transition-colors">Forgot?</button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isSubmitting}
+                      className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Select Department</label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
+                    <select
+                      value={selectedDept}
+                      onChange={(e) => setSelectedDept(e.target.value)}
+                      disabled={isSubmitting}
+                      className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50 appearance-none cursor-pointer"
+                      required
+                    >
+                      <option value="">Choose your unit...</option>
+                      {departments.map(dept => (
+                        <option key={dept.id} value={dept.name}>{dept.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Unit Access Code</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
+                    <input
+                      type="password"
+                      value={accessCode}
+                      onChange={(e) => setAccessCode(e.target.value)}
+                      disabled={isSubmitting}
+                      className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50 font-mono tracking-widest"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-xl transition-all shadow-md shadow-primary/15 flex items-center justify-center space-x-2 active:scale-[0.98] disabled:opacity-50 text-sm"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-4 rounded-xl transition-all shadow-md shadow-primary/15 flex items-center justify-center space-x-2 active:scale-[0.98] disabled:opacity-50 text-sm h-12"
             >
-              <span>{isSubmitting ? "Authenticating..." : "Sign In"}</span>
+              <span>{isSubmitting ? "Authenticating..." : (loginMode === 'admin' ? "Sign In as Admin" : "Access Dept Dashboard")}</span>
               {!isSubmitting && <ArrowRight size={16} />}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-[11px] text-muted-foreground">© 2026 CSS Group Holdings</p>
+          <div className="mt-8 text-center">
+            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">© 2026 CSS Group Holdings</p>
           </div>
         </div>
       </div>

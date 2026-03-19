@@ -46,11 +46,11 @@ async function ensureInitialized() {
   if (!existingDepts) {
     // Initial core departments
     await departmentStore.setItem('all', [
-      { id: 1, name: 'Hatchery', type: 'Operational' },
-      { id: 2, name: 'Poultry', type: 'Operational' },
-      { id: 3, name: 'QA/QC', type: 'Strategic' },
-      { id: 4, name: 'Logistics', type: 'Operational' },
-      { id: 5, name: 'HR Department', type: 'Strategic' },
+      { id: 1, name: 'Hatchery', type: 'Operational', accessCode: 'HATCH-2026' },
+      { id: 2, name: 'Poultry', type: 'Operational', accessCode: 'POULT-2026' },
+      { id: 3, name: 'QA/QC', type: 'Strategic', accessCode: 'QAQC-2026' },
+      { id: 4, name: 'Logistics', type: 'Operational', accessCode: 'LOG-2026' },
+      { id: 5, name: 'HR Department', type: 'Strategic', accessCode: 'HR-2026' },
     ]);
   }
   _initialized = true;
@@ -161,4 +161,11 @@ export async function deleteDepartment(id) {
   const filtered = all.filter(d => d.id !== id);
   await departmentStore.setItem('all', filtered);
   await logActivity('Department Deleted', `ID: ${id} removed from system`);
+}
+
+export async function validateDepartmentLogin(deptName, code) {
+  await ensureInitialized();
+  const all = await getDepartments();
+  const dept = all.find(d => d.name === deptName && d.accessCode === code);
+  return dept || null;
 }

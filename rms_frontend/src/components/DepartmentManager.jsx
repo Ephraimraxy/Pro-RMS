@@ -14,7 +14,10 @@ const DeptItem = ({ name, type, onDelete }) => (
       </div>
       <div>
         <h4 className="text-sm font-bold text-foreground">{name}</h4>
-        <p className="text-[10px] text-muted-foreground uppercase font-medium tracking-tight font-mono">{type}</p>
+        <div className="flex items-center space-x-2">
+          <p className="text-[10px] text-muted-foreground uppercase font-medium tracking-tight font-mono">{type}</p>
+          <span className="text-[10px] text-primary/60 font-mono tracking-tighter border border-primary/20 px-1 rounded bg-primary/5">CODE: {name.substring(0,3).toUpperCase()}-2026</span>
+        </div>
       </div>
     </div>
     <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -30,12 +33,19 @@ const DeptItem = ({ name, type, onDelete }) => (
 
 import { getDepartments, addDepartment, deleteDepartment } from '../lib/store';
 import { toast } from 'react-hot-toast';
+import Modal from './Modal';
 
 const DepartmentManager = ({ onViewChange }) => {
   const { user } = useAuth();
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Modal states
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [pendingDept, setPendingDept] = useState(null);
+  const [newDeptData, setNewDeptData] = useState({ name: '', type: 'Operational', accessCode: '' });
 
   const loadDepts = async () => {
     const data = await getDepartments();
@@ -47,27 +57,50 @@ const DepartmentManager = ({ onViewChange }) => {
     loadDepts();
   }, []);
 
-  const handleAdd = async () => {
-    const name = prompt("Enter Department Name:");
-    if (!name) return;
-    const type = confirm("Is this a Strategic department? (Cancel for Operational)") ? "Strategic" : "Operational";
-    
-    await addDepartment({ name, type });
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    if (!newDeptData.name) return;
+    setIsProcessing(true);
+    // Simulate real network delay for UX
+    await new Promise(r => setTimeout(r, 600));
+    await addDepartment(newDeptData);
     await loadDepts();
-    toast.success(`${name} Department added`);
+    setIsProcessing(false);
+    setIsAddModalOpen(false);
+    setNewDeptData({ name: '', type: 'Operational' });
+    toast.success(`${newDeptData.name} Department added`);
   };
 
-  const handleDelete = async (id, name) => {
-    if (!confirm(`Are you sure you want to delete the ${name} department?`)) return;
-    await deleteDepartment(id);
+  const confirmDelete = async () => {
+    if (!pendingDept) return;
+    setIsProcessing(true);
+    await new Promise(r => setTimeout(r, 600));
+    await deleteDepartment(pendingDept.id);
     await loadDepts();
-    toast.error(`${name} Department removed`);
+    setIsProcessing(false);
+    setIsDeleteModalOpen(false);
+    toast.error(`${pendingDept.name} Department removed`);
+    setPendingDept(null);
   };
 
   const strategic = departments.filter(d => d.type === 'Strategic');
   const operational = departments.filter(d => d.type === 'Operational');
 
-  if (loading) return <div className="p-20 text-center animate-pulse text-muted-foreground font-mono text-xs">Syncing Corporate Hierarchy...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex flex-col items-center justify-center space-y-6">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center text-primary">
+            <Briefcase size={24} className="animate-pulse" />
+          </div>
+        </div>
+        <p className="text-sm font-bold text-primary tracking-widest uppercase animate-pulse">Syncing Corporate Hierarchy</p>
+      </div>
+    );
+  }
 
   return (
     <Layout user={user} currentView="department_manager" onViewChange={onViewChange}>
@@ -95,7 +128,7 @@ const DepartmentManager = ({ onViewChange }) => {
               />
             </div>
             <button 
-              onClick={handleAdd}
+              onClick={() => setIsAddModalOpen(true)}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center space-x-2"
             >
               <Plus size={18} />
@@ -113,7 +146,7 @@ const DepartmentManager = ({ onViewChange }) => {
             </div>
             <div className="grid gap-4">
               {strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                <DeptItem key={dept.id} name={dept.name} type="Strategic" onDelete={() => handleDelete(dept.id, dept.name)} />
+                <DeptItem key={dept.id} name={dept.name} type="Strategic" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
               ))}
             </div>
           </div>
@@ -126,12 +159,126 @@ const DepartmentManager = ({ onViewChange }) => {
             </div>
             <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               {operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                <DeptItem key={dept.id} name={dept.name} type="Operational" onDelete={() => handleDelete(dept.id, dept.name)} />
+                <DeptItem key={dept.id} name={dept.name} type="Operational" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
               ))}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Add Department Modal */}
+      <Modal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        title="Add New Department"
+        footer={(
+          <>
+            <button 
+              onClick={() => setIsAddModalOpen(false)}
+              className="flex-1 px-4 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleAddSubmit}
+              disabled={isProcessing}
+              className="flex-1 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin"></div>
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <span>Create Department</span>
+              )}
+            </button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Department Name</label>
+            <input 
+              type="text" 
+              value={newDeptData.name}
+              onChange={(e) => setNewDeptData({...newDeptData, name: e.target.value})}
+              placeholder="e.g. Finance & Accounts"
+              className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 focus:ring-2 focus:ring-primary/20 outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Login Access Code</label>
+            <input 
+              type="text" 
+              value={newDeptData.accessCode}
+              onChange={(e) => setNewDeptData({...newDeptData, accessCode: e.target.value})}
+              placeholder="e.g. HATCH-2026"
+              className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 focus:ring-2 focus:ring-primary/20 outline-none font-mono"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">ClassificationType</label>
+            <div className="grid grid-cols-2 gap-3">
+              {['Operational', 'Strategic'].map(type => (
+                <button
+                  key={type}
+                  onClick={() => setNewDeptData({...newDeptData, type})}
+                  className={`p-4 rounded-xl border transition-all text-xs font-bold uppercase tracking-tight ${
+                    newDeptData.type === type 
+                    ? 'bg-primary/10 border-primary/50 text-primary shadow-sm' 
+                    : 'bg-white border-border/50 text-muted-foreground hover:border-border'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal 
+        isOpen={isDeleteModalOpen} 
+        onClose={() => setIsDeleteModalOpen(false)} 
+        title="Delete Department"
+        footer={(
+          <>
+            <button 
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="flex-1 px-4 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={confirmDelete}
+              disabled={isProcessing}
+              className="flex-1 px-4 py-3 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm shadow-lg shadow-destructive/20 hover:bg-destructive/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-destructive-foreground/30 border-t-destructive-foreground rounded-full animate-spin"></div>
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <span>Delete Permanently</span>
+              )}
+            </button>
+          </>
+        )}
+      >
+        <div className="text-center space-y-4 py-4">
+          <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mx-auto mb-2">
+            <Trash2 size={32} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Are you sure you want to delete the</p>
+            <p className="text-lg font-bold text-foreground">"{pendingDept?.name}"</p>
+            <p className="text-sm font-medium text-muted-foreground">department? This action cannot be undone.</p>
+          </div>
+        </div>
+      </Modal>
     </Layout>
   );
 };

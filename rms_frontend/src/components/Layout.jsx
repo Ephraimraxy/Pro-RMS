@@ -39,7 +39,7 @@ const Navbar = ({ user }) => (
       <div className="flex items-center space-x-3 pl-4 lg:pl-6 border-l border-border/50">
         <div className="text-right hidden sm:block">
           <p className="text-xs font-bold text-foreground leading-none">{user?.name || 'Administrator'}</p>
-          <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-tighter">{user?.role || 'Global Admin'}</p>
+          <p className="text-[10px] text-primary font-bold mt-1 uppercase tracking-widest">{user?.role === 'department' ? 'Unit Controller' : (user?.role || 'Global Admin')}</p>
         </div>
         <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-xl bg-muted border border-border/50 flex items-center justify-center text-primary">
            <UserIcon size={18} className="lg:w-5 lg:h-5" />
@@ -68,12 +68,17 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
             <SidebarItem icon={PenTool} label="Document Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} />
           </div>
 
-          <div className="mt-8 space-y-1">
-           <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4">Administration</p>
-           <SidebarItem icon={Settings} label="Workflow Builder" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} />
-           <SidebarItem icon={Briefcase} label="Dept Manager" active={currentView === 'department_manager'} onClick={() => onViewChange('department_manager')} />
-           <SidebarItem icon={Activity} label="System Audit" active={currentView === 'audit_logs'} onClick={() => onViewChange('audit_logs')} />
-           <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} />
+          {user?.role !== 'department' && (
+            <div className="mt-8 space-y-1">
+              <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4">Administration</p>
+              <SidebarItem icon={Settings} label="Workflow Builder" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} />
+              <SidebarItem icon={Briefcase} label="Dept Manager" active={currentView === 'department_manager'} onClick={() => onViewChange('department_manager')} />
+              <SidebarItem icon={Activity} label="System Audit" active={currentView === 'audit_logs'} onClick={() => onViewChange('audit_logs')} />
+            </div>
+          )}
+          
+          <div className="mt-4 space-y-1">
+             <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} />
           </div>
         </aside>
 
@@ -88,7 +93,9 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         <SidebarItem icon={LayoutDashboard} label="Overview" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
         <SidebarItem icon={ClipboardCheck} label="Requests" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
         <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} mobile />
-        <SidebarItem icon={Settings} label="Admin" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
+        {user?.role !== 'department' && (
+          <SidebarItem icon={Settings} label="Admin" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
+        )}
         <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} mobile />
       </nav>
     </div>

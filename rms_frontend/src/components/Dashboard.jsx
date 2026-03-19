@@ -82,8 +82,18 @@ const Dashboard = ({ onViewChange }) => {
       <div className="max-w-7xl mx-auto space-y-12 pb-20">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">Oversight <span className="text-primary italic">Dashboard</span></h1>
-            <p className="text-muted-foreground text-sm mt-1 font-medium">Welcome back, {user?.name}. Monitoring CSS Group operations.</p>
+            <h1 className="text-3xl font-bold text-foreground tracking-tight">
+              {user?.role === 'department' ? (
+                <span>{user.name} <span className="text-primary italic">Unit Portal</span></span>
+              ) : (
+                <span>Oversight <span className="text-primary italic">Dashboard</span></span>
+              )}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1 font-medium">
+              {user?.role === 'department' 
+                ? `Operational control for the ${user.name} unit. Monitoring local activities.` 
+                : `Welcome back, ${user?.name}. Monitoring CSS Group operations.`}
+            </p>
           </div>
           <button 
             onClick={() => setIsFormOpen(true)}

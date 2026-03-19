@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI } from '../lib/api';
-import { logActivity } from '../lib/store';
+import { logActivity, validateDepartmentLogin } from '../lib/store';
 
 const AuthContext = createContext(null);
 
@@ -21,7 +20,25 @@ export const AuthProvider = ({ children }) => {
     const result = await authAPI.login(systemId, password);
     setUser(result);
     localStorage.setItem('rms_user', JSON.stringify(result));
-    logActivity('Logged In', `${result.name} authenticated at ${new Date().toLocaleTimeString()}`);
+    logActivity('Logged In', `${result.name} (Admin) authenticated at ${new Date().toLocaleTimeString()}`);
+    return result;
+  };
+
+  const deptLogin = async (deptName, accessCode) => {
+    const dept = await validateDepartmentLogin(deptName, accessCode);
+    if (!dept) throw new Error("Invalid Department or Access Code");
+    
+    const result = {
+      id: `dept_${dept.id}`,
+      name: dept.name,
+      role: 'department',
+      deptId: dept.id,
+      email: `${dept.name.toLowerCase().replace(/\s/g, '')}@cssgroup.local`
+    };
+    
+    setUser(result);
+    localStorage.setItem('rms_user', JSON.stringify(result));
+    logActivity('Dept Logged In', `${dept.name} department authenticated at ${new Date().toLocaleTimeString()}`);
     return result;
   };
 
@@ -33,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, deptLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );

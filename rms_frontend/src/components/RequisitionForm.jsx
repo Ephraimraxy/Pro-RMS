@@ -7,7 +7,7 @@ const RequisitionForm = ({ isOpen, onClose, user }) => {
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
-    department: user?.department_id?.[1] || 'General',
+    department: user?.role === 'department' ? user.name : 'General',
     notes: '',
     urgency: 'normal'
   });
@@ -19,7 +19,7 @@ const RequisitionForm = ({ isOpen, onClose, user }) => {
     e.preventDefault();
     const typeMap = { cash: 'Cash', material: 'Material', memo: 'Memo' };
     await addRequisition({ ...formData, type: typeMap[type], isDraft, createdBy: user?.name || 'Administrator' });
-    setFormData({ description: '', amount: '', department: user?.department_id?.[1] || 'General', notes: '', urgency: 'normal' });
+    setFormData({ description: '', amount: '', department: user?.role === 'department' ? user.name : 'General', notes: '', urgency: 'normal' });
     setType('cash');
     onClose();
   };
@@ -92,14 +92,30 @@ const RequisitionForm = ({ isOpen, onClose, user }) => {
               )}
               
               <div className="space-y-2">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Assigned Unit / Dept</label>
+                <input
+                  type="text"
+                  value={formData.department}
+                  readOnly={user?.role === 'department'}
+                  onChange={e => setFormData({...formData, department: e.target.value})}
+                  className={`w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all ${user?.role === 'department' ? 'opacity-70 cursor-not-allowed bg-muted/20' : ''}`}
+                />
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Urgency Level</label>
-                <select className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer transition-all">
+                <select 
+                   value={formData.urgency}
+                   onChange={e => setFormData({...formData, urgency: e.target.value})}
+                   className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer transition-all"
+                >
                   <option value="normal" className="bg-background">Normal</option>
                   <option value="urgent" className="bg-background">Urgent</option>
                   <option value="critical" className="bg-background text-destructive">Critical / Emergency</option>
                 </select>
               </div>
             </div>
+
 
             {/* File Upload Area */}
             <div className="space-y-2">

@@ -75,11 +75,14 @@ const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
 
 import { getWorkflows, updateWorkflows } from '../lib/store';
 import { toast } from 'react-hot-toast';
+import Modal from './Modal';
 
 const WorkflowBuilder = ({ onViewChange }) => {
   const { user } = useAuth();
   const [stages, setStages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [pendingStage, setPendingStage] = useState(null);
 
   const loadStages = async () => {
     const data = await getWorkflows();
@@ -91,7 +94,11 @@ const WorkflowBuilder = ({ onViewChange }) => {
     loadStages();
   }, []);
 
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const addStage = async () => {
+    setIsProcessing(true);
+    await new Promise(r => setTimeout(r, 600));
     const newStage = {
       id: Date.now(),
       sequence: stages.length + 1,
@@ -102,6 +109,7 @@ const WorkflowBuilder = ({ onViewChange }) => {
     const updated = [...stages, newStage];
     setStages(updated);
     await updateWorkflows(updated);
+    setIsProcessing(false);
     toast.success('New stage added to workflow');
   };
 
@@ -111,14 +119,32 @@ const WorkflowBuilder = ({ onViewChange }) => {
     await updateWorkflows(updated);
   };
 
-  const deleteStage = async (id) => {
-    const updated = stages.filter(s => s.id !== id).map((s, idx) => ({ ...s, sequence: idx + 1 }));
+  const confirmDelete = async () => {
+    if (!pendingStage) return;
+    setIsProcessing(true);
+    await new Promise(r => setTimeout(r, 600));
+    const updated = stages.filter(s => s.id !== pendingStage.id).map((s, idx) => ({ ...s, sequence: idx + 1 }));
     setStages(updated);
     await updateWorkflows(updated);
+    setIsProcessing(false);
+    setIsDeleteModalOpen(false);
     toast.error('Stage removed');
+    setPendingStage(null);
   };
 
-  if (loading) return <div className="p-20 text-center animate-pulse text-muted-foreground font-mono text-xs">Loading Workflow Governance...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-[400px] flex flex-col items-center justify-center space-y-6">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center text-primary">
+            <Settings2 size={24} className="animate-pulse" />
+          </div>
+        </div>
+        <p className="text-sm font-bold text-primary tracking-widest uppercase animate-pulse">Syncing Approval Chain</p>
+      </div>
+    );
+  }
 
   return (
     <Layout user={user} currentView="workflow_builder" onViewChange={onViewChange}>
@@ -135,10 +161,15 @@ const WorkflowBuilder = ({ onViewChange }) => {
           </div>
           <button 
             onClick={addStage}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center space-x-2"
+            disabled={isProcessing}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Plus size={18} />
-            <span>Add Stage</span>
+            {isProcessing ? (
+               <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin"></div>
+            ) : (
+               <Plus size={18} />
+            )}
+            <span>{isProcessing ? 'Adding...' : 'Add Stage'}</span>
           </button>
         </div>
 
@@ -148,7 +179,7 @@ const WorkflowBuilder = ({ onViewChange }) => {
               key={stage.id} 
               stage={stage} 
               onUpdate={updateStage}
-              onDelete={() => deleteStage(stage.id)}
+              onDelete={() => { setPendingStage(stage); setIsDeleteModalOpen(true); }}
               isFirst={idx === 0}
             />
           ))}
@@ -161,6 +192,48 @@ const WorkflowBuilder = ({ onViewChange }) => {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal 
+        isOpen={isDeleteModalOpen} 
+        onClose={() => setIsDeleteModalOpen(false)} 
+        title="Delete Workflow Stage"
+        footer={(
+          <>
+            <button 
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="flex-1 px-4 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={confirmDelete}
+              disabled={isProcessing}
+              className="flex-1 px-4 py-3 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm shadow-lg shadow-destructive/20 hover:bg-destructive/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-destructive-foreground/30 border-t-destructive-foreground rounded-full animate-spin"></div>
+                  <span>Removing...</span>
+                </>
+              ) : (
+                <span>Delete Stage</span>
+              )}
+            </button>
+          </>
+        )}
+      >
+        <div className="text-center space-y-4 py-4">
+          <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mx-auto mb-2">
+            <Trash2 size={32} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Are you sure you want to delete the</p>
+            <p className="text-lg font-bold text-foreground">"{pendingStage?.name}"</p>
+            <p className="text-sm font-medium text-muted-foreground">workflow stage? This will re-sequence the approval chain.</p>
+          </div>
+        </div>
+      </Modal>
     </Layout>
   );
 };
