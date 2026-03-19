@@ -35,7 +35,7 @@ exec odoo \\
   --proxy-mode \\
   --workers="${ODOO_WORKERS:-0}" \\
   --without-demo=True \\
-  -u css_rms_custom
+  -i css_rms_custom
 EOF
 
 chmod +x /tmp/run_odoo.sh
