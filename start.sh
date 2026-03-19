@@ -40,4 +40,5 @@ EOF
 chmod +x /tmp/run_odoo.sh
 
 # Safely drop privileges to the 'odoo' user and execute the generated script
-exec su -p odoo -c /tmp/run_odoo.sh
+# The official odoo user has its shell set to /usr/sbin/nologin, so we MUST force /bin/bash via -s
+exec su -s /bin/bash -p odoo -c /tmp/run_odoo.sh
