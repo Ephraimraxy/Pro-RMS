@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { CORPORATE_HIERARCHY } from '../constants/departments';
-import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
 
 const DeptItem = ({ name, type, onDelete }) => (
   <div className="glass bg-white/80 p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
@@ -50,6 +50,7 @@ const DepartmentManager = ({ onViewChange }) => {
   // Section states
   const [isStrategicOpen, setIsStrategicOpen] = useState(true);
   const [isOperationalOpen, setIsOperationalOpen] = useState(true);
+  const [showAccessCode, setShowAccessCode] = useState(false);
 
   const openAddModal = (type = 'Operational') => {
     setNewDeptData({ name: '', type, accessCode: '' });
@@ -262,13 +263,23 @@ const DepartmentManager = ({ onViewChange }) => {
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Login Access Code</label>
-            <input 
-              type="text" 
-              value={newDeptData.accessCode}
-              onChange={(e) => setNewDeptData({...newDeptData, accessCode: e.target.value})}
-              placeholder="e.g. HATCH-2026"
-              className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 focus:ring-2 focus:ring-primary/20 outline-none font-mono"
-            />
+            <div className="relative">
+              <input 
+                type={showAccessCode ? "text" : "password"} 
+                value={newDeptData.accessCode}
+                onChange={(e) => setNewDeptData({...newDeptData, accessCode: e.target.value})}
+                placeholder="e.g. HATCH-2026"
+                className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 pr-12 focus:ring-2 focus:ring-primary/20 outline-none font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAccessCode(!showAccessCode)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-primary transition-colors"
+                title={showAccessCode ? "Hide Access Code" : "Show Access Code"}
+              >
+                {showAccessCode ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">ClassificationType</label>
