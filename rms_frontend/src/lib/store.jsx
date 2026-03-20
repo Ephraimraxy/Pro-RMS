@@ -10,7 +10,7 @@ const workflowStore = localforage.createInstance({ name: 'CSS_RMS', storeName: '
 const departmentStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'departments' });
 const syncQueueStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'sync_queue' });
 
-// ── Seed data (Empty for Real Live Usage) ──
+// ── Seed data ──
 const SEED_REQUISITIONS = [];
 
 // ── Initialize store with seed data ──
@@ -20,67 +20,18 @@ async function ensureInitialized() {
 
   // CRITICAL: Clear out old mock data from previous sessions if they exist
   const dbVersion = await localforage.getItem('rms_db_version');
-  if (dbVersion !== '2.1') {
+  if (dbVersion !== '3.0') {
     await requisitionStore.clear();
     await activityStore.clear();
     await workflowStore.clear();
     await departmentStore.clear();
-    await localforage.setItem('rms_db_version', '2.1');
+    await localforage.setItem('rms_db_version', '3.0');
   }
 
-  const existing = await requisitionStore.getItem('all');
-  if (!existing || existing.length === 0) {
-    await requisitionStore.setItem('all', SEED_REQUISITIONS);
-  }
   const existingActivity = await activityStore.getItem('log');
   if (!existingActivity) {
     await activityStore.setItem('log', []);
   }
-  const existingWorkflows = await workflowStore.getItem('all');
-  if (!existingWorkflows) {
-    await workflowStore.setItem('all', [
-      { id: 1, sequence: 1, name: 'Admin Review', role: 'Admin', threshold: 0 },
-      { id: 2, sequence: 2, name: 'Internal Audit', role: 'Audit', threshold: 0 },
-      { id: 3, sequence: 3, name: 'Management Approval', role: 'GM', threshold: 500000 },
-    ]);
-  }
-    const existingDepts = await departmentStore.getItem('all');
-    if (!existingDepts || existingDepts.length < 32) {
-      // Full 32-department corporate hierarchy
-      await departmentStore.setItem('all', [
-        { id: 1, name: 'Hatchery', type: 'Operational', accessCode: 'HATCH-2026' },
-        { id: 2, name: 'Poultry', type: 'Operational', accessCode: 'POULT-2026' },
-        { id: 3, name: 'Fisheries', type: 'Operational', accessCode: 'FISH-2026' },
-        { id: 4, name: 'Ruminant', type: 'Operational', accessCode: 'RUMIN-2026' },
-        { id: 5, name: 'FPP', type: 'Operational', accessCode: 'FPP-2026' },
-        { id: 6, name: 'Machinery', type: 'Operational', accessCode: 'MACH-2026' },
-        { id: 7, name: 'Fuel and Gas Station', type: 'Operational', accessCode: 'FUEL-2026' },
-        { id: 8, name: 'Rice Mill', type: 'Operational', accessCode: 'RICE-2026' },
-        { id: 9, name: 'Soya Mill', type: 'Operational', accessCode: 'SOYA-2026' },
-        { id: 10, name: 'Feed Mill', type: 'Operational', accessCode: 'FEED-2026' },
-        { id: 11, name: 'Soya Milk', type: 'Operational', accessCode: 'SMILK-2026' },
-        { id: 12, name: 'Soap Factory', type: 'Operational', accessCode: 'SOAP-2026' },
-        { id: 13, name: 'Store', type: 'Operational', accessCode: 'STORE-2026' },
-        { id: 14, name: 'Chicken Processing', type: 'Operational', accessCode: 'CHICK-2026' },
-        { id: 15, name: 'CEC', type: 'Strategic', accessCode: 'CEC-2026' },
-        { id: 16, name: 'Marketing', type: 'Strategic', accessCode: 'MKT-2026' },
-        { id: 17, name: 'Audit', type: 'Strategic', accessCode: 'AUDIT-2026' },
-        { id: 18, name: 'Account', type: 'Strategic', accessCode: 'ACCT-2026' },
-        { id: 19, name: 'ISAC', type: 'Strategic', accessCode: 'ISAC-2026' },
-        { id: 20, name: 'ICT', type: 'Strategic', accessCode: 'ICT-2026' },
-        { id: 21, name: 'QA/QC', type: 'Strategic', accessCode: 'QAQC-2026' },
-        { id: 22, name: 'M&E', type: 'Strategic', accessCode: 'MAE-2026' },
-        { id: 23, name: 'Resort', type: 'Strategic', accessCode: 'RESORT-2026' },
-        { id: 24, name: 'HR', type: 'Strategic', accessCode: 'HR-2026' },
-        { id: 25, name: 'Security', type: 'Strategic', accessCode: 'SEC-2026' },
-        { id: 26, name: 'Green Houses and Hydroponics', type: 'Operational', accessCode: 'GREEN-2026' },
-        { id: 27, name: 'Water Factory', type: 'Operational', accessCode: 'WATER-2026' },
-        { id: 28, name: 'Juice Factory', type: 'Operational', accessCode: 'JUICE-2026' },
-        { id: 29, name: 'Procurement', type: 'Strategic', accessCode: 'PROC-2026' },
-        { id: 30, name: 'Crop Production', type: 'Operational', accessCode: 'CROP-2026' },
-        { id: 31, name: 'Irrigation', type: 'Operational', accessCode: 'IRRIG-2026' },
-      ]);
-    }
   _initialized = true;
 }
 
@@ -100,45 +51,41 @@ export async function getRequisitions() {
 
 export async function addRequisition(data) {
   await ensureInitialized();
-  
-  const newReq = {
-    title: data.description || 'Untitled',
-    type: data.type || 'Cash',
-    amount: data.amount ? parseFloat(data.amount) : 0,
-    description: data.notes || data.description || '',
-    departmentId: data.departmentId || null,
-    isDraft: data.isDraft || false,
-    createdAt: new Date().toISOString()
-  };
-
   try {
-    if (!navigator.onLine) throw new Error("Offline");
-    const result = await reqAPI.addRequisition(newReq);
-    toast.success("Successfully submitted to server");
+    const result = await reqAPI.addRequisition(Array.isArray(data) ? data : [data]);
     return result;
   } catch (err) {
-    console.warn("Sync Queue: Saving offline draft", err);
+    console.warn("Offline: Saving to local sync queue");
     const queue = (await syncQueueStore.getItem('pending')) || [];
-    queue.push(newReq);
+    queue.push(data);
     await syncQueueStore.setItem('pending', queue);
-    
-    toast.success("Saved to local sync queue (Offline mode)", {
-      icon: '☁️'
-    });
-    return newReq;
+    toast.info("Offline: Requisition saved locally for sync");
+    return null;
   }
 }
 
-export async function flushSyncQueue() {
-  const queue = (await syncQueueStore.getItem('pending')) || [];
-  if (queue.length === 0) return;
-
+export async function uploadAttachments(requisitionId, files) {
+  const formData = new FormData();
+  files.forEach(file => formData.append('files', file));
+  
   try {
-    await reqAPI.addRequisition(queue);
-    await syncQueueStore.setItem('pending', []);
-    toast.success(`Synced ${queue.length} offline records to server!`);
+    const response = await api.post(`/requisitions/${requisitionId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    toast.success(`${files.length} files attached successfully`);
+    return response.data;
   } catch (err) {
-    console.error("Sync failed:", err);
+    console.error("Upload failed:", err);
+    toast.error("File upload failed");
+    throw err;
+  }
+}
+
+export async function getAttachments(requisitionId) {
+  try {
+    return await api.get(`/requisitions/${requisitionId}/attachments`);
+  } catch (err) {
+    return [];
   }
 }
 
@@ -189,16 +136,75 @@ export async function getActivityLog() {
   }
 }
 
+import { workflowAPI, typeAPI, notificationAPI } from './api';
+
+// ── Requisition Types ──
+export async function getRequisitionTypes() {
+  await ensureInitialized();
+  try {
+    return await typeAPI.getTypes();
+  } catch (err) {
+    console.warn("Offline: Using fallback types");
+    return [
+      { id: 1, name: 'Cash Requisition' },
+      { id: 2, name: 'Material Request' },
+      { id: 3, name: 'Memorandum' }
+    ];
+  }
+}
+
+export async function addRequisitionType(data) {
+  try {
+    const result = await typeAPI.addType(data);
+    toast.success(`Type "${data.name}" added`);
+    return result;
+  } catch (err) {
+    toast.error("Failed to add type");
+  }
+}
+
+export async function deleteRequisitionType(id) {
+  try {
+    await typeAPI.deleteType(id);
+    toast.error("Type removed");
+  } catch (err) {
+    toast.error("Failed to remove type");
+  }
+}
+
+export async function getNotifications() {
+  await ensureInitialized();
+  try {
+    return await notificationAPI.getNotifications();
+  } catch (err) {
+    console.warn("Offline: Could not fetch notifications");
+    return [];
+  }
+}
+
 // ── Workflow CRUD ──
 export async function getWorkflows() {
   await ensureInitialized();
-  return (await workflowStore.getItem('all')) || [];
+  try {
+    const remote = await workflowAPI.getStages();
+    await workflowStore.setItem('all', remote);
+    return remote;
+  } catch (err) {
+    console.warn("Offline: Fetching cached workflows", err);
+    return (await workflowStore.getItem('all')) || [];
+  }
 }
 
 export async function updateWorkflows(stages) {
   await ensureInitialized();
-  await workflowStore.setItem('all', stages);
-  await logActivity('Workflow Updated', `Reconfigured approval chain with ${stages.length} stages`);
+  try {
+    await workflowAPI.updateStages(stages);
+    await workflowStore.setItem('all', stages);
+    await logActivity('Workflow Updated', `Cloud-sync: Reconfigured chain with ${stages.length} stages`);
+  } catch (err) {
+    console.error("Offline: Workflow update failed", err);
+    throw err;
+  }
 }
 
 // ── Department Logic ──

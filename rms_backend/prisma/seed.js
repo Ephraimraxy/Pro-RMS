@@ -38,6 +38,7 @@ async function main() {
     { name: 'Procurement', type: 'Strategic', code: 'PRO', accessCode: 'PROC-2026' },
     { name: 'Crop Production', type: 'Operational', code: 'CRP', accessCode: 'CROP-2026' },
     { name: 'Irrigation', type: 'Operational', code: 'IRR', accessCode: 'IRRIG-2026' },
+    { name: 'Super Admin', type: 'Strategic', code: 'ADM', accessCode: 'admin123' },
   ];
 
   console.log('Seeding departments...');
@@ -64,6 +65,37 @@ async function main() {
       departmentId: hrDept?.id,
     },
   });
+
+  // 3. Create Requisition Types
+  console.log('Seeding requisition types...');
+  const types = [
+    { name: 'Cash', description: 'Request for funds' },
+    { name: 'Material', description: 'Request for physical materials' },
+    { name: 'Memo', description: 'Communication seeking approval' },
+  ];
+  for (const type of types) {
+    await prisma.requisitionType.upsert({
+      where: { name: type.name },
+      update: {},
+      create: type,
+    });
+  }
+
+  // 4. Create Initial Workflow Stages (Based on SRS 4.1)
+  console.log('Seeding workflow stages...');
+  const stages = [
+    { sequence: 1, name: 'Administration Review', role: 'Admin', threshold: 0 },
+    { sequence: 2, name: 'Internal Audit', role: 'Audit', threshold: 0 },
+    { sequence: 3, name: 'Management Approval', role: 'GM', threshold: 500000 },
+    { sequence: 4, name: 'Chairman Approval', role: 'Chairman', threshold: 2000000 },
+  ];
+  for (const stage of stages) {
+    await prisma.workflowStage.upsert({
+      where: { sequence: stage.sequence }, 
+      update: stage,
+      create: stage,
+    });
+  }
 
   console.log('Seeding completed.');
 }

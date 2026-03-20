@@ -15,12 +15,16 @@ model User {
   email        String        @unique
   name         String
   password     String
-  role         String        @default("staff") // "global_admin", "director", "staff"
+  role         String        @default("staff")
+  mfaEnabled   Boolean       @default(false)
+  mfaSecret    String?       
   departmentId Int?
   department   Department?   @relation(fields: [departmentId], references: [id])
   requisitions Requisition[]
   memos        Memo[]
   activityLogs ActivityLog[]
+  notifications Notification[]
+  fileAccessLogs FileAccessLog[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -47,11 +51,12 @@ model Requisition {
   type         String     // "Cash", "Material", "Memo"
   amount       Float?
   description  String?
-  status       String     @default("pending") // "pending", "approved", "rejected"
+  status       String     @default("pending")
   creatorId    Int
   creator      User       @relation(fields: [creatorId], references: [id])
   departmentId Int
   department   Department @relation(fields: [departmentId], references: [id])
+  attachments  Attachment[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }
@@ -76,4 +81,51 @@ model ActivityLog {
   userId    Int?
   user      User?    @relation(fields: [userId], references: [id])
   timestamp DateTime @default(now())
+}
+
+model RequisitionType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model WorkflowStage {
+  id        Int      @id @default(autoincrement())
+  sequence  Int      @unique
+  name      String
+  role      String   
+  threshold Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  content    String
+  link       String?  
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Attachment {
+  id            Int           @id @default(autoincrement())
+  filename      String
+  path          String
+  fileType      String
+  requisitionId Int?
+  requisition   Requisition?  @relation(fields: [requisitionId], references: [id])
+  accessLogs    FileAccessLog[]
+  createdAt     DateTime      @default(now())
+}
+
+model FileAccessLog {
+  id           Int        @id @default(autoincrement())
+  attachmentId Int
+  attachment   Attachment @relation(fields: [attachmentId], references: [id])
+  userId       Int
+  user         User       @relation(fields: [userId], references: [id])
+  timestamp    DateTime   @default(now())
 }

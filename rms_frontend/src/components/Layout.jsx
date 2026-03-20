@@ -3,8 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import { 
   LayoutDashboard, FileText, ClipboardCheck, History, Settings, 
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
-  ChevronLeft, ChevronRight, Menu
+  ChevronLeft, ChevronRight, Menu, Inbox, Clock
 } from 'lucide-react';
+import { getNotifications } from '../lib/store';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
   <div 
@@ -32,7 +33,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed }) => (
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, setShowBell }) => (
   <nav className="h-14 border-b border-border/40 bg-white/70 backdrop-blur-xl sticky top-0 z-[60] flex items-center justify-between px-4 lg:px-6">
     <div className="flex items-center space-x-3 lg:space-x-5">
       <button onClick={toggleSidebar} className="hidden lg:flex p-1.5 hover:bg-muted rounded-lg text-muted-foreground transition-colors mr-1">
@@ -55,10 +56,56 @@ const Navbar = ({ user, toggleSidebar, isCollapsed }) => (
         <span className="group-hover:text-foreground transition-colors">NODE: ONLINE</span>
       </div>
       
-      <button className="relative text-muted-foreground hover:text-primary transition-all p-1.5 hover:bg-muted rounded-lg">
-        <Bell size={18} />
-        <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm"></span>
-      </button>
+      <div className="relative">
+        <button 
+          onClick={() => setShowBell(!showBell)}
+          className="relative text-muted-foreground hover:text-primary transition-all p-1.5 hover:bg-muted rounded-lg"
+        >
+          <Bell size={18} />
+          {notifications.length > 0 && (
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-primary rounded-full border-2 border-background shadow-xs"></span>
+          )}
+        </button>
+
+        {showBell && (
+           <div className="absolute right-0 mt-3 w-80 glass bg-white/95 rounded-2xl border border-border/50 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+              <div className="p-4 border-b border-border/40 bg-muted/30 flex items-center justify-between">
+                <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Notifications</h3>
+                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{notifications.length} New</span>
+              </div>
+              <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
+                {notifications.length === 0 ? (
+                  <div className="p-10 text-center space-y-3">
+                    <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto opacity-50">
+                      <Bell size={20} className="text-muted-foreground" />
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium">No new alerts yet.</p>
+                  </div>
+                ) : (
+                  notifications.map(n => (
+                    <div key={n.id} className="p-4 border-b border-border/20 last:border-0 hover:bg-primary/5 transition-colors cursor-pointer group">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                          <Inbox size={14} />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-[11px] font-bold text-foreground leading-tight">{n.message}</p>
+                          <div className="flex items-center space-x-2 opacity-60">
+                            <Clock size={10} />
+                            <span className="text-[9px] font-medium">{new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="p-3 bg-muted/20 border-t border-border/40 text-center">
+                <button className="text-[10px] font-black text-primary hover:text-primary/80 uppercase tracking-widest transition-colors">Clear All Notifications</button>
+              </div>
+           </div>
+        )}
+      </div>
 
       <div className="flex items-center space-x-3 pl-4 lg:pl-5 border-l border-border/30">
         <div className="text-right hidden sm:block">
@@ -83,6 +130,20 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
     const saved = localStorage.getItem('rms_sidebar_collapsed');
     return saved === 'true';
   });
+  const [notifications, setNotifications] = useState([]);
+  const [showBell, setShowBell] = useState(false);
+
+  useEffect(() => {
+    const fetchNotifs = async () => {
+        try {
+            const data = await getNotifications();
+            setNotifications(data);
+        } catch (err) { console.error("Notif fetch error:", err); }
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('rms_sidebar_collapsed', isCollapsed);
@@ -92,7 +153,14 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-foreground selection:bg-primary/30 font-sans antialiased overflow-x-hidden">
-      <Navbar user={user} toggleSidebar={toggleSidebar} isCollapsed={isCollapsed} />
+      <Navbar 
+        user={user} 
+        toggleSidebar={toggleSidebar} 
+        isCollapsed={isCollapsed} 
+        notifications={notifications}
+        showBell={showBell}
+        setShowBell={setShowBell}
+      />
       
       <div className="flex h-[calc(100vh-56px)] overflow-hidden">
         {/* Desktop Sidebar App-Tile Navigation */}
@@ -120,7 +188,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
                     Control Center
                   </p>
                 )}
-                <SidebarItem icon={Settings} label="Workflows" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={Settings} label="System Studio" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} isCollapsed={isCollapsed} />
                 <SidebarItem icon={Briefcase} label="Departments" active={currentView === 'department_manager'} onClick={() => onViewChange('department_manager')} isCollapsed={isCollapsed} />
                 <SidebarItem icon={Activity} label="System Audit" active={currentView === 'audit_logs'} onClick={() => onViewChange('audit_logs')} isCollapsed={isCollapsed} />
               </div>

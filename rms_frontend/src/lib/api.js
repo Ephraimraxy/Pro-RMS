@@ -37,14 +37,10 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
-  async login(email, password) {
-    return api.post('/auth/login', { email, password });
+  deptLogin: async (departmentName, accessCode, mfaCode) => {
+    const response = await api.post('/dept-login', { departmentName, accessCode, mfaCode });
+    return response.data;
   },
-  
-  async deptLogin(departmentName, accessCode) {
-    return api.post('/auth/dept-login', { departmentName, accessCode });
-  },
-
   async checkSession() {
     return api.get('/auth/me');
   },
@@ -52,6 +48,36 @@ export const authAPI = {
   async logout() {
     localStorage.removeItem('rms_token');
     localStorage.removeItem('rms_user');
+  }
+};
+
+export const workflowAPI = {
+  async getStages() {
+    return api.get('/workflow-stages');
+  },
+  async updateStages(stages) {
+    return api.post('/workflow-stages', stages);
+  }
+};
+
+export const typeAPI = {
+  getTypes: async () => {
+    const response = await api.get('/requisition-types');
+    return response.data;
+  },
+  addType: async (data) => {
+    const response = await api.post('/requisition-types', data);
+    return response.data;
+  },
+  deleteType: async (id) => {
+    const response = await api.delete(`/requisition-types/${id}`);
+    return response.data;
+  }
+};
+
+export const notificationAPI = {
+  async getNotifications() {
+    return api.get('/notifications');
   }
 };
 

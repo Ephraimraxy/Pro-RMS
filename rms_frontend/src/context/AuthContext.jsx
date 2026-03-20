@@ -41,8 +41,8 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
-  const deptLogin = async (departmentName, accessCode) => {
-    const { token, user: userData } = await authAPI.deptLogin(departmentName, accessCode);
+  const deptLogin = async (departmentName, accessCode, mfaCode) => {
+    const { token, user: userData } = await authAPI.deptLogin(departmentName, accessCode, mfaCode);
     setUser(userData);
     localStorage.setItem('rms_token', token);
     localStorage.setItem('rms_user', JSON.stringify(userData));

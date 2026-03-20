@@ -5,20 +5,18 @@ import { getDepartments } from '../lib/store';
 import { toast } from 'react-hot-toast';
 
 const Login = () => {
-  const [loginMode, setLoginMode] = useState('admin'); // 'admin' or 'dept'
-  const [systemId, setSystemId] = useState('');
-  const [password, setPassword] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [departments, setDepartments] = useState([]);
-  const [showPassword, setShowPassword] = useState(false);
   const [showAccessCode, setShowAccessCode] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
+  const [showMfa, setShowMfa] = useState(false);
   
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
-  const { login, deptLogin } = useAuth();
+  const { deptLogin } = useAuth();
 
   useEffect(() => {
     const fetchDepts = async () => {
@@ -60,14 +58,11 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      if (loginMode === 'admin') {
-        await login(systemId, password);
-      } else {
-        if (!selectedDept) {
-          throw new Error("Please select a department");
-        }
-        await deptLogin(selectedDept, accessCode);
+      if (!selectedDept) {
+        throw new Error("Please select a department");
       }
+      // Unify login to use the department portal (Backend now handles Super Admin role internally)
+      await deptLogin(selectedDept, accessCode, mfaCode);
     } catch (err) {
       const displayString = err.response?.data?.error || err.message || "Invalid Authentication Details";
       setError(displayString);
@@ -138,135 +133,94 @@ const Login = () => {
             <p className="text-sm text-muted-foreground mt-1">Authenticate to access the RMS portal</p>
           </div>
 
-          {/* ── Login Mode Toggle ── */}
-          <div className="flex bg-muted/50 p-1 rounded-xl mb-8 border border-border/40">
-            <button 
-              onClick={() => { setLoginMode('admin'); setError(''); }}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                loginMode === 'admin' ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Shield size={14} />
-              <span>Administrator</span>
-            </button>
-            <button 
-              onClick={() => { setLoginMode('dept'); setError(''); }}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                loginMode === 'dept' ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Building2 size={14} />
-              <span>Department</span>
-            </button>
-          </div>
-
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/20 text-destructive text-xs px-4 py-3 rounded-xl mb-5 flex items-center space-x-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse"></div>
-              <span>{error}</span>
+          <div className="space-y-6">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-foreground">Sign In to Dashboard</h2>
+              <p className="text-muted-foreground text-sm font-medium">Select your department and enter access code</p>
             </div>
-          )}
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            {loginMode === 'admin' ? (
-              <>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">System Identifier</label>
-                  <div className="relative">
-                    <UserCircle2 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
-                    <input
-                      type="text"
-                      value={systemId}
-                      onChange={(e) => setSystemId(e.target.value)}
-                      disabled={isSubmitting}
-                      className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50"
-                      placeholder="you@cssgroup.local"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Password</label>
-                    <button type="button" className="text-[11px] text-muted-foreground hover:text-primary transition-colors">Forgot?</button>
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isSubmitting}
-                      className="w-full bg-white border border-border rounded-xl pl-10 pr-12 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50"
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-primary transition-colors"
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Select Department</label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
-                    <select
-                      value={selectedDept}
-                      onChange={(e) => setSelectedDept(e.target.value)}
-                      disabled={isSubmitting}
-                      className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50 appearance-none cursor-pointer"
-                      required
-                    >
-                      <option value="">Choose your unit...</option>
-                      {departments.map(dept => (
-                        <option key={dept.id} value={dept.name}>{dept.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Unit Access Code</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" size={16} />
-                    <input
-                      type={showAccessCode ? "text" : "password"}
-                      value={accessCode}
-                      onChange={(e) => setAccessCode(e.target.value)}
-                      disabled={isSubmitting}
-                      className="w-full bg-white border border-border rounded-xl pl-10 pr-12 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50 font-mono tracking-widest"
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowAccessCode(!showAccessCode)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-primary transition-colors"
-                    >
-                      {showAccessCode ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-              </>
+            {error && (
+              <div className="bg-destructive/10 border border-destructive/20 text-destructive text-xs px-4 py-3 rounded-xl mb-5 flex items-center space-x-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse"></div>
+                <span>{error}</span>
+              </div>
             )}
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-4 rounded-xl transition-all shadow-md shadow-primary/15 flex items-center justify-center space-x-2 active:scale-[0.98] disabled:opacity-50 text-sm h-12"
-            >
-              <span>{isSubmitting ? "Authenticating..." : (loginMode === 'admin' ? "Sign In as Admin" : "Access Dept Dashboard")}</span>
-              {!isSubmitting && <ArrowRight size={16} />}
-            </button>
-          </form>
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Department / Unit</label>
+                <div className="relative group">
+                  <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors" size={16} />
+                  <select
+                    value={selectedDept}
+                    onChange={(e) => setSelectedDept(e.target.value)}
+                    disabled={isSubmitting}
+                    className="w-full bg-white border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50 appearance-none cursor-pointer"
+                    required
+                  >
+                    <option value="">Choose your unit...</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Access Code</label>
+                <div className="relative group">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors" size={16} />
+                  <input
+                    type={showAccessCode ? "text" : "password"}
+                    value={accessCode}
+                    onChange={(e) => setAccessCode(e.target.value)}
+                    disabled={isSubmitting}
+                    className="w-full bg-white border border-border rounded-xl pl-10 pr-12 py-3 text-sm text-foreground placeholder-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50 font-mono tracking-widest"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAccessCode(!showAccessCode)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-primary transition-colors"
+                  >
+                    {showAccessCode ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {selectedDept === 'Super Admin' && (
+                <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                  <label className="text-[11px] font-medium text-primary uppercase tracking-wider flex items-center justify-between">
+                    <span>MFA Security PIN</span>
+                    <span className="text-[9px] lowercase opacity-60">Required for Admin</span>
+                  </label>
+                  <div className="relative group">
+                    <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary/50 group-focus-within:text-primary transition-colors" size={16} />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                      disabled={isSubmitting}
+                      className="w-full bg-primary/5 border border-primary/20 rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-primary/30 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-50 font-mono tracking-[0.5em] text-center"
+                      placeholder="000000"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 px-4 rounded-xl transition-all shadow-md shadow-primary/15 flex items-center justify-center space-x-2 active:scale-[0.98] disabled:opacity-50 text-sm h-12"
+              >
+                <span>{isSubmitting ? "Authenticating..." : "Enter RMS Portal"}</span>
+                {!isSubmitting && <ArrowRight size={16} />}
+              </button>
+            </form>
+          </div>
 
           <div className="mt-8 text-center">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">© 2026 CSS Group Holdings</p>
