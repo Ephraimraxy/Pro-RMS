@@ -3,7 +3,7 @@ import Layout from './Layout';
 import RequisitionForm from './RequisitionForm';
 import { useAuth } from '../context/AuthContext';
 import { CORPORATE_HIERARCHY } from '../constants/departments';
-import { getDashboardStats, getRequisitions } from '../lib/store';
+import { getDashboardStats, getRequisitions, getDepartments } from '../lib/store';
 import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
