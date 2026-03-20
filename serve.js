@@ -43,8 +43,20 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/dept-login', async (req, res) => {
   try {
     const { departmentName, accessCode } = req.body;
-    const dept = await prisma.department.findFirst({ where: { name: departmentName, accessCode } });
-    if (!dept) return res.status(401).json({ error: 'Invalid Department or Access Code' });
+    console.log(`[AUTH] Dept login attempt: "${departmentName?.trim()}"`);
+    
+    const dept = await prisma.department.findFirst({ 
+      where: { 
+        name: { equals: departmentName?.trim(), mode: 'insensitive' }, 
+        accessCode: accessCode?.trim() 
+      } 
+    });
+    
+    if (!dept) {
+      console.warn(`[AUTH] Failed: ${departmentName} / ${accessCode}`);
+      return res.status(401).json({ error: 'Invalid Department or Access Code' });
+    }
+    
     const userData = { id: `dept_${dept.id}`, name: dept.name, role: 'department', deptId: dept.id, email: `${dept.name.toLowerCase().replace(/\s/g, '')}@cssgroup.local` };
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
     await prisma.activityLog.create({ data: { action: 'Dept Logged In', details: `${dept.name} unit authenticated` } });
