@@ -1,16 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FileText, ClipboardCheck, History, Settings, LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool } from 'lucide-react';
+import { 
+  LayoutDashboard, FileText, ClipboardCheck, History, Settings, 
+  LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
+  ChevronLeft, ChevronRight
+} from 'lucide-react';
 
-const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false }) => (
+const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
   <div 
     onClick={onClick}
+    title={isCollapsed ? label : ''}
     className={mobile
       ? `flex flex-col items-center justify-center p-2 rounded-xl cursor-pointer transition-all ${active ? 'text-primary scale-110' : 'text-muted-foreground hover:text-foreground'}`
-      : `flex items-center space-x-3 px-4 py-3 rounded-xl cursor-pointer transition-all ${active ? 'bg-primary/10 text-primary border border-primary/20 shadow-lg shadow-primary/5' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`
-  }>
-    <Icon size={mobile ? 22 : 20} className={mobile && active ? 'drop-shadow-md' : ''} />
-    <span className={mobile ? "text-[10px] font-bold mt-1 tracking-tight" : "font-medium text-sm"}>{label}</span>
+      : `flex items-center group relative px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 ${isCollapsed ? 'justify-center px-0' : 'space-x-3'} ${active ? 'bg-primary/10 text-primary border border-primary/20 shadow-lg shadow-primary/5' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`
+    }
+  >
+    <Icon size={mobile ? 22 : 20} className={`${mobile && active ? 'drop-shadow-md' : ''} transition-transform duration-300 group-hover:scale-110`} />
+    {!mobile && !isCollapsed && (
+      <span className="font-medium text-sm whitespace-nowrap overflow-hidden transition-all duration-300 transform translate-x-0 opacity-100">
+        {label}
+      </span>
+    )}
+    {isCollapsed && !mobile && (
+       <div className="absolute left-full ml-2 px-2 py-1 bg-foreground text-background text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[100]">
+         {label}
+       </div>
+    )}
+    {mobile && <span className="text-[10px] font-bold mt-1 tracking-tight">{label}</span>}
   </div>
 );
 
@@ -21,7 +37,7 @@ const Navbar = ({ user }) => (
          <img src="/favicon.png" alt="Logo" className="w-6 h-6 object-contain" />
       </div>
       <div>
-        <h1 className="text-sm font-bold text-foreground tracking-tight">CSS <span className="text-primary font-black italic">RMS</span></h1>
+        <h1 className="text-sm font-bold text-foreground tracking-tight uppercase">CSS <span className="text-primary font-black italic">RMS</span></h1>
       </div>
     </div>
 
@@ -58,6 +74,16 @@ const Navbar = ({ user }) => (
 
 const Layout = ({ children, user, currentView, onViewChange }) => {
   const { logout } = useAuth();
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('rms_sidebar_collapsed');
+    return saved === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('rms_sidebar_collapsed', isCollapsed);
+  }, [isCollapsed]);
+
+  const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 font-sans antialiased">
@@ -65,32 +91,61 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       
       <div className="flex">
         {/* Desktop Sidebar */}
-        <aside className="w-64 h-[calc(100vh-64px)] border-r border-border/50 bg-white/50 backdrop-blur-md sticky top-16 hidden lg:block p-4 overflow-y-auto custom-scrollbar">
-          <div className="space-y-1">
-            <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 mt-2">Main Navigation</p>
-            <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} />
-            <SidebarItem icon={FileText} label="Memo Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} />
-            <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} />
-            <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} />
-            <SidebarItem icon={PenTool} label="Document Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} />
+        <aside 
+          className={`h-[calc(100vh-64px)] border-r border-border/50 bg-white/50 backdrop-blur-md sticky top-16 hidden lg:flex flex-col transition-all duration-300 ease-in-out group/sidebar ${isCollapsed ? 'w-20' : 'w-64'}`}
+        >
+          <div className="p-4 flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
+            <div className="space-y-1">
+              {!isCollapsed && (
+                <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 mt-2 animate-in fade-in duration-500">
+                  Main Navigation
+                </p>
+              )}
+              <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={FileText} label="Memo Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={PenTool} label="Document Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
+            </div>
+
+            {user?.role !== 'department' && (
+              <div className="mt-8 space-y-1">
+                {!isCollapsed && (
+                  <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 animate-in fade-in duration-500">
+                    Administration
+                  </p>
+                )}
+                <SidebarItem icon={Settings} label="Workflow Builder" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={Briefcase} label="Dept Manager" active={currentView === 'department_manager'} onClick={() => onViewChange('department_manager')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={Activity} label="System Audit" active={currentView === 'audit_logs'} onClick={() => onViewChange('audit_logs')} isCollapsed={isCollapsed} />
+              </div>
+            )}
+            
+            <div className="mt-4 space-y-1">
+               <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} isCollapsed={isCollapsed} />
+            </div>
           </div>
 
-          {user?.role !== 'department' && (
-            <div className="mt-8 space-y-1">
-              <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4">Administration</p>
-              <SidebarItem icon={Settings} label="Workflow Builder" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} />
-              <SidebarItem icon={Briefcase} label="Dept Manager" active={currentView === 'department_manager'} onClick={() => onViewChange('department_manager')} />
-              <SidebarItem icon={Activity} label="System Audit" active={currentView === 'audit_logs'} onClick={() => onViewChange('audit_logs')} />
-            </div>
-          )}
-          
-          <div className="mt-4 space-y-1">
-             <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} />
+          {/* Collapse Toggle Button */}
+          <div className="p-4 border-t border-border/50 bg-muted/20">
+            <button 
+              onClick={toggleSidebar}
+              className="w-full h-10 flex items-center justify-center rounded-xl bg-white border border-border/60 shadow-sm hover:bg-muted hover:text-primary transition-all duration-300 group"
+            >
+              {isCollapsed ? (
+                <ChevronRight size={18} className="group-hover:scale-125 transition-transform" />
+              ) : (
+                <>
+                  <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                  <span className="ml-2 text-xs font-bold uppercase tracking-widest overflow-hidden whitespace-nowrap">Collapse</span>
+                </>
+              )}
+            </button>
           </div>
         </aside>
 
         {/* Dynamic Content Area */}
-        <main className="flex-1 p-4 pb-28 lg:p-8 lg:pb-8 overflow-y-auto relative z-10 w-full">
+        <main className="flex-1 p-4 pb-28 lg:p-8 lg:pb-8 overflow-y-auto relative z-10 w-full transition-all duration-300">
           {children}
         </main>
       </div>
