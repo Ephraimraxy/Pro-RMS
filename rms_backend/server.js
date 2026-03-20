@@ -114,6 +114,30 @@ app.get('/api/departments', async (req, res) => {
   }
 });
 
+app.post('/api/departments', authenticateToken, async (req, res) => {
+  try {
+    const { name, type, accessCode } = req.body;
+    const dept = await prisma.department.create({
+      data: { name, type, accessCode }
+    });
+    res.json(dept);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/departments/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.department.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ── REQUISITIONS ROUTES ──
 app.post('/api/requisitions', authenticateToken, async (req, res) => {
   try {
