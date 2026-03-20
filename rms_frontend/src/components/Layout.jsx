@@ -34,7 +34,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, setShowBell }) => {
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, setShowBell, onLogout }) => {
   const { isOnline } = useNetwork();
   return (
   <nav className="h-14 border-b border-border/40 bg-white/70 backdrop-blur-xl sticky top-0 z-[60] flex items-center justify-between px-4 lg:px-6">
@@ -134,6 +134,16 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
             {user?.role === 'department' ? 'Controller' : (user?.role || 'Admin Account')}
           </p>
         </div>
+        
+        {/* Mobile Log Out Button */}
+        <button 
+          onClick={onLogout} 
+          className="lg:hidden p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
+          title="Log Out"
+        >
+          <LogOut size={18} />
+        </button>
+
         <div className="w-8 h-8 rounded-xl bg-muted/50 border border-border/40 flex items-center justify-center text-primary/70 shadow-sm overflow-hidden group hover:border-primary/30 transition-all cursor-pointer">
            <UserIcon size={16} className="group-hover:scale-110 transition-transform" />
         </div>
@@ -179,6 +189,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         notifications={notifications}
         showBell={showBell}
         setShowBell={setShowBell}
+        onLogout={logout}
       />
       
       <div className="flex h-[calc(100vh-56px)] overflow-hidden">
@@ -230,13 +241,27 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       {/* Modern Floating Mobile App-Bar Navigation (Glassmorphism) */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md lg:hidden z-[100] animate-in slide-in-from-bottom-5 duration-500">
         <nav className="glass bg-white/60 backdrop-blur-2xl border border-white/40 rounded-[2.5rem] flex items-center justify-around px-4 py-2 shadow-2xl shadow-primary/10">
-          <SidebarItem icon={LayoutDashboard} label="Home" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
-          <SidebarItem icon={ClipboardCheck} label="Inbox" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
-          <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
-             <PenTool size={20} />
-          </div>
-          <SidebarItem icon={Briefcase} label="Admin" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
-          <SidebarItem icon={LogOut} label="Exit" onClick={logout} mobile />
+          {user?.role === 'department' ? (
+            <>
+              <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
+              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
+              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
+                 <PenTool size={20} />
+              </div>
+              <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
+              <SidebarItem icon={History} label="Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} mobile />
+            </>
+          ) : (
+            <>
+              <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
+              <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
+              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
+                 <PenTool size={20} />
+              </div>
+              <SidebarItem icon={Settings} label="Control" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
+              <SidebarItem icon={History} label="Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} mobile />
+            </>
+          )}
         </nav>
       </div>
     </div>
