@@ -86,7 +86,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
         </button>
 
         {showBell && (
-           <div className="absolute right-0 mt-3 w-80 glass bg-white/95 rounded-2xl border border-border/50 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+           <div className="fixed inset-x-4 top-[60px] sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-80 bg-white rounded-2xl border border-border/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
               <div className="p-4 border-b border-border/40 bg-muted/30 flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Notifications</h3>
                 <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{notifications.length} New</span>
