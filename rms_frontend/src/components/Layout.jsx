@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   LayoutDashboard, FileText, ClipboardCheck, History, Settings, 
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Menu
 } from 'lucide-react';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
@@ -11,61 +11,66 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
     onClick={onClick}
     title={isCollapsed ? label : ''}
     className={mobile
-      ? `flex flex-col items-center justify-center p-2 rounded-xl cursor-pointer transition-all ${active ? 'text-primary scale-110' : 'text-muted-foreground hover:text-foreground'}`
-      : `flex items-center group relative px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 ${isCollapsed ? 'justify-center px-0' : 'space-x-3'} ${active ? 'bg-primary/10 text-primary border border-primary/20 shadow-lg shadow-primary/5' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`
+      ? `flex flex-col items-center justify-center p-2.5 rounded-2xl cursor-pointer transition-all active:scale-90 ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`
+      : `flex items-center group relative px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-300 ${isCollapsed ? 'justify-center mx-1' : 'space-x-4 mx-1'} ${active ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`
     }
   >
-    <Icon size={mobile ? 22 : 20} className={`${mobile && active ? 'drop-shadow-md' : ''} transition-transform duration-300 group-hover:scale-110`} />
+    <div className={`transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
+      <Icon size={mobile ? 20 : 18} />
+    </div>
     {!mobile && !isCollapsed && (
-      <span className="font-medium text-sm whitespace-nowrap overflow-hidden transition-all duration-300 transform translate-x-0 opacity-100">
+      <span className="font-bold text-[13px] tracking-tight whitespace-nowrap overflow-hidden transition-all duration-300">
         {label}
       </span>
     )}
     {isCollapsed && !mobile && (
-       <div className="absolute left-full ml-2 px-2 py-1 bg-foreground text-background text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[100]">
+       <div className="absolute left-full ml-4 px-3 py-2 bg-foreground text-background text-[10px] font-black rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-[-10px] group-hover:translate-x-0 shadow-xl whitespace-nowrap z-[100] uppercase tracking-widest">
          {label}
        </div>
     )}
-    {mobile && <span className="text-[10px] font-bold mt-1 tracking-tight">{label}</span>}
+    {mobile && <span className={`text-[9px] font-black mt-1.5 uppercase tracking-tighter transition-all ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>}
   </div>
 );
 
-const Navbar = ({ user }) => (
-  <nav className="h-16 border-b border-border/50 bg-white/80 backdrop-blur-md sticky top-0 z-[60] flex items-center justify-between px-4 lg:px-6">
-    <div className="flex items-center space-x-3 lg:space-x-4">
-      <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
-         <img src="/favicon.png" alt="Logo" className="w-6 h-6 object-contain" />
+const Navbar = ({ user, toggleSidebar, isCollapsed }) => (
+  <nav className="h-14 border-b border-border/40 bg-white/70 backdrop-blur-xl sticky top-0 z-[60] flex items-center justify-between px-4 lg:px-6">
+    <div className="flex items-center space-x-3 lg:space-x-5">
+      <button onClick={toggleSidebar} className="hidden lg:flex p-1.5 hover:bg-muted rounded-lg text-muted-foreground transition-colors mr-1">
+        <Menu size={18} />
+      </button>
+      <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-inner">
+         <img src="/favicon.png" alt="Logo" className="w-5 h-5 object-contain" />
       </div>
       <div>
-        <h1 className="text-sm font-bold text-foreground tracking-tight uppercase">CSS <span className="text-primary font-black italic">RMS</span></h1>
+        <h1 className="text-xs font-black text-foreground tracking-widest uppercase flex items-center">
+          CSS <span className="text-primary italic ml-1">RMS</span>
+          <span className="ml-3 px-2 py-0.5 rounded-full bg-primary/5 border border-primary/10 text-[8px] text-primary/60 font-mono hidden md:inline-block">V1.0.4</span>
+        </h1>
       </div>
     </div>
 
-    <div className="flex items-center space-x-4 lg:space-x-6">
-      <div className="hidden lg:flex items-center space-x-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-muted/50 px-3 py-1.5 rounded-full border border-border/50 hover:bg-muted transition-colors cursor-default group">
-        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse group-hover:scale-125 transition-transform"></div>
-        <span className="group-hover:text-foreground transition-colors">RMS NODE: ONLINE</span>
+    <div className="flex items-center space-x-3 lg:space-x-5">
+      <div className="hidden md:flex items-center space-x-2 text-[9px] font-black text-muted-foreground uppercase tracking-[0.15em] bg-muted/30 px-3 py-1.5 rounded-xl border border-border/40 hover:bg-muted/50 transition-colors cursor-default group">
+        <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse group-hover:scale-125 transition-transform"></div>
+        <span className="group-hover:text-foreground transition-colors">NODE: ONLINE</span>
       </div>
       
-      <button className="relative text-muted-foreground hover:text-primary transition-colors">
-        <Bell size={20} />
-        <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full border-2 border-background"></span>
+      <button className="relative text-muted-foreground hover:text-primary transition-all p-1.5 hover:bg-muted rounded-lg">
+        <Bell size={18} />
+        <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm"></span>
       </button>
 
-      <div className="flex items-center space-x-3 pl-4 lg:pl-6 border-l border-border/50">
+      <div className="flex items-center space-x-3 pl-4 lg:pl-5 border-l border-border/30">
         <div className="text-right hidden sm:block">
-          <p className="text-xs font-bold text-foreground leading-none flex items-center justify-end space-x-1.5">
+          <p className="text-[11px] font-black text-foreground leading-none flex items-center justify-end space-x-1.5">
             <span>{user?.name || 'Administrator'}</span>
-            {user?.role !== 'department' && (
-              <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[8px] uppercase tracking-tighter border border-primary/20">ROOT</span>
-            )}
           </p>
-          <p className="text-[10px] text-primary font-bold mt-1 uppercase tracking-widest opacity-70">
-            {user?.role === 'department' ? 'Unit Controller' : (user?.role || 'Global Admin')}
+          <p className="text-[9px] text-primary font-black mt-1 uppercase tracking-tighter opacity-80">
+            {user?.role === 'department' ? 'Controller' : (user?.role || 'Admin Account')}
           </p>
         </div>
-        <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-xl bg-muted border border-border/50 flex items-center justify-center text-primary">
-           <UserIcon size={18} className="lg:w-5 lg:h-5" />
+        <div className="w-8 h-8 rounded-xl bg-muted/50 border border-border/40 flex items-center justify-center text-primary/70 shadow-sm overflow-hidden group hover:border-primary/30 transition-all cursor-pointer">
+           <UserIcon size={16} className="group-hover:scale-110 transition-transform" />
         </div>
       </div>
     </div>
@@ -86,80 +91,67 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 font-sans antialiased">
-      <Navbar user={user} />
+    <div className="min-h-screen bg-[#FAF9F6] text-foreground selection:bg-primary/30 font-sans antialiased overflow-x-hidden">
+      <Navbar user={user} toggleSidebar={toggleSidebar} isCollapsed={isCollapsed} />
       
-      <div className="flex">
-        {/* Desktop Sidebar */}
+      <div className="flex h-[calc(100vh-56px)] overflow-hidden">
+        {/* Desktop Sidebar App-Tile Navigation */}
         <aside 
-          className={`h-[calc(100vh-64px)] border-r border-border/50 bg-white/50 backdrop-blur-md sticky top-16 hidden lg:flex flex-col transition-all duration-300 ease-in-out group/sidebar ${isCollapsed ? 'w-20' : 'w-64'}`}
+          className={`border-r border-border/30 bg-white/40 backdrop-blur-3xl sticky top-0 hidden lg:flex flex-col transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${isCollapsed ? 'w-20' : 'w-56'}`}
         >
-          <div className="p-4 flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
-            <div className="space-y-1">
+          <div className="p-3 pt-5 flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
+            <div className="space-y-1.5">
               {!isCollapsed && (
-                <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 mt-2 animate-in fade-in duration-500">
-                  Main Navigation
+                <p className="px-4 text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
+                  Workspace
                 </p>
               )}
               <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} isCollapsed={isCollapsed} />
-              <SidebarItem icon={FileText} label="Memo Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} isCollapsed={isCollapsed} />
               <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} isCollapsed={isCollapsed} />
-              <SidebarItem icon={PenTool} label="Document Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
             </div>
 
             {user?.role !== 'department' && (
-              <div className="mt-8 space-y-1">
+              <div className="mt-8 space-y-1.5">
                 {!isCollapsed && (
-                  <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 animate-in fade-in duration-500">
-                    Administration
+                  <p className="px-4 text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
+                    Control Center
                   </p>
                 )}
-                <SidebarItem icon={Settings} label="Workflow Builder" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} isCollapsed={isCollapsed} />
-                <SidebarItem icon={Briefcase} label="Dept Manager" active={currentView === 'department_manager'} onClick={() => onViewChange('department_manager')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={Settings} label="Workflows" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={Briefcase} label="Departments" active={currentView === 'department_manager'} onClick={() => onViewChange('department_manager')} isCollapsed={isCollapsed} />
                 <SidebarItem icon={Activity} label="System Audit" active={currentView === 'audit_logs'} onClick={() => onViewChange('audit_logs')} isCollapsed={isCollapsed} />
               </div>
             )}
-            
-            <div className="mt-4 space-y-1">
-               <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} isCollapsed={isCollapsed} />
-            </div>
           </div>
 
-          {/* Collapse Toggle Button */}
-          <div className="p-4 border-t border-border/50 bg-muted/20">
-            <button 
-              onClick={toggleSidebar}
-              className="w-full h-10 flex items-center justify-center rounded-xl bg-white border border-border/60 shadow-sm hover:bg-muted hover:text-primary transition-all duration-300 group"
-            >
-              {isCollapsed ? (
-                <ChevronRight size={18} className="group-hover:scale-125 transition-transform" />
-              ) : (
-                <>
-                  <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-                  <span className="ml-2 text-xs font-bold uppercase tracking-widest overflow-hidden whitespace-nowrap">Collapse</span>
-                </>
-              )}
-            </button>
+          <div className="p-3 border-t border-border/20 mb-2">
+             <SidebarItem icon={LogOut} label="Log Out" onClick={logout} isCollapsed={isCollapsed} />
           </div>
         </aside>
 
-        {/* Dynamic Content Area */}
-        <main className="flex-1 p-4 pb-28 lg:p-8 lg:pb-8 overflow-y-auto relative z-10 w-full transition-all duration-300">
-          {children}
+        {/* Dynamic Content Area with Stress-Free Scrolling */}
+        <main className="flex-1 overflow-y-auto custom-scrollbar relative z-10 w-full bg-[#FAF9F6]/50">
+          <div className="p-5 lg:p-10 max-w-7xl mx-auto animate-slide-up">
+            {children}
+          </div>
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-border/50 lg:hidden flex items-center justify-around px-2 py-3 z-[100] shadow-[0_-4px_24px_rgba(0,0,0,0.05)] pb-safe">
-        <SidebarItem icon={LayoutDashboard} label="Overview" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
-        <SidebarItem icon={ClipboardCheck} label="Requests" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
-        <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} mobile />
-        {user?.role !== 'department' && (
-          <SidebarItem icon={Settings} label="Admin" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
-        )}
-        <SidebarItem icon={LogOut} label="Sign Out" onClick={logout} mobile />
-      </nav>
+      {/* Modern Floating Mobile App-Bar Navigation (Glassmorphism) */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md lg:hidden z-[100] animate-in slide-in-from-bottom-5 duration-500">
+        <nav className="glass bg-white/60 backdrop-blur-2xl border border-white/40 rounded-[2.5rem] flex items-center justify-around px-4 py-2 shadow-2xl shadow-primary/10">
+          <SidebarItem icon={LayoutDashboard} label="Home" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
+          <SidebarItem icon={ClipboardCheck} label="Inbox" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
+          <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
+             <PenTool size={20} />
+          </div>
+          <SidebarItem icon={Briefcase} label="Admin" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
+          <SidebarItem icon={LogOut} label="Exit" onClick={logout} mobile />
+        </nav>
+      </div>
     </div>
   );
 };

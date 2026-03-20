@@ -39,75 +39,79 @@
     --ring: 22 50% 28%;
     --radius: 0.75rem;
   }
-}
 
-@layer base {
+  html {
+    font-size: 15px; /* Compacting the UI for that "zoomed out" feel */
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   * {
     @apply border-border;
   }
+  
   body {
     @apply bg-background text-foreground font-sans antialiased;
     background-image: 
       radial-gradient(at 0% 0%, hsla(30, 40%, 95%, 1) 0, transparent 50%), 
       radial-gradient(at 100% 0%, hsla(25, 30%, 92%, 0.5) 0, transparent 50%);
     background-attachment: fixed;
+    overscroll-behavior-y: none; /* Stress-free PWA feel */
   }
 }
 
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(139, 90, 43, 0.1); /* Chocolate tinted border */
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(139, 90, 43, 0.08);
+  box-shadow: 0 8px 32px rgba(106, 58, 34, 0.04);
 }
 
-/* ── Custom Scrollbar ── */
-.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+/* ── Custom Stress-Free Scrollbar ── */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(106, 58, 34, 0.1) transparent;
+}
 
-/* ── Quill Editor Aura Theme ── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(106, 58, 34, 0);
+  border-radius: 10px;
+  transition: background 0.3s;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(106, 58, 34, 0.15);
+}
+
+/* ── Quill Editor Perfection ── */
 .rms-quill-editor .ql-toolbar {
   border: none !important;
-  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-  background: rgba(255,255,255,0.02);
-  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid rgba(106, 58, 34, 0.05) !important;
+  background: rgba(106, 58, 34, 0.01);
+  border-radius: 16px 16px 0 0;
 }
-.rms-quill-editor .ql-toolbar .ql-stroke { stroke: #71717a !important; }
-.rms-quill-editor .ql-toolbar .ql-fill { fill: #71717a !important; }
-.rms-quill-editor .ql-toolbar .ql-picker-label { color: #71717a !important; }
-.rms-quill-editor .ql-toolbar button:hover .ql-stroke { stroke: #60a5fa !important; }
-.rms-quill-editor .ql-toolbar button:hover .ql-fill { fill: #60a5fa !important; }
-.rms-quill-editor .ql-toolbar button.ql-active .ql-stroke { stroke: #3b82f6 !important; }
-.rms-quill-editor .ql-toolbar button.ql-active .ql-fill { fill: #3b82f6 !important; }
+
 .rms-quill-editor .ql-container {
   border: none !important;
-  font-size: 15px;
-  color: #e4e4e7;
-  min-height: 400px;
+  font-size: 14px;
 }
-.rms-quill-editor .ql-editor {
-  padding: 24px 0;
-  line-height: 1.8;
+
+/* Utility Animations */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.rms-quill-editor .ql-editor.ql-blank::before {
-  color: #3f3f46;
-  font-style: normal;
+
+.animate-slide-up {
+  animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-.rms-quill-editor .ql-editor h1 { color: #fff; font-size: 28px; font-weight: 900; }
-.rms-quill-editor .ql-editor h2 { color: #e4e4e7; font-size: 22px; font-weight: 700; }
-.rms-quill-editor .ql-editor h3 { color: #a1a1aa; font-size: 18px; font-weight: 600; }
-.rms-quill-editor .ql-editor blockquote {
-  border-left: 3px solid #3b82f6;
-  padding-left: 16px;
-  color: #a1a1aa;
-}
-.rms-quill-editor .ql-picker-options {
-  background: #18181b !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
-  border-radius: 12px !important;
-  padding: 8px !important;
-}
-.rms-quill-editor .ql-picker-item { color: #a1a1aa !important; }
-.rms-quill-editor .ql-picker-item:hover { color: #fff !important; }
