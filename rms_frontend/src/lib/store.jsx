@@ -86,7 +86,7 @@ export async function uploadAttachments(requisitionId, files) {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     toast.success(`${files.length} files attached successfully`);
-    return response.data;
+    return response;
   } catch (err) {
     console.error("Upload failed:", err);
     toast.error("File upload failed");

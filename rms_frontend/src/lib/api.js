@@ -38,8 +38,7 @@ api.interceptors.response.use(
 
 export const authAPI = {
   deptLogin: async (departmentName, accessCode, mfaCode) => {
-    const response = await api.post('/auth/dept-login', { departmentName, accessCode, mfaCode });
-    return response.data;
+    return api.post('/auth/dept-login', { departmentName, accessCode, mfaCode });
   },
   async checkSession() {
     return api.get('/auth/me');
@@ -62,16 +61,13 @@ export const workflowAPI = {
 
 export const typeAPI = {
   getTypes: async () => {
-    const response = await api.get('/requisition-types');
-    return response.data;
+    return api.get('/requisition-types');
   },
   addType: async (data) => {
-    const response = await api.post('/requisition-types', data);
-    return response.data;
+    return api.post('/requisition-types', data);
   },
   deleteType: async (id) => {
-    const response = await api.delete(`/requisition-types/${id}`);
-    return response.data;
+    return api.delete(`/requisition-types/${id}`);
   }
 };
 
