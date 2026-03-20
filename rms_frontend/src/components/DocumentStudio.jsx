@@ -1,21 +1,27 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Layout from './Layout';
-// Removed react-quill due to React 19 findDOMNode compatibility issues
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
 import localforage from 'localforage';
+import Quill from 'quill';
+import 'quill/dist/quill.snow.css';
+import { Workbook } from '@fortune-sheet/react';
+import '@fortune-sheet/react/dist/index.css';
+
 import { 
   FileText, Table, Download, Plus, Trash2, Save, 
   FileSpreadsheet, FileImage, File, ChevronDown,
-  Columns, CloudOff, Cloud
+  CloudOff, Cloud, Clock, X, HardDrive, AlertCircle, 
+  FolderOpen, Edit3
 } from 'lucide-react';
 
-// Configure LocalForage
-localforage.config({
-  name: 'CSS_RMS_Offline',
-  storeName: 'drafts'
-});
+localforage.config({ name: 'CSS_RMS_Offline', storeName: 'drafts' });
+const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB max offline storage per department
+
+const getObjectSize = (obj) => {
+  try { return new Blob([JSON.stringify(obj)]).size; } catch(e) { return 0; }
+};
 
 // ── Tab Button ──
 const TabButton = ({ icon: Icon, label, active, onClick }) => (
@@ -64,9 +70,14 @@ const ExportMenu = ({ onExport, formats }) => {
 };
 
 // ── Save Indicator ──
-const SaveIndicator = ({ saving, lastSaved }) => (
-  <div className="flex items-center space-x-2 text-[10px] font-mono font-bold text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-full">
-    {saving ? (
+const SaveIndicator = ({ saving, lastSaved, error }) => (
+  <div className={`flex items-center space-x-2 text-[10px] font-mono font-bold px-3 py-1.5 rounded-full ${error ? 'bg-destructive/10 text-destructive' : 'bg-muted/30 text-muted-foreground'}`}>
+    {error ? (
+      <>
+        <AlertCircle size={12} />
+        <span>{error}</span>
+      </>
+    ) : saving ? (
       <>
         <CloudOff size={12} className="animate-pulse" />
         <span>Saving Draft Locally...</span>
@@ -83,98 +94,72 @@ const SaveIndicator = ({ saving, lastSaved }) => (
 // ══════════════════════════════════════════════
 // ── RICH TEXT EDITOR (Docs / Memos) ──────────
 // ══════════════════════════════════════════════
-const RichTextEditor = () => {
-  const [title, setTitle] = useState('Untitled Document');
-  const [content, setContent] = useState('');
+const RichTextEditor = ({ loadedDraft, onAutosave }) => {
+  const [title, setTitle] = useState(loadedDraft?.title || 'Untitled Document');
   const [saving, setSaving] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const printRef = useRef();
+  const editorRef = useRef(null);
+  const quillInstance = useRef(null);
 
-  // Load from offline storage sequentially
   useEffect(() => {
-    localforage.getItem('rms_doc_draft')
-      .then(draft => {
-        if (draft) {
-          setTitle(draft.title || 'Untitled Document');
-          setContent(draft.content || '');
-        }
-      })
-      .catch(err => console.error("Draft load failed:", err))
-      .finally(() => setIsLoaded(true));
-  }, []);
+    if (!editorRef.current || quillInstance.current) return;
+    
+    quillInstance.current = new Quill(editorRef.current, {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ 'color': [] }, { 'background': [] }],
+          [{ 'script': 'sub'}, { 'script': 'super' }],
+          [{ 'header': 1 }, { 'header': 2 }, 'blockquote', 'code-block'],
+          [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
+          [{ 'direction': 'rtl' }, { 'align': [] }],
+          ['link', 'image', 'video'],
+          ['clean']
+        ]
+      }
+    });
 
-  // Autosave when data changes sequentially
+    if (loadedDraft?.data) {
+      quillInstance.current.root.innerHTML = loadedDraft.data;
+    }
+
+    quillInstance.current.on('text-change', () => {
+      setSaving(true);
+      if (window.docAutoSaveTimer) clearTimeout(window.docAutoSaveTimer);
+      window.docAutoSaveTimer = setTimeout(() => {
+        onAutosave({ title, data: quillInstance.current.root.innerHTML });
+        setSaving(false);
+      }, 1500);
+    });
+  }, [loadedDraft, onAutosave, title]);
+
   useEffect(() => {
-    if (!isLoaded) return;
+    // Save on title change
     setSaving(true);
-    const timer = setTimeout(() => {
-      localforage.setItem('rms_doc_draft', { title, content }).then(() => setSaving(false));
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [title, content, isLoaded]);
-
-  const quillModules = {
-    toolbar: [
-      [{ header: [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ list: 'ordered' }, { list: 'bullet' }],
-      [{ align: [] }],
-      ['blockquote', 'code-block'],
-      ['link'],
-      ['clean'],
-    ],
-  };
+    if (window.docTitleTimer) clearTimeout(window.docTitleTimer);
+    window.docTitleTimer = setTimeout(() => {
+      if (quillInstance.current) {
+        onAutosave({ title, data: quillInstance.current.root.innerHTML });
+      }
+      setSaving(false);
+    }, 1500);
+  }, [title]);
 
   const handleExport = useCallback(async (type) => {
-    const el = printRef.current;
-    if (!el) return;
-
-    if (type === 'pdf') {
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${title}.pdf`);
-    }
-
-    if (type === 'png') {
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff' });
-      const link = document.createElement('a');
-      link.download = `${title}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    }
-
+    const contentHtml = quillInstance.current?.root.innerHTML || '';
     if (type === 'html') {
-      const blob = new Blob([`<html><head><title>${title}</title><style>body{font-family:sans-serif;color:#333;}</style></head><body>${content}</body></html>`], { type: 'text/html' });
+      const blob = new Blob([`<html><head><title>${title}</title><style>body{font-family:sans-serif;}</style></head><body>${contentHtml}</body></html>`], { type: 'text/html' });
       const link = document.createElement('a');
       link.download = `${title}.html`;
       link.href = URL.createObjectURL(blob);
       link.click();
     }
-
-    if (type === 'txt') {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
-      const text = tempDiv.textContent || tempDiv.innerText || '';
-      const blob = new Blob([text], { type: 'text/plain' });
-      const link = document.createElement('a');
-      link.download = `${title}.txt`;
-      link.href = URL.createObjectURL(blob);
-      link.click();
-    }
-  }, [title, content]);
+  }, [title]);
 
   const exportFormats = [
-    { type: 'pdf', label: 'Export as PDF', icon: File },
-    { type: 'png', label: 'Export as PNG Image', icon: FileImage },
-    { type: 'html', label: 'Export as HTML', icon: FileText },
-    { type: 'txt', label: 'Export as Plain Text', icon: FileText },
+    { type: 'html', label: 'Export as HTML', icon: FileText }
   ];
-
-  if (!isLoaded) return <div className="p-8 text-center text-muted-foreground animate-pulse font-mono tracking-widest text-xs">Loading Offline Draft Cache...</div>;
 
   return (
     <div className="space-y-6">
@@ -191,29 +176,8 @@ const RichTextEditor = () => {
         <ExportMenu onExport={handleExport} formats={exportFormats} />
       </div>
 
-      {/* Printable Area */}
-      <div ref={printRef} className="glass bg-white border border-border/50 rounded-2xl p-0 min-h-[600px] shadow-sm relative z-10 overflow-hidden flex flex-col">
-        {/* Simple Toolbar */}
-        <div className="bg-muted/30 border-b border-border/50 p-2 flex items-center space-x-2">
-          <div className="px-3 py-1 bg-white rounded-md text-[10px] font-bold text-muted-foreground border border-border/50">Normal Text</div>
-          <div className="w-px h-4 bg-border mx-1"></div>
-          <button className="p-1 px-2 hover:bg-white rounded text-xs font-bold font-serif">B</button>
-          <button className="p-1 px-2 hover:bg-white rounded text-xs italic font-serif">I</button>
-          <button className="p-1 px-2 hover:bg-white rounded text-xs underline font-serif">U</button>
-        </div>
-        
-        <div className="p-8 flex-1 flex flex-col">
-          <div className="mb-6 pb-4 border-b border-border/50">
-            <h2 className="text-lg font-bold text-foreground">{title}</h2>
-            <p className="text-[10px] text-muted-foreground font-mono mt-1">CSS Group Holding — Internal Document</p>
-          </div>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Start typing your document content here..."
-            className="w-full flex-1 bg-transparent border-none outline-none resize-none font-sans text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/30"
-          />
-        </div>
+      <div className="glass bg-white border border-border/50 rounded-2xl shadow-sm relative z-10 overflow-hidden flex flex-col">
+          <div ref={editorRef} className="h-[600px] border-none font-sans" />
       </div>
     </div>
   );
@@ -222,106 +186,34 @@ const RichTextEditor = () => {
 // ══════════════════════════════════════════════
 // ── SPREADSHEET EDITOR ───────────────────────
 // ══════════════════════════════════════════════
-const SpreadsheetEditor = () => {
-  const [title, setTitle] = useState('Untitled Spreadsheet');
-  const [columns, setColumns] = useState(['Item', 'Description', 'Quantity', 'Unit Price (₦)', 'Total (₦)']);
-  const [rows, setRows] = useState([
-    ['', '', '', '', ''],
-    ['', '', '', '', ''],
-    ['', '', '', '', ''],
-  ]);
+const SpreadsheetEditor = ({ loadedDraft, onAutosave }) => {
+  const [title, setTitle] = useState(loadedDraft?.title || 'Untitled Spreadsheet');
   const [saving, setSaving] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const sheetData = useRef(loadedDraft?.data || [{ name: "Sheet1", celldata: [] }]);
 
-  // Load from offline storage
-  useEffect(() => {
-    localforage.getItem('rms_sheet_draft')
-      .then(draft => {
-        if (draft) {
-          setTitle(draft.title || 'Untitled Spreadsheet');
-          setColumns(draft.columns || ['Item', 'Description', 'Quantity', 'Unit Price (₦)', 'Total (₦)']);
-          setRows(draft.rows || [['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']]);
-        }
-      })
-      .catch(err => console.error("Sheet draft load failed:", err))
-      .finally(() => setIsLoaded(true));
-  }, []);
-
-  // Autosave
-  useEffect(() => {
-    if (!isLoaded) return;
+  const handleSheetChange = (data) => {
+    sheetData.current = data;
     setSaving(true);
-    const timer = setTimeout(() => {
-      localforage.setItem('rms_sheet_draft', { title, columns, rows }).then(() => setSaving(false));
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [title, columns, rows, isLoaded]);
-
-  const updateCell = (rowIdx, colIdx, value) => {
-    const updated = rows.map((r, ri) => ri === rowIdx ? r.map((c, ci) => ci === colIdx ? value : c) : r);
-    setRows(updated);
+    if (window.sheetAutoSaveTimer) clearTimeout(window.sheetAutoSaveTimer);
+    window.sheetAutoSaveTimer = setTimeout(() => {
+      onAutosave({ title, data: sheetData.current });
+      setSaving(false);
+    }, 1500);
   };
 
-  const addRow = () => setRows([...rows, Array(columns.length).fill('')]);
-  const removeRow = (idx) => setRows(rows.filter((_, i) => i !== idx));
-  const addColumn = () => {
-    setColumns([...columns, `Column ${columns.length + 1}`]);
-    setRows(rows.map(r => [...r, '']));
-  };
-
-  const handleExport = useCallback((type) => {
-    const wsData = [columns, ...rows];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-
-    if (type === 'xlsx') {
-      XLSX.writeFile(wb, `${title}.xlsx`);
-    }
-    if (type === 'csv') {
-      XLSX.writeFile(wb, `${title}.csv`, { bookType: 'csv' });
-    }
-    if (type === 'pdf') {
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      pdf.setFontSize(16);
-      pdf.text(title, 14, 20);
-      pdf.setFontSize(8);
-      pdf.text('CSS Group Holding — Generated Spreadsheet', 14, 26);
-      
-      const startY = 35;
-      const cellW = (pdf.internal.pageSize.getWidth() - 28) / columns.length;
-      const cellH = 10;
-
-      // Header
-      pdf.setFillColor(240, 240, 245);
-      pdf.setTextColor(30, 30, 40);
-      pdf.setFontSize(9);
-      columns.forEach((col, ci) => {
-        pdf.rect(14 + ci * cellW, startY, cellW, cellH, 'F');
-        pdf.text(col, 14 + ci * cellW + 3, startY + 7);
-      });
-
-      // Body
-      pdf.setTextColor(60, 60, 70);
-      pdf.setFontSize(8);
-      rows.forEach((row, ri) => {
-        row.forEach((cell, ci) => {
-          pdf.rect(14 + ci * cellW, startY + (ri + 1) * cellH, cellW, cellH);
-          pdf.text(String(cell || ''), 14 + ci * cellW + 3, startY + (ri + 1) * cellH + 7);
-        });
-      });
-
-      pdf.save(`${title}.pdf`);
-    }
-  }, [title, columns, rows]);
+  useEffect(() => {
+    // Hook up title change autosave
+    setSaving(true);
+    if (window.sheetTitleTimer) clearTimeout(window.sheetTitleTimer);
+    window.sheetTitleTimer = setTimeout(() => {
+      onAutosave({ title, data: sheetData.current });
+      setSaving(false);
+    }, 1500);
+  }, [title]);
 
   const exportFormats = [
-    { type: 'xlsx', label: 'Export as Excel (.xlsx)', icon: FileSpreadsheet },
-    { type: 'csv', label: 'Export as CSV', icon: FileText },
-    { type: 'pdf', label: 'Export as PDF', icon: File },
+    { type: 'xlsx', label: 'Export as Excel (Not Implemented)', icon: FileSpreadsheet }
   ];
-
-  if (!isLoaded) return <div className="p-8 text-center text-muted-foreground animate-pulse font-mono tracking-widest text-xs">Loading Offline Draft Cache...</div>;
 
   return (
     <div className="space-y-6">
@@ -335,66 +227,11 @@ const SpreadsheetEditor = () => {
           />
           <SaveIndicator saving={saving} />
         </div>
-        <ExportMenu onExport={handleExport} formats={exportFormats} />
+        <ExportMenu onExport={() => alert('Excel export coming soon!')} formats={exportFormats} />
       </div>
 
-      <div className="glass bg-white/70 border border-border/50 rounded-2xl overflow-hidden shadow-sm">
-        {/* Toolbar */}
-        <div className="flex items-center space-x-2 p-3 border-b border-border/50 bg-white/50 relative z-20">
-          <button onClick={addRow} className="flex items-center space-x-1.5 text-xs font-bold text-muted-foreground hover:text-foreground bg-white/80 hover:bg-muted shadow-sm px-3 py-2 rounded-lg transition-all border border-border/50">
-            <Plus size={14} /> <span>Add Row</span>
-          </button>
-          <button onClick={addColumn} className="flex items-center space-x-1.5 text-xs font-bold text-muted-foreground hover:text-foreground bg-white/80 hover:bg-muted shadow-sm px-3 py-2 rounded-lg transition-all border border-border/50">
-            <Columns size={14} /> <span>Add Column</span>
-          </button>
-        </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto custom-scrollbar relative z-10">
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="w-10 p-3 text-muted-foreground text-[10px] font-mono bg-muted/30">#</th>
-                {columns.map((col, ci) => (
-                  <th key={ci} className="p-0 border-l border-border/50 bg-muted/30">
-                    <input
-                      value={col}
-                      onChange={(e) => {
-                        const updated = [...columns];
-                        updated[ci] = e.target.value;
-                        setColumns(updated);
-                      }}
-                      className="w-full bg-transparent text-primary text-xs font-bold px-4 py-3 outline-none focus:bg-white/80 transition-all text-center"
-                    />
-                  </th>
-                ))}
-                <th className="w-10 bg-muted/30"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, ri) => (
-                <tr key={ri} className="border-t border-border/50 hover:bg-white transition-colors bg-white/40">
-                  <td className="p-3 text-muted-foreground text-[10px] font-mono text-center">{ri + 1}</td>
-                  {row.map((cell, ci) => (
-                    <td key={ci} className="p-0 border-l border-border/50">
-                      <input
-                        value={cell}
-                        onChange={(e) => updateCell(ri, ci, e.target.value)}
-                        className="w-full bg-transparent text-foreground text-sm px-4 py-3 outline-none focus:bg-white/90 transition-all"
-                        placeholder="—"
-                      />
-                    </td>
-                  ))}
-                  <td className="p-2 text-center border-l border-border/50">
-                    <button onClick={() => removeRow(ri)} className="text-muted-foreground hover:text-destructive transition-colors p-1 bg-white/80 rounded-md border border-border/50 shadow-sm">
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="glass bg-white/70 border border-border/50 rounded-2xl overflow-hidden shadow-sm h-[600px] w-full relative">
+        <Workbook data={sheetData.current} onChange={handleSheetChange} />
       </div>
     </div>
   );
@@ -405,28 +242,213 @@ const SpreadsheetEditor = () => {
 // ══════════════════════════════════════════════
 const DocumentStudio = ({ user, onViewChange }) => {
   const [activeTab, setActiveTab] = useState('doc');
+  
+  // Drafts State
+  const [draftsManagerOpen, setDraftsManagerOpen] = useState(false);
+  const [allDrafts, setAllDrafts] = useState([]);
+  const [currentDraftId, setCurrentDraftId] = useState(null);
+  const [draftsSpaceUsed, setDraftsSpaceUsed] = useState(0);
+
+  const localKey = `rms_drafts_${user?.department || 'global'}`;
+
+  const loadDrafts = useCallback(async () => {
+    const stored = await localforage.getItem(localKey);
+    const drafts = stored || [];
+    setAllDrafts(drafts);
+    
+    let totalSize = 0;
+    drafts.forEach(d => { totalSize += (d.sizeBytes || 0); });
+    setDraftsSpaceUsed(totalSize);
+    return drafts;
+  }, [localKey]);
+
+  useEffect(() => {
+    loadDrafts();
+  }, [loadDrafts]);
+
+  const initiateNewDraft = (type) => {
+    setCurrentDraftId(`draft_${Date.now()}`);
+    setActiveTab(type);
+    setDraftsManagerOpen(false);
+  };
+
+  const handleAutosave = async ({ title, data }) => {
+    if (!currentDraftId) {
+      setCurrentDraftId(`draft_${Date.now()}`);
+      return; // The next render will pick up the currentDraftId and autosave properly
+    }
+
+    const currentDrafts = [...allDrafts];
+    const draftIndex = currentDrafts.findIndex(d => d.id === currentDraftId);
+    
+    const draftObj = {
+      id: currentDraftId,
+      type: activeTab,
+      title,
+      data,
+      updatedAt: new Date().toISOString()
+    };
+    draftObj.sizeBytes = getObjectSize(draftObj);
+
+    if (draftIndex >= 0) {
+      currentDrafts[draftIndex] = draftObj;
+    } else {
+      currentDrafts.push(draftObj);
+    }
+
+    // Size limit check
+    let sizeCalc = 0;
+    currentDrafts.forEach(d => { sizeCalc += d.sizeBytes; });
+    
+    if (sizeCalc > MAX_STORAGE_BYTES) {
+      alert("Storage limit reached! Please delete older offline drafts.");
+      return;
+    }
+
+    await localforage.setItem(localKey, currentDrafts);
+    setAllDrafts(currentDrafts);
+    setDraftsSpaceUsed(sizeCalc);
+  };
+
+  const deleteDraft = async (id) => {
+    const filtered = allDrafts.filter(d => d.id !== id);
+    await localforage.setItem(localKey, filtered);
+    await loadDrafts();
+    if (currentDraftId === id) setCurrentDraftId(null);
+  };
+
+  const loadDraftIntoEditor = (draft) => {
+    setCurrentDraftId(draft.id);
+    setActiveTab(draft.type);
+    setDraftsManagerOpen(false);
+  };
+
+  const currentActiveDraft = allDrafts.find(d => d.id === currentDraftId);
 
   return (
     <Layout user={user} currentView="document_studio" onViewChange={onViewChange}>
-      <div className="max-w-6xl mx-auto space-y-8 pb-20">
+      <div className="max-w-6xl mx-auto space-y-8 pb-20 relative">
+        
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">
-            Document <span className="text-primary italic">Studio</span>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Create, edit, and export documents and spreadsheets effortlessly with <span className="text-emerald-500 font-bold">Offline Auto-Save</span>.</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-black text-foreground tracking-tight">
+              Document <span className="text-primary italic">Studio</span>
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Create, edit, and export documents. <span className="text-emerald-500 font-bold">Offline Auto-Save is Active.</span>
+            </p>
+          </div>
+          
+          <button 
+            onClick={() => setDraftsManagerOpen(true)}
+            className="flex flex-col items-center justify-center bg-white border border-border/60 shadow-sm rounded-2xl px-5 py-3 hover:bg-muted/30 transition-all group"
+          >
+            <div className="flex items-center space-x-2 text-foreground font-bold">
+              <FolderOpen size={18} className="text-primary group-hover:scale-110 transition-transform" />
+              <span>Drafts ({allDrafts.length})</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground font-mono mt-1 w-full bg-muted/50 rounded-full overflow-hidden h-1.5 relative">
+               <div className="absolute top-0 left-0 h-full bg-primary" style={{ width: `${(draftsSpaceUsed/MAX_STORAGE_BYTES)*100}%`}}></div>
+            </div>
+            <p className="text-[9px] text-muted-foreground font-mono mt-1 uppercase">
+              {(draftsSpaceUsed / 1024).toFixed(1)} KB / 5 MB
+            </p>
+          </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center space-x-3 p-1.5 glass bg-white/80 border border-border/50 rounded-2xl w-fit shadow-sm">
-          <TabButton icon={FileText} label="Document Editor" active={activeTab === 'doc'} onClick={() => setActiveTab('doc')} />
-          <TabButton icon={Table} label="Spreadsheet" active={activeTab === 'sheet'} onClick={() => setActiveTab('sheet')} />
-        </div>
+        {!currentDraftId ? (
+          <div className="glass bg-white/50 border border-primary/20 rounded-3xl p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
+            <h2 className="text-xl font-bold text-foreground mb-2">Start a New Document</h2>
+            <p className="text-sm text-muted-foreground mb-8 max-w-sm">Launch a new rich text document or a robust spreadsheet workspace.</p>
+            <div className="flex space-x-4">
+              <button onClick={() => initiateNewDraft('doc')} className="flex items-center space-x-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 py-3 rounded-xl shadow-lg shadow-primary/20 transition-transform hover:scale-105">
+                <FileText size={18} /> <span>New Document</span>
+              </button>
+              <button onClick={() => initiateNewDraft('sheet')} className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-emerald-600/20 transition-transform hover:scale-105">
+                <Table size={18} /> <span>New Spreadsheet</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center space-x-3 p-1.5 glass bg-white/80 border border-border/50 rounded-2xl w-fit shadow-sm">
+              <TabButton icon={FileText} label="Document Editor" active={activeTab === 'doc'} onClick={() => { setActiveTab('doc'); initiateNewDraft('doc'); }} />
+              <TabButton icon={Table} label="Spreadsheet" active={activeTab === 'sheet'} onClick={() => { setActiveTab('sheet'); initiateNewDraft('sheet'); }} />
+            </div>
 
-        {/* Active Editor */}
-        {activeTab === 'doc' && <RichTextEditor />}
-        {activeTab === 'sheet' && <SpreadsheetEditor />}
+            {/* Active Editor */}
+            {activeTab === 'doc' && <RichTextEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
+            {activeTab === 'sheet' && <SpreadsheetEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
+          </>
+        )}
+
       </div>
+
+      {/* Drafts Manager Modal */}
+      {draftsManagerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-2xl flex flex-col border border-border/50 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-border/50 flex items-center justify-between bg-muted/10">
+              <div>
+                <h2 className="text-xl font-bold text-foreground flex items-center space-x-2">
+                  <HardDrive size={20} className="text-primary" />
+                  <span>Department Drafts</span>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">Manage auto-saved documents for {user?.department}</p>
+              </div>
+              <button onClick={() => setDraftsManagerOpen(false)} className="p-2 hover:bg-muted text-muted-foreground rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-muted/5 custom-scrollbar">
+              {allDrafts.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <FolderOpen size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+                  <p className="font-bold">No saved drafts found.</p>
+                  <p className="text-xs mt-1">Start a new document to see it appear here.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {allDrafts.map(draft => (
+                    <div key={draft.id} className="bg-white border border-border/50 rounded-2xl p-4 flex flex-col group hover:border-primary/30 transition-all hover:shadow-md">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <div className={`p-2 rounded-lg ${draft.type === 'doc' ? 'bg-blue-500/10 text-blue-600' : 'bg-emerald-500/10 text-emerald-600'}`}>
+                            {draft.type === 'doc' ? <FileText size={16} /> : <Table size={16} />}
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-sm text-foreground truncate max-w-[150px]">{draft.title}</h3>
+                            <p className="text-[10px] text-muted-foreground font-mono uppercase mt-0.5">{(draft.sizeBytes / 1024).toFixed(1)} KB</p>
+                          </div>
+                        </div>
+                        <button onClick={() => deleteDraft(draft.id)} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      
+                      <div className="text-xs text-muted-foreground mb-4 flex items-center space-x-1">
+                        <Clock size={12} />
+                        <span>{new Date(draft.updatedAt).toLocaleString()}</span>
+                      </div>
+
+                      <button 
+                        onClick={() => loadDraftIntoEditor(draft)}
+                        className="w-full mt-auto flex items-center justify-center space-x-2 bg-muted hover:bg-primary/10 hover:text-primary text-foreground font-bold text-xs py-2 rounded-xl transition-all"
+                      >
+                        <Edit3 size={14} />
+                        <span>Resume Editing</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
