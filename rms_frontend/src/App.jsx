@@ -73,6 +73,11 @@ const AppContent = () => {
   const { user, loading } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
 
+  useEffect(() => {
+    // Reset to dashboard whenever user session changes (login or logout)
+    setCurrentView('dashboard');
+  }, [user?.id]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-6">
@@ -92,6 +97,10 @@ const AppContent = () => {
 
   if (!user) return <Login />;
 
+  // Security Guard: Prevent department users from accessing admin views
+  const isAdminView = ['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView);
+  const activeView = (user.role === 'department' && isAdminView) ? 'dashboard' : currentView;
+
   const views = {
     dashboard: <Dashboard onViewChange={setCurrentView} />,
     requisitions: <RequisitionsPage onViewChange={setCurrentView} />,
@@ -103,7 +112,7 @@ const AppContent = () => {
     document_studio: <DocumentStudio user={user} onViewChange={setCurrentView} />
   };
 
-  return views[currentView] || views.dashboard;
+  return views[activeView] || views.dashboard;
 };
 
 function App() {
