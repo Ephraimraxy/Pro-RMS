@@ -38,7 +38,8 @@ const Login = () => {
         await deptLogin(selectedDept, accessCode);
       }
     } catch (err) {
-      setError(err.message || "Invalid Authentication Details");
+      const displayString = err.response?.data?.error || err.message || "Invalid Authentication Details";
+      setError(displayString);
       setIsSubmitting(false);
     }
   };
