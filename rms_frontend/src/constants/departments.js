@@ -1,12 +1,17 @@
 export const CORPORATE_HIERARCHY = {
   strategic: [
-    "Account",
     "Audit",
-    "HR Department",
-    "Procurement",
+    "Account",
+    "ISAC",
     "ICT",
     "QA/QC",
-    "M&E"
+    "M&E",
+    "Resort",
+    "HR",
+    "Security",
+    "Procurement",
+    "Marketing",
+    "CEC"
   ],
   operational: [
     "Hatchery",
@@ -23,11 +28,6 @@ export const CORPORATE_HIERARCHY = {
     "Soap Factory",
     "Store",
     "Chicken Processing",
-    "CEC",
-    "Marketing",
-    "ISAC",
-    "Resort",
-    "Security",
     "Green Houses and Hydroponics",
     "Water Factory",
     "Juice Factory",

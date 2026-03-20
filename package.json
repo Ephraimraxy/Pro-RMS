@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "prisma generate --schema=rms_backend/prisma/schema.prisma && prisma db push --schema=rms_backend/prisma/schema.prisma --accept-data-loss && node rms_backend/prisma/seed.js && cd rms_frontend && npm install --legacy-peer-deps",
+    "postinstall": "prisma generate --schema=rms_backend/prisma/schema.prisma && cd rms_frontend && npm install --legacy-peer-deps",
     "build": "cd rms_frontend && npm run build",
-    "start": "node serve.js",
+    "start": "node -e \"require('dotenv').config()\" && prisma db push --schema=rms_backend/prisma/schema.prisma --accept-data-loss && node rms_backend/prisma/seed.js && node serve.js",
     "seed": "node rms_backend/prisma/seed.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.1.0",
+    "@prisma/client": "^6.19.2",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
@@ -17,7 +17,7 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "pg": "^8.20.0",
-    "prisma": "^6.1.0"
+    "prisma": "^6.19.2"
   },
   "prisma": {
     "schema": "rms_backend/prisma/schema.prisma",
