@@ -8,4 +8,6 @@ The mobile navigation bar has been updated to reflect the full functional suite 
 - **Role-Based Menus**:
   - **Departments**: Access "Management" directly from the bar.
   - **Admins**: Access "Control" (System Studio) from the bar.
+- **Dashboard Control**:
+  - The "Strategic Management" and "Operational Units" overviews are now restricted to Super Admin accounts to simplify the interface for department users.
 - **Log Out**: On mobile devices, the Log Out button is located in the top-right corner of the application for quick access.

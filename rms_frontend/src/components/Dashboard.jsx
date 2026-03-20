@@ -173,34 +173,36 @@ const Dashboard = ({ onViewChange }) => {
           )}
         </div>
 
-        {/* Departments */}
-        <div className="space-y-6">
-          <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4">
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><ShieldAlert size={20} className="text-primary"/> Strategic Management</h3>
-            <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-md uppercase border border-primary/20">Core</span>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {loadingDepts ? (
-               <div className="text-muted-foreground text-sm font-bold">Loading departments...</div>
-            ) : strategicDepts.map(dept => (
-               <DepartmentCard key={dept.id} name={dept.name} type="Strategic" />
-            ))}
-          </div>
+        {/* Departments - Only visible to Super Admins */}
+        {user?.role !== 'department' && (
+          <div className="space-y-6">
+            <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><ShieldAlert size={20} className="text-primary"/> Strategic Management</h3>
+              <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-md uppercase border border-primary/20">Core</span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {loadingDepts ? (
+                 <div className="text-muted-foreground text-sm font-bold">Loading departments...</div>
+              ) : strategicDepts.map(dept => (
+                 <DepartmentCard key={dept.id} name={dept.name} type="Strategic" />
+              ))}
+            </div>
 
-          <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4 mt-8">
-            <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Boxes size={20} className="text-primary"/> Operational Units</h3>
-            <span className="bg-muted text-muted-foreground border border-border text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">{operationalDepts.length} Units</span>
+            <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4 mt-8">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Boxes size={20} className="text-primary"/> Operational Units</h3>
+              <span className="bg-muted text-muted-foreground border border-border text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">{operationalDepts.length} Units</span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {loadingDepts ? (
+                 <div className="text-muted-foreground text-sm font-bold">Loading...</div>
+              ) : operationalDepts.map(dept => (
+                 <DepartmentCard key={dept.id} name={dept.name} type="Operations" />
+              ))}
+            </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {loadingDepts ? (
-               <div className="text-muted-foreground text-sm font-bold">Loading...</div>
-            ) : operationalDepts.map(dept => (
-               <DepartmentCard key={dept.id} name={dept.name} type="Operations" />
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     </Layout>
   );

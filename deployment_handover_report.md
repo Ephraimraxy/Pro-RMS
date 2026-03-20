@@ -5,9 +5,10 @@
 
 ## Deployment Details
 - Built using `npm run build` in `rms_frontend`.
-- Changes are client-side only (UI navigation and layout alignment).
-- No backend migrations required for this frontend-only sync.
+- Changes include client-side UI navigation alignment and dashboard access control.
+- No backend migrations required for these frontend-only syncs.
 
 ## Verification
 - Build successful.
+- Role-based visibility for "Strategic Management" and "Operational Units" confirmed.
 - Accessibility for all 32 departments confirmed via role-based navigation bar logic.

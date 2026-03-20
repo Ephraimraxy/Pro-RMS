@@ -10,3 +10,5 @@
 | Role: Super Admin | Login as Super Admin | Bottom bar shows: Dashboard, Requisitions, Studio, Control, Activity | PASS |
 | Consistency | View both views | Labels match across desktop and mobile ("Dashboard" etc.) | PASS |
 | Logout Positioning | View common mobile layout | "Log Out" button available near user profile in the top navbar | PASS |
+| Dash Restriction | Login as Department | "Strategic Management" and "Operational Units" are HIDDEN | PASS |
+| Dash Access | Login as Super Admin | "Strategic Management" and "Operational Units" are VISIBLE | PASS |
