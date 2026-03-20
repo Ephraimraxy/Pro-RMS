@@ -64,6 +64,19 @@ export async function addRequisition(data) {
   }
 }
 
+export async function flushSyncQueue() {
+  const queue = (await syncQueueStore.getItem('pending')) || [];
+  if (queue.length === 0) return;
+
+  try {
+    await reqAPI.addRequisition(queue);
+    await syncQueueStore.setItem('pending', []);
+    toast.success(`Synced ${queue.length} offline records to server!`);
+  } catch (err) {
+    console.error("Sync failed:", err);
+  }
+}
+
 export async function uploadAttachments(requisitionId, files) {
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
