@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNetwork } from '../App';
 import { 
   LayoutDashboard, FileText, ClipboardCheck, History, Settings, 
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
-  ChevronLeft, ChevronRight, Menu, Inbox, Clock
+  ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff
 } from 'lucide-react';
 import { getNotifications } from '../lib/store';
 
@@ -33,7 +34,9 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, setShowBell }) => (
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, setShowBell }) => {
+  const { isOnline } = useNetwork();
+  return (
   <nav className="h-14 border-b border-border/40 bg-white/70 backdrop-blur-xl sticky top-0 z-[60] flex items-center justify-between px-4 lg:px-6">
     <div className="flex items-center space-x-3 lg:space-x-5">
       <button onClick={toggleSidebar} className="hidden lg:flex p-1.5 hover:bg-muted rounded-lg text-muted-foreground transition-colors mr-1">
@@ -51,15 +54,30 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
     </div>
 
     <div className="flex items-center space-x-3 lg:space-x-5">
-      <div className="hidden md:flex items-center space-x-2 text-[9px] font-black text-muted-foreground uppercase tracking-[0.15em] bg-muted/30 px-3 py-1.5 rounded-xl border border-border/40 hover:bg-muted/50 transition-colors cursor-default group">
-        <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse group-hover:scale-125 transition-transform"></div>
-        <span className="group-hover:text-foreground transition-colors">NODE: ONLINE</span>
+      <div className={`hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-full border transition-all duration-300 ${
+        isOnline 
+          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
+          : 'bg-destructive/10 border-destructive text-destructive'
+      }`}>
+        {isOnline ? (
+          <>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+            <span className="text-[9px] font-black uppercase tracking-widest hidden md:inline-block">RMS Global: Online</span>
+            <span className="text-[9px] font-black uppercase tracking-widest md:hidden">Online</span>
+          </>
+        ) : (
+          <>
+            <WifiOff size={12} className="animate-pulse" />
+            <span className="text-[9px] font-black uppercase tracking-widest hidden md:inline-block">Offline Mode Active</span>
+            <span className="text-[9px] font-black uppercase tracking-widest md:hidden">Offline</span>
+          </>
+        )}
       </div>
       
       <div className="relative">
         <button 
           onClick={() => setShowBell(!showBell)}
-          className="relative text-muted-foreground hover:text-primary transition-all p-1.5 hover:bg-muted rounded-lg"
+          className={`relative transition-all p-1.5 rounded-lg ${showBell ? 'bg-foreground text-background shadow-md' : 'text-muted-foreground hover:bg-muted hover:text-primary'}`}
         >
           <Bell size={18} />
           {notifications.length > 0 && (
@@ -123,6 +141,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
     </div>
   </nav>
 );
+};
 
 const Layout = ({ children, user, currentView, onViewChange }) => {
   const { logout } = useAuth();
