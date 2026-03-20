@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Lock, ArrowRight, CheckCircle2, Building2, UserCircle2, Eye, EyeOff } from 'lucide-react';
+import { Shield, Lock, ArrowRight, CheckCircle2, Building2, UserCircle2, Eye, EyeOff, Smartphone } from 'lucide-react';
 import { getDepartments } from '../lib/store';
+import { toast } from 'react-hot-toast';
 
 const Login = () => {
   const [loginMode, setLoginMode] = useState('admin'); // 'admin' or 'dept'
@@ -15,6 +16,8 @@ const Login = () => {
   
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isStandalone, setIsStandalone] = useState(false);
   const { login, deptLogin } = useAuth();
 
   useEffect(() => {
@@ -23,7 +26,33 @@ const Login = () => {
       setDepartments(depts);
     };
     fetchDepts();
+
+    // PWA Install Logic
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsStandalone(true);
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) {
+      toast("To install: Open browser menu and select 'Add to Home Screen'", { icon: '📲' });
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -244,6 +273,22 @@ const Login = () => {
           </div>
         </div>
       </div>
+
+      {/* ── PWA Floating Install Button ── */}
+      {!isStandalone && (
+        <button 
+          onClick={handleInstallApp}
+          className="fixed bottom-6 right-6 z-[100] glass border border-primary/20 bg-white/40 hover:bg-white/60 text-primary py-2.5 px-5 rounded-full shadow-2xl flex items-center space-x-2.5 transition-all active:scale-95 group animate-in slide-in-from-bottom-10"
+        >
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+            <Smartphone size={16} />
+          </div>
+          <div className="text-left pr-1">
+            <p className="text-[10px] font-black uppercase tracking-widest leading-none opacity-60">Install App</p>
+            <p className="text-xs font-bold leading-tight mt-0.5">RMS Portal</p>
+          </div>
+        </button>
+      )}
     </div>
   );
 };
