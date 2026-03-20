@@ -38,7 +38,7 @@ api.interceptors.response.use(
 
 export const authAPI = {
   deptLogin: async (departmentName, accessCode, mfaCode) => {
-    const response = await api.post('/dept-login', { departmentName, accessCode, mfaCode });
+    const response = await api.post('/auth/dept-login', { departmentName, accessCode, mfaCode });
     return response.data;
   },
   async checkSession() {
