@@ -7,6 +7,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 14px; /* Global scale reduction to push display backward */
+  }
+
   :root {
     /* Pristine White Background */
     --background: 36 33% 98%; /* #FAF9F6 - Off white warm cream */

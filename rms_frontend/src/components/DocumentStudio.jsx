@@ -508,16 +508,17 @@ const DocumentStudio = ({ user, onViewChange }) => {
     <Layout user={user} currentView="document_studio" onViewChange={onViewChange}>
       <div className="max-w-6xl mx-auto space-y-8 pb-20 relative">
         
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-black text-foreground tracking-tight">
-              Document <span className="text-primary italic">Studio</span>
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create, edit, and export documents. <span className="text-emerald-500 font-bold">Offline Auto-Save is Active.</span>
-            </p>
-          </div>
+        <div className="space-y-4 max-w-7xl mx-auto px-2 lg:px-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground tracking-tight flex items-center space-x-3">
+            <Edit3 className="text-primary" />
+            <span>Document <span className="text-primary">Studio</span></span>
+          </h1>
+          <p className="text-muted-foreground text-xs lg:text-sm mt-1 font-medium">
+            Create, edit, and export documents. <span className="text-emerald-600 font-bold hidden sm:inline">Offline Auto-Save is Active.</span>
+          </p>
+        </div>
           
           <button 
             onClick={() => setDraftsManagerOpen(true)}
@@ -535,20 +536,21 @@ const DocumentStudio = ({ user, onViewChange }) => {
             </p>
           </button>
         </div>
+        </div>
 
         {/* Tab Switcher */}
         {!currentDraftId ? (
-          <div className="glass bg-white/50 border border-primary/20 rounded-3xl p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
-            <h2 className="text-xl font-bold text-foreground mb-2">Start a New Document</h2>
-            <p className="text-sm text-muted-foreground mb-8 max-w-sm">Launch a new rich text document or a robust spreadsheet workspace.</p>
-            <div className="flex space-x-4">
-              <button onClick={() => initiateNewDraft('doc')} className="flex items-center space-x-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 py-3 rounded-xl shadow-lg shadow-primary/20 transition-transform hover:scale-105">
+          <div className="glass bg-white/50 border border-primary/20 rounded-3xl p-6 lg:p-12 text-center flex flex-col items-center justify-center min-h-[300px] w-full max-w-3xl mx-auto">
+            <h2 className="text-lg lg:text-xl font-bold text-foreground mb-2">Start a New Document</h2>
+            <p className="text-xs lg:text-sm text-muted-foreground mb-8 max-w-sm">Launch a new rich text document or a robust spreadsheet workspace.</p>
+            <div className="flex flex-col sm:flex-row gap-3 lg:gap-4 w-full justify-center px-4">
+              <button onClick={() => initiateNewDraft('doc')} className="flex items-center justify-center space-x-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-4 py-3 lg:px-6 rounded-xl shadow-lg shadow-primary/20 transition-transform hover:scale-105 w-full sm:w-auto text-sm">
                 <FileText size={18} /> <span>New Document</span>
               </button>
-              <button onClick={() => initiateNewDraft('sheet')} className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-emerald-600/20 transition-transform hover:scale-105">
+              <button onClick={() => initiateNewDraft('sheet')} className="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-3 lg:px-6 rounded-xl shadow-lg shadow-emerald-600/20 transition-transform hover:scale-105 w-full sm:w-auto text-sm">
                 <Table size={18} /> <span>New Spreadsheet</span>
               </button>
-              <button onClick={() => initiateNewDraft('slide')} className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-orange-600/20 transition-transform hover:scale-105">
+              <button onClick={() => initiateNewDraft('slide')} className="flex items-center justify-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-3 lg:px-6 rounded-xl shadow-lg shadow-orange-600/20 transition-transform hover:scale-105 w-full sm:w-auto text-sm">
                 <Presentation size={18} /> <span>New Presentation</span>
               </button>
             </div>
