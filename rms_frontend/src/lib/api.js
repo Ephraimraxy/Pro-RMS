@@ -24,9 +24,13 @@ api.interceptors.response.use(
     console.error("API Error Response:", error);
     if (error.response?.status === 401) {
       // Handle unauthorized (expired token)
-      localStorage.removeItem('rms_token');
-      localStorage.removeItem('rms_user');
-      window.location.reload();
+      // Do not reload if the error is from a login attempt
+      const configUrl = error.config?.url || '';
+      if (!configUrl.includes('/auth/login') && !configUrl.includes('/auth/dept-login')) {
+        localStorage.removeItem('rms_token');
+        localStorage.removeItem('rms_user');
+        window.location.reload();
+      }
     }
     return Promise.reject(error);
   }
