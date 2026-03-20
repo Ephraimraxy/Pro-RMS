@@ -132,5 +132,8 @@ app.use((req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
+// Health check
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 CSS RMS Unified Node listening on port ${PORT}`));

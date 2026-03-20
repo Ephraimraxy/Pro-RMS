@@ -21,29 +21,59 @@ const NetworkProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      toast.success('Connection Restored. Syncing drafts...', { 
-        icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" /> 
-      });
-      flushSyncQueue();
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-      toast.error('Offline Mode Active. Drafts will save locally.', { 
-        icon: <img src="/favicon.png" className="w-5 h-5 object-contain grayscale opacity-50" alt="" />, 
-        duration: 4000 
-      });
+    let checkInterval;
+    
+    const checkConnectivity = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+        
+        const response = await fetch('/health', { 
+          method: 'GET',
+          signal: controller.signal,
+          cache: 'no-store'
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok && !isOnline) {
+          setIsOnline(true);
+          toast.success('Connection Restored. Syncing drafts...', { 
+            icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" /> 
+          });
+          flushSyncQueue();
+        }
+      } catch (err) {
+        if (isOnline) {
+          setIsOnline(false);
+          toast.error('Offline Mode Active. Drafts will save locally.', { 
+            icon: <img src="/favicon.png" className="w-5 h-5 object-contain grayscale opacity-50" alt="" />, 
+            duration: 4000 
+          });
+        }
+      }
     };
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    // Initial check
+    checkConnectivity();
+
+    // Periodic heartbeat (every 10 seconds)
+    checkInterval = setInterval(checkConnectivity, 10000);
+
+    const handleBrowserStatusChange = () => {
+      if (navigator.onLine) checkConnectivity();
+      else setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleBrowserStatusChange);
+    window.addEventListener('offline', handleBrowserStatusChange);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      clearInterval(checkInterval);
+      window.removeEventListener('online', handleBrowserStatusChange);
+      window.removeEventListener('offline', handleBrowserStatusChange);
     };
-  }, []);
+  }, [isOnline]);
 
   return (
     <NetworkContext.Provider value={{ isOnline }}>
