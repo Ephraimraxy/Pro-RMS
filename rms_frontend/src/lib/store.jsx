@@ -1,7 +1,7 @@
 import localforage from 'localforage';
 import { toast } from 'react-hot-toast';
 import React from 'react';
-import { deptAPI, reqAPI } from './api';
+import api, { deptAPI, reqAPI, auditAPI } from './api';
 
 // ── Configure storage namespaces ──
 const requisitionStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'requisitions' });
@@ -180,7 +180,7 @@ export async function logActivity(action, detail) {
 export async function getActivityLog() {
   await ensureInitialized();
   try {
-    const remote = await api.get('/audit-logs');
+    const remote = await auditAPI.getAuditLogs();
     await activityStore.setItem('log', remote);
     return remote;
   } catch (err) {
@@ -217,7 +217,7 @@ export async function getDepartments() {
 export async function addDepartment(dept) {
   await ensureInitialized();
   try {
-    const result = await api.post('/departments', dept);
+    const result = await deptAPI.addDepartment(dept);
     toast.success(`${dept.name} added to cloud`);
     return result;
   } catch (err) {
@@ -233,7 +233,7 @@ export async function addDepartment(dept) {
 export async function deleteDepartment(id) {
   await ensureInitialized();
   try {
-    await api.delete(`/departments/${id}`);
+    await deptAPI.deleteDepartment(id);
     toast.success("Department removed from cloud");
   } catch (err) {
     console.warn("Offline: Department removed locally ONLY", err);

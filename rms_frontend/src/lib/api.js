@@ -58,6 +58,18 @@ export const authAPI = {
 export const deptAPI = {
   async getDepartments() {
     return api.get('/departments');
+  },
+  async addDepartment(dept) {
+    return api.post('/departments', dept);
+  },
+  async deleteDepartment(id) {
+    return api.delete(`/departments/${id}`);
+  }
+};
+
+export const auditAPI = {
+  async getAuditLogs() {
+    return api.get('/audit-logs');
   }
 };
 
