@@ -13,7 +13,7 @@ import {
   FileText, Table, Download, Plus, Trash2, Save, 
   FileSpreadsheet, FileImage, File, ChevronDown,
   CloudOff, Cloud, Clock, X, HardDrive, AlertCircle, 
-  FolderOpen, Edit3
+  FolderOpen, Edit3, Presentation, MonitorPlay, ChevronLeft, ChevronRight, Maximize
 } from 'lucide-react';
 
 localforage.config({ name: 'CSS_RMS_Offline', storeName: 'drafts' });
@@ -238,6 +238,185 @@ const SpreadsheetEditor = ({ loadedDraft, onAutosave }) => {
 };
 
 // ══════════════════════════════════════════════
+// ── PRESENTATION EDITOR (PowerPoint) ─────────
+// ══════════════════════════════════════════════
+const PresentationEditor = ({ loadedDraft, onAutosave }) => {
+  const [title, setTitle] = useState(loadedDraft?.title || 'Untitled Presentation');
+  const [saving, setSaving] = useState(false);
+  const [slides, setSlides] = useState(loadedDraft?.data || [{ id: Date.now(), html: '<h1 class="ql-align-center">New Slide</h1>' }]);
+  const [activeSlideId, setActiveSlideId] = useState(slides[0]?.id || Date.now());
+  const [presenting, setPresenting] = useState(false);
+  const [presentIndex, setPresentIndex] = useState(0);
+
+  const editorRef = useRef(null);
+  const quillInstance = useRef(null);
+  const presentAreaRef = useRef(null);
+
+  // Initialize Quill
+  useEffect(() => {
+    if (!editorRef.current || quillInstance.current || presenting) return;
+    
+    quillInstance.current = new Quill(editorRef.current, {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
+          ['bold', 'italic', 'underline'],
+          [{ 'color': [] }, { 'background': [] }],
+          [{ 'align': [] }],
+          ['image', 'video'],
+          ['clean']
+        ]
+      }
+    });
+
+    quillInstance.current.on('text-change', () => {
+      const html = quillInstance.current.root.innerHTML;
+      setSlides(prev => prev.map(s => s.id === activeSlideId ? { ...s, html } : s));
+    });
+  }, [activeSlideId, presenting]);
+
+  // Load active slide content into quill
+  useEffect(() => {
+    if (quillInstance.current) {
+      const currentSlide = slides.find(s => s.id === activeSlideId);
+      if (currentSlide && quillInstance.current.root.innerHTML !== currentSlide.html) {
+        quillInstance.current.root.innerHTML = currentSlide.html || '';
+      }
+    }
+  }, [activeSlideId]);
+
+  // Autosave
+  useEffect(() => {
+    if (presenting) return; // Don't autosave while presenting to avoid lag
+    setSaving(true);
+    const timer = setTimeout(() => {
+      onAutosave({ title, data: slides });
+      setSaving(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [slides, title]);
+
+  const addSlide = () => {
+    const newSlide = { id: Date.now(), html: '<h2 class="ql-align-center">New Slide</h2>' };
+    setSlides([...slides, newSlide]);
+    setActiveSlideId(newSlide.id);
+  };
+  
+  const removeSlide = (id) => {
+    if (slides.length === 1) return;
+    const remaining = slides.filter(s => s.id !== id);
+    setSlides(remaining);
+    if (activeSlideId === id) setActiveSlideId(remaining[0].id);
+  };
+
+  // Fullscreen Presentation Logic
+  const startPresentation = () => {
+    setPresentIndex(slides.findIndex(s => s.id === activeSlideId) || 0);
+    setPresenting(true);
+    setTimeout(() => {
+      if (presentAreaRef.current) {
+        presentAreaRef.current.requestFullscreen().catch(err => console.error("Fullscreen err:", err));
+      }
+    }, 100);
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) setPresenting(false);
+    };
+    const handleKeyDown = (e) => {
+      if (!presenting) return;
+      if (e.key === 'ArrowRight' || e.key === ' ') setPresentIndex(i => Math.min(i + 1, slides.length - 1));
+      if (e.key === 'ArrowLeft') setPresentIndex(i => Math.max(i - 1, 0));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [presenting, slides.length]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="space-y-2 w-full max-w-lg">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="text-2xl font-black text-foreground bg-transparent outline-none border-b-2 border-transparent focus:border-primary/50 transition-all pb-1 w-full max-w-lg"
+            placeholder="Presentation Title..."
+          />
+          <SaveIndicator saving={saving} />
+        </div>
+        <button onClick={startPresentation} className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-5 py-3 rounded-xl transition-all shadow-lg shadow-emerald-600/20">
+          <MonitorPlay size={16} />
+          <span>Present</span>
+        </button>
+      </div>
+
+      <div className="glass bg-white/70 border border-border/50 rounded-2xl flex overflow-hidden shadow-sm h-[600px] relative">
+        {/* Left Sidebar: Slides */}
+        <div className="w-56 bg-muted/10 border-r border-border/50 flex flex-col z-20">
+          <div className="p-3 border-b border-border/50">
+            <button onClick={addSlide} className="w-full flex items-center justify-center space-x-2 bg-white hover:bg-muted border border-border/60 shadow-sm text-foreground font-bold text-xs py-2 rounded-lg transition-all">
+              <Plus size={14} /> <span>New Slide</span>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+            {slides.map((s, idx) => (
+              <div 
+                key={s.id}
+                onClick={() => setActiveSlideId(s.id)}
+                className={`relative group cursor-pointer border-2 rounded-xl aspect-[4/3] flex flex-col overflow-hidden transition-all ${activeSlideId === s.id ? 'border-primary shadow-md' : 'border-border/60 hover:border-primary/40 bg-white/50'}`}
+              >
+                <div className="bg-muted/30 px-2 py-1 flex items-center justify-between border-b border-border/50">
+                  <span className="text-[10px] font-bold text-muted-foreground">{idx + 1}</span>
+                  {slides.length > 1 && (
+                    <button onClick={(e) => { e.stopPropagation(); removeSlide(s.id); }} className="text-muted-foreground hover:text-destructive p-0.5 rounded transition-colors opacity-0 group-hover:opacity-100">
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+                <div className="flex-1 p-2 scale-[0.35] origin-top-left w-[280%] h-[280%] pointer-events-none" dangerouslySetInnerHTML={{ __html: s.html }}></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Main Canvas */}
+        <div className="flex-1 flex flex-col bg-muted/5 z-10">
+          {!presenting && <div ref={editorRef} className="flex-1 border-none bg-white font-sans" />}
+        </div>
+      </div>
+
+      {/* Presentation Fullscreen Node */}
+      <div 
+        ref={presentAreaRef} 
+        className={`fixed inset-0 bg-black z-[9999] flex flex-col ${presenting ? 'block' : 'hidden'}`}
+      >
+        <div className="flex-1 flex items-center justify-center p-8 relative">
+          <div 
+            className="w-full max-w-6xl aspect-[16/9] bg-white rounded-xl shadow-2xl p-12 overflow-hidden ql-editor"
+            dangerouslySetInnerHTML={{ __html: slides[presentIndex]?.html || '' }}
+          />
+          
+          {/* Controls overlay */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center space-x-4 bg-black/50 backdrop-blur-md px-6 py-3 rounded-full text-white opacity-0 hover:opacity-100 transition-opacity">
+            <button onClick={() => setPresentIndex(i => Math.max(i - 1, 0))} disabled={presentIndex === 0} className="p-2 hover:bg-white/20 rounded-full disabled:opacity-30"><ChevronLeft size={24} /></button>
+            <span className="font-mono text-sm font-bold">{presentIndex + 1} / {slides.length}</span>
+            <button onClick={() => setPresentIndex(i => Math.min(i + 1, slides.length - 1))} disabled={presentIndex === slides.length - 1} className="p-2 hover:bg-white/20 rounded-full disabled:opacity-30"><ChevronRight size={24} /></button>
+            <div className="w-px h-6 bg-white/20 mx-2"></div>
+            <button onClick={() => document.exitFullscreen()} className="p-2 hover:bg-white/20 rounded-full"><X size={20} /></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════
 // ── MAIN DOCUMENT STUDIO ─────────────────────
 // ══════════════════════════════════════════════
 const DocumentStudio = ({ user, onViewChange }) => {
@@ -369,6 +548,9 @@ const DocumentStudio = ({ user, onViewChange }) => {
               <button onClick={() => initiateNewDraft('sheet')} className="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-emerald-600/20 transition-transform hover:scale-105">
                 <Table size={18} /> <span>New Spreadsheet</span>
               </button>
+              <button onClick={() => initiateNewDraft('slide')} className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-orange-600/20 transition-transform hover:scale-105">
+                <Presentation size={18} /> <span>New Presentation</span>
+              </button>
             </div>
           </div>
         ) : (
@@ -376,11 +558,13 @@ const DocumentStudio = ({ user, onViewChange }) => {
             <div className="flex items-center space-x-3 p-1.5 glass bg-white/80 border border-border/50 rounded-2xl w-fit shadow-sm">
               <TabButton icon={FileText} label="Document Editor" active={activeTab === 'doc'} onClick={() => { setActiveTab('doc'); initiateNewDraft('doc'); }} />
               <TabButton icon={Table} label="Spreadsheet" active={activeTab === 'sheet'} onClick={() => { setActiveTab('sheet'); initiateNewDraft('sheet'); }} />
+              <TabButton icon={Presentation} label="Presentation" active={activeTab === 'slide'} onClick={() => { setActiveTab('slide'); initiateNewDraft('slide'); }} />
             </div>
 
             {/* Active Editor */}
             {activeTab === 'doc' && <RichTextEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
             {activeTab === 'sheet' && <SpreadsheetEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
+            {activeTab === 'slide' && <PresentationEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
           </>
         )}
 
@@ -416,8 +600,8 @@ const DocumentStudio = ({ user, onViewChange }) => {
                     <div key={draft.id} className="bg-white border border-border/50 rounded-2xl p-4 flex flex-col group hover:border-primary/30 transition-all hover:shadow-md">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center space-x-2">
-                          <div className={`p-2 rounded-lg ${draft.type === 'doc' ? 'bg-blue-500/10 text-blue-600' : 'bg-emerald-500/10 text-emerald-600'}`}>
-                            {draft.type === 'doc' ? <FileText size={16} /> : <Table size={16} />}
+                          <div className={`p-2 rounded-lg ${draft.type === 'doc' ? 'bg-blue-500/10 text-blue-600' : draft.type === 'sheet' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-orange-500/10 text-orange-600'}`}>
+                            {draft.type === 'doc' ? <FileText size={16} /> : draft.type === 'sheet' ? <Table size={16} /> : <Presentation size={16} />}
                           </div>
                           <div>
                             <h3 className="font-bold text-sm text-foreground truncate max-w-[150px]">{draft.title}</h3>
