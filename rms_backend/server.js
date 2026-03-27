@@ -184,7 +184,7 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
 });
 
 // ── REQUISITION TYPES ──
-app.get('/api/requisition-types', async (req, res) => {
+app.get('/api/requisition-types', authenticateToken, async (req, res) => {
   try {
     const types = await prisma.requisitionType.findMany({ orderBy: { name: 'asc' } });
     res.json(types);
@@ -204,7 +204,7 @@ app.post('/api/requisition-types', authenticateToken, async (req, res) => {
 });
 
 // ── WORKFLOW STAGES ──
-app.get('/api/workflow-stages', async (req, res) => {
+app.get('/api/workflow-stages', authenticateToken, async (req, res) => {
   try {
     const stages = await prisma.workflowStage.findMany({ orderBy: { sequence: 'asc' } });
     res.json(stages);
@@ -232,17 +232,20 @@ app.post('/api/workflow-stages', authenticateToken, async (req, res) => {
 // ── NOTIFICATIONS ──
 app.get('/api/notifications', authenticateToken, async (req, res) => {
   try {
-    // For department logins, we use their deptId to find relevant notifications or link them to the department
     const userId = typeof req.user.id === 'number' ? req.user.id : null;
-    
+    const deptId = req.user.deptId;
+
+    if (!userId && !deptId) return res.json([]);
+
     const notifications = await prisma.notification.findMany({
-      where: userId ? { userId } : { user: { departmentId: req.user.deptId } },
+      where: userId ? { userId } : { user: { departmentId: parseInt(deptId) } },
       orderBy: { createdAt: 'desc' },
       take: 20
     });
     res.json(notifications);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Notif Fetch Error:", error);
+    res.status(500).json({ error: "Notification fetch failed", details: error.message });
   }
 });
 
