@@ -233,25 +233,30 @@ app.post('/api/workflow-stages', authenticateToken, async (req, res) => {
 app.get('/api/notifications', authenticateToken, async (req, res) => {
   try {
     const isDept = req.user.role === 'department';
-    const userId = !isDept ? req.user.id : null;
-    const deptId = req.user.deptId;
+    const rawId = !isDept ? req.user.id : req.user.deptId;
+    
+    // Robust Integer Parsing
+    const parsedId = (typeof rawId === 'string' && rawId.startsWith('dept_')) 
+      ? parseInt(rawId.split('_')[1]) 
+      : parseInt(rawId);
+
+    if (isNaN(parsedId)) {
+      console.warn("Notif Fetch: Invalid ID format", { rawId, role: req.user.role });
+      return res.json([]);
+    }
 
     let whereClause = {};
-    if (!isDept && userId) {
-      whereClause = { userId: typeof userId === 'string' ? parseInt(userId) : userId };
-    } else if (isDept && deptId) {
-      // Find all users in this department to show collective notifications
+    if (!isDept) {
+      whereClause = { userId: parsedId };
+    } else {
+      // Find all users in this department
       const deptUsers = await prisma.user.findMany({
-        where: { departmentId: typeof deptId === 'string' ? parseInt(deptId) : deptId },
+        where: { departmentId: parsedId },
         select: { id: true }
       });
       const userIds = deptUsers.map(u => u.id);
-      // If no users in dept, return empty notifs instead of 500
       if (userIds.length === 0) return res.json([]);
       whereClause = { userId: { in: userIds } };
-    } else {
-      // Fallback for cases where neither is found
-      return res.json([]);
     }
 
     const notifications = await prisma.notification.findMany({
@@ -261,8 +266,16 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
     });
     res.json(notifications);
   } catch (error) {
-    console.error("Notif Fetch Error:", error);
-    res.status(500).json({ error: "Notification fetch failed", details: error.message });
+    console.error("Notif Fetch Error:", { 
+      message: error.message, 
+      user: req.user,
+      stack: error.stack 
+    });
+    res.status(500).json({ 
+      error: "Notification fetch failed", 
+      details: error.message,
+      diag: { role: req.user?.role, id: req.user?.id, deptId: req.user?.deptId } 
+    });
   }
 });
 
