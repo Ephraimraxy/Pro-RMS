@@ -7,9 +7,6 @@
 @tailwind utilities;
 
 @layer base {
-  html {
-    font-size: 14px; /* Global scale reduction to push display backward */
-  }
 
   :root {
     /* Pristine White Background */
@@ -45,7 +42,7 @@
   }
 
   html {
-    font-size: 15px; /* Compacting the UI for that "zoomed out" feel */
+    font-size: 12px; /* Maximum Scale Reduction for that ultra-compact premium feel */
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
   }
