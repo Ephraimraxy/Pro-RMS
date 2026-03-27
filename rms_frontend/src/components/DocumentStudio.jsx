@@ -453,18 +453,18 @@ const DocumentStudio = ({ user, onViewChange }) => {
   }, []);
 
   const handleSendToWorkflow = async (metadata) => {
-    if (!loadedDraft) return;
+    if (!currentActiveDraft) return;
     
     try {
-      const type = metadata.type || (loadedDraft.title.toLowerCase().includes('memo') ? 'Memo' : 'Requisition');
+      const type = metadata.type || (currentActiveDraft.title.toLowerCase().includes('memo') ? 'Memo' : 'Requisition');
       const requisitionData = {
-        title: loadedDraft.title,
-        description: metadata.description || `Submitted from Document Studio: ${loadedDraft.title}`,
+        title: currentActiveDraft.title,
+        description: metadata.description || `Submitted from Document Studio: ${currentActiveDraft.title}`,
         departmentId: parseInt(metadata.departmentId),
         type: type,
         status: 'pending',
         amount: metadata.amount ? parseFloat(metadata.amount) : 0,
-        content: loadedDraft.data, // Storing the HTML content in the requisition
+        content: currentActiveDraft.data, // Storing the HTML content in the requisition
         createdBy: user?.name || 'Administrator',
         createdAt: new Date().toISOString()
       };
@@ -478,6 +478,8 @@ const DocumentStudio = ({ user, onViewChange }) => {
       toast.error('Failed to send document to workflow');
     }
   };
+  
+  const [activeTab, setActiveTab] = useState('doc');
   
   // Drafts State
   const [draftsManagerOpen, setDraftsManagerOpen] = useState(false);

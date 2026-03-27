@@ -182,6 +182,81 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
   }
 });
 
+// ── REQUISITION TYPES ──
+app.get('/api/requisition-types', async (req, res) => {
+  try {
+    const types = await prisma.requisitionType.findMany({ orderBy: { name: 'asc' } });
+    res.json(types);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/requisition-types', authenticateToken, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const type = await prisma.requisitionType.create({ data: { name, description } });
+    res.json(type);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── WORKFLOW STAGES ──
+app.get('/api/workflow-stages', async (req, res) => {
+  try {
+    const stages = await prisma.workflowStage.findMany({ orderBy: { sequence: 'asc' } });
+    res.json(stages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/workflow-stages', authenticateToken, async (req, res) => {
+  try {
+    const stages = req.body; // Expects an array of stages
+    await prisma.$transaction(
+      stages.map(s => prisma.workflowStage.upsert({
+        where: { sequence: s.sequence },
+        update: { name: s.name, role: s.role, threshold: s.threshold },
+        create: { sequence: s.sequence, name: s.name, role: s.role, threshold: s.threshold }
+      }))
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── NOTIFICATIONS ──
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    // For department logins, we use their deptId to find relevant notifications or link them to the department
+    const userId = typeof req.user.id === 'number' ? req.user.id : null;
+    
+    const notifications = await prisma.notification.findMany({
+      where: userId ? { userId } : { user: { departmentId: req.user.deptId } },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    await prisma.notification.update({
+      where: { id: parseInt(req.params.id) },
+      data: { isRead: true }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ── AUDIT LOGS ──
 app.get('/api/audit-logs', authenticateToken, async (req, res) => {
   try {
