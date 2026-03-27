@@ -4,7 +4,7 @@ export const templates = {
     data: `
       <div style="font-family: 'Inter', sans-serif; padding: 20px; color: #333;">
         <div style="text-align: center; margin-bottom: 25px;">
-          <img src="/templates/logo.jpg" style="width: 90px; height: auto; margin-bottom: 5px;" />
+          <img src="/favicon.svg" style="width: 70px; height: 70px; margin-bottom: 8px; border-radius: 12px;" />
           <h2 style="font-size: 15px; font-weight: 700; margin-top: 5px; border-bottom: 2px solid #333; display: inline-block; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">INTERNAL MEMO</h2>
         </div>
         
@@ -46,10 +46,10 @@ export const templates = {
       <div style="font-family: 'Inter', sans-serif; padding: 25px; color: #333; border: 1px solid #ddd; margin: 10px; background: white;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <img src="/templates/logo.jpg" style="width: 75px; height: auto;" />
+            <img src="/favicon.svg" style="width: 60px; height: 60px; border-radius: 10px;" />
             <div style="border-left: 2px solid #ccc; padding-left: 12px;">
               <h1 style="font-size: 22px; font-weight: 800; margin: 0; color: #333; letter-spacing: -0.5px;">CSS</h1>
-              <p style="font-size: 10px; font-weight: 700; margin: 0; color: #666; text-transform: uppercase;">Global Integrated Farms Ltd</p>
+              <p style="font-size: 10px; font-weight: 700; margin: 0; color: #666; text-transform: uppercase;">RMS | Enterprise Workflow</p>
             </div>
           </div>
           <div style="text-align: right; font-size: 9px; color: #444; line-height: 1.3;">
