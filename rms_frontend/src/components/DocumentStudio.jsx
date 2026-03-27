@@ -578,7 +578,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
 
   const loadDrafts = useCallback(async () => {
     const stored = await localforage.getItem(localKey);
-    const drafts = stored || [];
+    const drafts = Array.isArray(stored) ? stored : [];
     setAllDrafts(drafts);
     
     let totalSize = 0;
@@ -606,7 +606,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
     
     // Save it immediately so it's available for the next render
     const updateDrafts = async () => {
-      const currentDrafts = [...allDrafts, newDraft];
+      const currentDrafts = Array.isArray(allDrafts) ? [...allDrafts, newDraft] : [newDraft];
       await localforage.setItem(localKey, currentDrafts);
       setAllDrafts(currentDrafts);
       setCurrentDraftId(newId);
@@ -623,7 +623,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
       return; // The next render will pick up the currentDraftId and autosave properly
     }
 
-    const currentDrafts = [...allDrafts];
+    const currentDrafts = Array.isArray(allDrafts) ? [...allDrafts] : [];
     const draftIndex = currentDrafts.findIndex(d => d.id === currentDraftId);
     
     const draftObj = {
@@ -643,7 +643,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
 
     // Size limit check
     let sizeCalc = 0;
-    currentDrafts.forEach(d => { sizeCalc += d.sizeBytes; });
+    currentDrafts.forEach(d => { sizeCalc += (d.sizeBytes || 0); });
     
     if (sizeCalc > MAX_STORAGE_BYTES) {
       alert("Storage limit reached! Please delete older offline drafts.");

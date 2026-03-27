@@ -232,17 +232,30 @@ app.post('/api/workflow-stages', authenticateToken, async (req, res) => {
 // ── NOTIFICATIONS ──
 app.get('/api/notifications', authenticateToken, async (req, res) => {
   try {
-    const userId = typeof req.user.id === 'number' ? req.user.id : null;
+    const isDept = req.user.role === 'department';
+    const userId = !isDept ? req.user.id : null;
     const deptId = req.user.deptId;
 
-    if (!userId && !deptId) return res.json([]);
+    let whereClause = {};
+    if (!isDept && userId) {
+      whereClause = { userId: typeof userId === 'string' ? parseInt(userId) : userId };
+    } else if (isDept && deptId) {
+      // Find all users in this department to show collective notifications
+      const deptUsers = await prisma.user.findMany({
+        where: { departmentId: typeof deptId === 'string' ? parseInt(deptId) : deptId },
+        select: { id: true }
+      });
+      const userIds = deptUsers.map(u => u.id);
+      // If no users in dept, return empty notifs instead of 500
+      if (userIds.length === 0) return res.json([]);
+      whereClause = { userId: { in: userIds } };
+    } else {
+      // Fallback for cases where neither is found
+      return res.json([]);
+    }
 
     const notifications = await prisma.notification.findMany({
-      where: userId ? { userId } : { 
-        user: { 
-          departmentId: isNaN(parseInt(deptId)) ? -1 : parseInt(deptId) 
-        } 
-      },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: 20
     });

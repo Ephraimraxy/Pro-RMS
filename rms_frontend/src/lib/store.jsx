@@ -40,12 +40,13 @@ export async function getRequisitions() {
   await ensureInitialized();
   try {
     const remote = await reqAPI.getRequisitions();
-    await requisitionStore.setItem('all', remote);
-    return remote;
+    const data = Array.isArray(remote) ? remote : [];
+    await requisitionStore.setItem('all', data);
+    return data;
   } catch (err) {
     console.warn("Offline: Fetching cached requisitions", err);
     const local = await requisitionStore.getItem('all');
-    return local || [];
+    return Array.isArray(local) ? local : [];
   }
 }
 
@@ -141,11 +142,13 @@ export async function getActivityLog() {
   await ensureInitialized();
   try {
     const remote = await auditAPI.getAuditLogs();
-    await activityStore.setItem('log', remote);
-    return remote;
+    const data = Array.isArray(remote) ? remote : [];
+    await activityStore.setItem('log', data);
+    return data;
   } catch (err) {
     console.warn("Offline: Fetching cached activity log", err);
-    return (await activityStore.getItem('log')) || [];
+    const local = await activityStore.getItem('log');
+    return Array.isArray(local) ? local : [];
   }
 }
 
@@ -188,9 +191,10 @@ export async function deleteRequisitionType(id) {
 export async function getNotifications() {
   await ensureInitialized();
   try {
-    return await notificationAPI.getNotifications();
+    const remote = await notificationAPI.getNotifications();
+    return Array.isArray(remote) ? remote : [];
   } catch (err) {
-    console.warn("Offline: Could not fetch notifications");
+    console.warn("Offline: Could not fetch notifications", err);
     return [];
   }
 }
