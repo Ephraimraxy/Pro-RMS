@@ -16,6 +16,10 @@ import {
   logActivity 
 } from '../lib/store';
 
+import { 
+  FileText, Table, Download, Plus, Trash2, Save, 
+  FileSpreadsheet, FileImage, File, ChevronDown,
+  CloudOff, Cloud, Clock, X, HardDrive, AlertCircle, 
   FolderOpen, Edit3, Presentation, MonitorPlay, ChevronLeft, ChevronRight, Maximize, Send
 } from 'lucide-react';
 
