@@ -57,6 +57,7 @@ model Requisition {
   departmentId Int
   department   Department @relation(fields: [departmentId], references: [id])
   attachments  Attachment[]
+  content      String?    @db.Text
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }

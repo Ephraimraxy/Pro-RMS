@@ -156,7 +156,8 @@ app.post('/api/requisitions', authenticateToken, async (req, res) => {
           description: item.description || '',
           status: 'pending',
           departmentId: item.departmentId || req.user.deptId || 1, // Fallback to user's dept
-          creatorId: creatorId || 1 // Fallback to system admin for dept logins for now
+          creatorId: creatorId || 1, // Fallback to system admin for dept logins for now
+          content: item.content || null
         }
       }))
     );
