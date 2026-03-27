@@ -12,10 +12,16 @@ export default defineConfig({
         name: 'CSS Group RMS',
         short_name: 'CSS RMS',
         description: 'Enterprise Requisition Management System',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+        theme_color: '#6A3A22',
+        background_color: '#FAF9F6',
         display: 'standalone',
         icons: [
+          {
+            src: 'favicon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any'
+          },
           {
             src: 'favicon.png',
             sizes: '192x192',

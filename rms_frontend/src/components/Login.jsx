@@ -81,7 +81,7 @@ const Login = () => {
 
         <div className="relative z-10">
           <div className="w-14 h-14 bg-white/15 border border-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-            <img src="/favicon.png" alt="Logo" className="w-9 h-9 object-contain" />
+            <img src="/favicon.svg" alt="Logo" className="w-9 h-9 object-contain" />
           </div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group Holdings</p>
         </div>
@@ -120,7 +120,7 @@ const Login = () => {
           {/* Mobile logo + app name */}
           <div className="lg:hidden flex items-center space-x-3 mb-8 pb-6 border-b border-border/40">
             <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
-              <img src="/favicon.png" alt="Logo" className="w-6 h-6 object-contain" />
+              <img src="/favicon.svg" alt="Logo" className="w-6 h-6 object-contain" />
             </div>
             <div>
               <h1 className="text-sm font-bold text-foreground tracking-tight">CSS <span className="text-primary italic">RMS</span></h1>
