@@ -171,15 +171,51 @@ async function notifyRole(roleName, message, requisitionId) {
   }
 }
 
+// ── NOTIFICATIONS ──
 app.get('/api/notifications', authenticateToken, async (req, res) => {
   try {
+    const isDept = req.user.role === 'department';
+    const rawId = !isDept ? req.user.id : req.user.deptId;
+    
+    // Robust Integer Parsing
+    const parsedId = (typeof rawId === 'string' && rawId.startsWith('dept_')) 
+      ? parseInt(rawId.split('_')[1]) 
+      : parseInt(rawId);
+
+    if (isNaN(parsedId)) {
+      console.warn("[NOTIF] Invalid ID format:", { rawId, role: req.user.role });
+      return res.json([]);
+    }
+
+    let whereClause = {};
+    if (!isDept) {
+      whereClause = { userId: parsedId };
+    } else {
+      // Find all users in this department
+      const deptUsers = await prisma.user.findMany({
+        where: { departmentId: parsedId },
+        select: { id: true }
+      });
+      const userIds = deptUsers.map(u => u.id);
+      if (userIds.length === 0) return res.json([]);
+      whereClause = { userId: { in: userIds } };
+    }
+
     const notifications = await prisma.notification.findMany({
-      where: { userId: req.user.id },
+      where: whereClause,
+      include: { requisition: { select: { title: true } } }, // Optional: include metadata
       orderBy: { createdAt: 'desc' },
       take: 20
     });
     res.json(notifications);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    console.error("[NOTIF] Fetch Error:", error.message);
+    res.status(500).json({ 
+      error: "Notification fetch failed", 
+      details: error.message,
+      diag: { role: req.user?.role, id: req.user?.id, deptId: req.user?.deptId } 
+    });
+  }
 });
 
 app.post('/api/requisition-types', authenticateToken, async (req, res) => {
