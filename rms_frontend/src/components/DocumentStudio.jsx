@@ -8,6 +8,7 @@ import Quill from 'quill';
 import 'quill/dist/quill.snow.css';
 import { Workbook } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
+import { templates } from '../lib/templates';
 
 import { 
   FileText, Table, Download, Plus, Trash2, Save, 
@@ -445,10 +446,30 @@ const DocumentStudio = ({ user, onViewChange }) => {
     loadDrafts();
   }, [loadDrafts]);
 
-  const initiateNewDraft = (type) => {
-    setCurrentDraftId(`draft_${Date.now()}`);
-    setActiveTab(type);
-    setDraftsManagerOpen(false);
+  const initiateNewDraft = (type, templateKey = null) => {
+    const newId = `draft_${Date.now()}`;
+    const template = templateKey ? templates[templateKey] : null;
+    
+    // Pre-create the draft object to ensure it loads with template data immediately
+    const newDraft = {
+      id: newId,
+      type,
+      title: template ? template.title : (type === 'doc' ? 'Untitled Document' : type === 'sheet' ? 'Untitled Spreadsheet' : 'Untitled Presentation'),
+      data: template ? template.data : (type === 'sheet' ? [{ name: "Sheet1", celldata: [] }] : (type === 'slide' ? [{ id: Date.now(), html: '<h1 class="ql-align-center">New Slide</h1>' }] : '')),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Save it immediately so it's available for the next render
+    const updateDrafts = async () => {
+      const currentDrafts = [...allDrafts, newDraft];
+      await localforage.setItem(localKey, currentDrafts);
+      setAllDrafts(currentDrafts);
+      setCurrentDraftId(newId);
+      setActiveTab(type);
+      setDraftsManagerOpen(false);
+    };
+    
+    updateDrafts();
   };
 
   const handleAutosave = async ({ title, data }) => {
@@ -540,19 +561,59 @@ const DocumentStudio = ({ user, onViewChange }) => {
 
         {/* Tab Switcher */}
         {!currentDraftId ? (
-          <div className="glass bg-white/50 border border-primary/20 rounded-3xl p-6 lg:p-12 text-center flex flex-col items-center justify-center min-h-[300px] w-full max-w-3xl mx-auto">
-            <h2 className="text-lg lg:text-xl font-bold text-foreground mb-2">Start a New Document</h2>
-            <p className="text-xs lg:text-sm text-muted-foreground mb-8 max-w-sm">Launch a new rich text document or a robust spreadsheet workspace.</p>
-            <div className="flex flex-col sm:flex-row gap-3 lg:gap-4 w-full justify-center px-4">
-              <button onClick={() => initiateNewDraft('doc')} className="flex items-center justify-center space-x-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-4 py-3 lg:px-6 rounded-xl shadow-lg shadow-primary/20 transition-transform hover:scale-105 w-full sm:w-auto text-sm">
-                <FileText size={18} /> <span>New Document</span>
+          <div className="glass bg-white/50 border border-primary/20 rounded-3xl p-6 lg:p-10 text-center flex flex-col items-center justify-center min-h-[300px] w-full max-w-4xl mx-auto">
+            <h2 className="text-lg lg:text-xl font-bold text-foreground mb-1">Start a New Document</h2>
+            <p className="text-xs lg:text-sm text-muted-foreground mb-8 max-w-sm">Launch a new rich text document, spreadsheet, or presentation workspace.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full px-4">
+              {/* Blank Document */}
+              <button 
+                onClick={() => initiateNewDraft('doc')} 
+                className="flex flex-col items-center justify-center p-6 bg-white border border-border/60 hover:border-primary/40 hover:bg-white rounded-2xl shadow-sm transition-all hover:scale-[1.02] group"
+              >
+                <div className="w-12 h-12 bg-primary/5 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors text-primary">
+                  <Plus size={24} />
+                </div>
+                <span className="font-bold text-sm">Blank Doc</span>
               </button>
-              <button onClick={() => initiateNewDraft('sheet')} className="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-3 lg:px-6 rounded-xl shadow-lg shadow-emerald-600/20 transition-transform hover:scale-105 w-full sm:w-auto text-sm">
-                <Table size={18} /> <span>New Spreadsheet</span>
+
+              {/* Memo Template */}
+              <button 
+                onClick={() => initiateNewDraft('doc', 'memo')} 
+                className="flex flex-col items-center justify-center p-6 bg-white border border-border/60 hover:border-primary/40 hover:bg-white rounded-2xl shadow-sm transition-all hover:scale-[1.02] group"
+              >
+                <div className="w-12 h-12 bg-primary/5 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors text-primary">
+                  <FileText size={24} />
+                </div>
+                <span className="font-bold text-sm">Internal Memo</span>
               </button>
-              <button onClick={() => initiateNewDraft('slide')} className="flex items-center justify-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-3 lg:px-6 rounded-xl shadow-lg shadow-orange-600/20 transition-transform hover:scale-105 w-full sm:w-auto text-sm">
-                <Presentation size={18} /> <span>New Presentation</span>
+
+              {/* Requisition Template */}
+              <button 
+                onClick={() => initiateNewDraft('doc', 'requisition')} 
+                className="flex flex-col items-center justify-center p-6 bg-white border border-border/60 hover:border-primary/40 hover:bg-white rounded-2xl shadow-sm transition-all hover:scale-[1.02] group"
+              >
+                <div className="w-12 h-12 bg-primary/5 rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors text-primary">
+                  <Save size={24} />
+                </div>
+                <span className="font-bold text-sm">Requisition</span>
               </button>
+
+              {/* More Types */}
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => initiateNewDraft('sheet')} 
+                  className="flex items-center space-x-3 w-full p-3 bg-emerald-50 text-emerald-700 font-bold rounded-xl hover:bg-emerald-100 transition-all text-xs"
+                >
+                  <Table size={16} /> <span>New Sheet</span>
+                </button>
+                <button 
+                  onClick={() => initiateNewDraft('slide')} 
+                  className="flex items-center space-x-3 w-full p-3 bg-orange-50 text-orange-700 font-bold rounded-xl hover:bg-orange-100 transition-all text-xs"
+                >
+                  <Presentation size={16} /> <span>New Slide</span>
+                </button>
+              </div>
             </div>
           </div>
         ) : (
