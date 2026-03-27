@@ -238,7 +238,11 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
     if (!userId && !deptId) return res.json([]);
 
     const notifications = await prisma.notification.findMany({
-      where: userId ? { userId } : { user: { departmentId: parseInt(deptId) } },
+      where: userId ? { userId } : { 
+        user: { 
+          departmentId: isNaN(parseInt(deptId)) ? -1 : parseInt(deptId) 
+        } 
+      },
       orderBy: { createdAt: 'desc' },
       take: 20
     });
