@@ -16,11 +16,7 @@ import {
   logActivity 
 } from '../lib/store';
 
-import { 
-  FileText, Table, Download, Plus, Trash2, Save, 
-  FileSpreadsheet, FileImage, File, ChevronDown,
-  CloudOff, Cloud, Clock, X, HardDrive, AlertCircle, 
-  FolderOpen, Edit3, Presentation, MonitorPlay, ChevronLeft, ChevronRight, Maximize
+  FolderOpen, Edit3, Presentation, MonitorPlay, ChevronLeft, ChevronRight, Maximize, Send
 } from 'lucide-react';
 
 localforage.config({ name: 'CSS_RMS_Offline', storeName: 'drafts' });
@@ -426,6 +422,93 @@ const PresentationEditor = ({ loadedDraft, onAutosave }) => {
             <div className="w-px h-6 bg-white/20 mx-2"></div>
             <button onClick={() => document.exitFullscreen()} className="p-2 hover:bg-white/20 rounded-full"><X size={20} /></button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── SEND TO WORKFLOW MODAL ──────────────────
+const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, types, initialTitle }) => {
+  const [targetDeptId, setTargetDeptId] = useState('');
+  const [reqType, setReqType] = useState('Cash');
+  const [desc, setDesc] = useState('');
+  const [amount, setAmount] = useState('');
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-left">
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col border border-border/50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+        <div className="p-6 border-b border-border/50 flex items-center justify-between bg-muted/10">
+          <div>
+            <h2 className="text-xl font-bold text-foreground flex items-center space-x-2">
+              <Send size={20} className="text-primary" />
+              <span>Send to Workflow</span>
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">Submit "{initialTitle}" for departmental approval</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-muted text-muted-foreground rounded-full transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Target Department</label>
+            <select 
+              value={targetDeptId}
+              onChange={(e) => setTargetDeptId(e.target.value)}
+              className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+            >
+              <option value="">Select Department...</option>
+              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Request Type</label>
+              <select 
+                value={reqType}
+                onChange={(e) => setReqType(e.target.value)}
+                className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+              >
+                {types.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Amount (Optional)</label>
+              <input 
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Purpose/Description</label>
+            <textarea 
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder="Briefly describe the purpose of this request..."
+              className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm h-24 focus:ring-2 focus:ring-primary/20 outline-none resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="p-6 bg-muted/20 border-t border-border/40 flex items-center gap-3">
+          <button onClick={onClose} className="flex-1 py-3 font-bold text-sm text-muted-foreground hover:bg-muted rounded-xl transition-all">Cancel</button>
+          <button 
+            disabled={!targetDeptId}
+            onClick={() => onSend({ departmentId: targetDeptId, departmentName: departments.find(d => String(d.id) === String(targetDeptId))?.name, type: reqType, description: desc, amount })}
+            className="flex-[3] py-3 px-8 bg-primary text-white font-bold text-sm rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+          >
+            Submit for Approval
+          </button>
         </div>
       </div>
     </div>
