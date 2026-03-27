@@ -110,7 +110,7 @@ export async function updateRequisitionStatus(id, newStatus) {
   await requisitionStore.setItem('all', all);
   await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
   toast.success(`${id} has been ${newStatus}`, {
-    icon: <img src="/favicon.png" className="w-5 h-5 object-contain" alt="" />
+    icon: <img src="/favicon.svg" className="w-5 h-5 object-contain" alt="" />
   });
 }
 

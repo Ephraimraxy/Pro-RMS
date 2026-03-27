@@ -43,7 +43,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
         <Menu size={18} />
       </button>
       <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-inner">
-         <img src="/favicon.png" alt="Logo" className="w-5 h-5 object-contain" />
+         <img src="/favicon.svg" alt="Logo" className="w-5 h-5 object-contain" />
       </div>
       <div>
         <h1 className="text-xs font-black text-foreground tracking-widest uppercase flex items-center">
