@@ -17,7 +17,6 @@ async function main() {
     { name: 'Rice Mill', type: 'Operational', code: 'RML', accessCode: 'RICE-2026' },
     { name: 'Soya Mill', type: 'Operational', code: 'SML', accessCode: 'SOYA-2026' },
     { name: 'Feed Mill', type: 'Operational', code: 'FML', accessCode: 'FEED-2026' },
-    { name: 'Soya Milk', type: 'Operational', code: 'SMK', accessCode: 'SMILK-2026' },
     { name: 'Soap Factory', type: 'Operational', code: 'SFC', accessCode: 'SOAP-2026' },
     { name: 'Store', type: 'Operational', code: 'STR', accessCode: 'STORE-2026' },
     { name: 'Chicken Processing', type: 'Operational', code: 'CPH', accessCode: 'CHICK-2026' },

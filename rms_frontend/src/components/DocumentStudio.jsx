@@ -9,6 +9,12 @@ import 'quill/dist/quill.snow.css';
 import { Workbook } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import { templates } from '../lib/templates';
+import { 
+  addRequisition, 
+  getDepartments, 
+  getRequisitionTypes,
+  logActivity 
+} from '../lib/store';
 
 import { 
   FileText, Table, Download, Plus, Trash2, Save, 
@@ -95,7 +101,7 @@ const SaveIndicator = ({ saving, lastSaved, error }) => (
 // ══════════════════════════════════════════════
 // ── RICH TEXT EDITOR (Docs / Memos) ──────────
 // ══════════════════════════════════════════════
-const RichTextEditor = ({ loadedDraft, onAutosave }) => {
+const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
   const [title, setTitle] = useState(loadedDraft?.title || 'Untitled Document');
   const [saving, setSaving] = useState(false);
   const editorRef = useRef(null);
@@ -174,7 +180,16 @@ const RichTextEditor = ({ loadedDraft, onAutosave }) => {
           />
           <SaveIndicator saving={saving} />
         </div>
-        <ExportMenu onExport={handleExport} formats={exportFormats} />
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={onSend}
+            className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm px-5 py-3 rounded-xl transition-all shadow-lg shadow-amber-600/20"
+          >
+            <Send size={16} />
+            <span>Send to Workflow</span>
+          </button>
+          <ExportMenu onExport={handleExport} formats={exportFormats} />
+        </div>
       </div>
 
       <div className="glass bg-white border border-border/50 rounded-2xl shadow-sm relative z-10 overflow-hidden flex flex-col">
@@ -421,7 +436,48 @@ const PresentationEditor = ({ loadedDraft, onAutosave }) => {
 // ── MAIN DOCUMENT STUDIO ─────────────────────
 // ══════════════════════════════════════════════
 const DocumentStudio = ({ user, onViewChange }) => {
-  const [activeTab, setActiveTab] = useState('doc');
+  const [availableDepartments, setAvailableDepartments] = useState([]);
+  const [requisitionTypes, setRequisitionTypes] = useState([]);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      const [depts, types] = await Promise.all([
+        getDepartments(),
+        getRequisitionTypes()
+      ]);
+      setAvailableDepartments(depts);
+      setRequisitionTypes(types);
+    };
+    fetchMetadata();
+  }, []);
+
+  const handleSendToWorkflow = async (metadata) => {
+    if (!loadedDraft) return;
+    
+    try {
+      const type = metadata.type || (loadedDraft.title.toLowerCase().includes('memo') ? 'Memo' : 'Requisition');
+      const requisitionData = {
+        title: loadedDraft.title,
+        description: metadata.description || `Submitted from Document Studio: ${loadedDraft.title}`,
+        departmentId: parseInt(metadata.departmentId),
+        type: type,
+        status: 'pending',
+        amount: metadata.amount ? parseFloat(metadata.amount) : 0,
+        content: loadedDraft.data, // Storing the HTML content in the requisition
+        createdBy: user?.name || 'Administrator',
+        createdAt: new Date().toISOString()
+      };
+
+      await addRequisition(requisitionData);
+      await logActivity('Document Sent', `"${loadedDraft.title}" sent to ${metadata.departmentName} for approval`);
+      toast.success('Successfully sent to workflow chain!');
+      setIsSendModalOpen(false);
+    } catch (err) {
+      console.error("Scale-to-Workflow failed:", err);
+      toast.error('Failed to send document to workflow');
+    }
+  };
   
   // Drafts State
   const [draftsManagerOpen, setDraftsManagerOpen] = useState(false);
@@ -625,10 +681,30 @@ const DocumentStudio = ({ user, onViewChange }) => {
             </div>
 
             {/* Active Editor */}
-            {activeTab === 'doc' && <RichTextEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
-            {activeTab === 'sheet' && <SpreadsheetEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
-            {activeTab === 'slide' && <PresentationEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />}
-          </>
+          {currentDraftId && activeTab === 'doc' && currentActiveDraft && (
+          <RichTextEditor 
+            key={currentDraftId}
+            loadedDraft={currentActiveDraft} 
+            onAutosave={handleAutosave} 
+            onSend={() => setIsSendModalOpen(true)}
+          />
+        )}
+        {currentDraftId && activeTab === 'sheet' && currentActiveDraft && (
+          <SpreadsheetEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />
+        )}
+        {currentDraftId && activeTab === 'slide' && currentActiveDraft && (
+          <PresentationEditor key={currentDraftId} loadedDraft={currentActiveDraft} onAutosave={handleAutosave} />
+        )}
+
+        <SendToWorkflowModal 
+          isOpen={isSendModalOpen}
+          onClose={() => setIsSendModalOpen(false)}
+          onSend={handleSendToWorkflow}
+          departments={availableDepartments}
+          types={requisitionTypes}
+          initialTitle={currentActiveDraft?.title}
+        />
+  </>
         )}
 
       </div>

@@ -24,7 +24,6 @@ export const CORPORATE_HIERARCHY = {
     "Rice Mill",
     "Soya Mill",
     "Feed Mill",
-    "Soya Milk",
     "Soap Factory",
     "Store",
     "Chicken Processing",
