@@ -162,8 +162,7 @@ async function notifyRole(roleName, message, requisitionId) {
     await prisma.notification.createMany({
       data: users.map(u => ({
         userId: u.id,
-        message,
-        requisitionId
+        content: message
       }))
     });
   } catch (err) {
@@ -203,7 +202,6 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
 
     const notifications = await prisma.notification.findMany({
       where: whereClause,
-      include: { requisition: { select: { title: true } } }, // Optional: include metadata
       orderBy: { createdAt: 'desc' },
       take: 20
     });
@@ -418,4 +416,34 @@ app.use((req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CSS RMS Unified Node listening on port ${PORT}`));
+app.listen(PORT, async () => {
+  console.log(`🚀 CSS RMS Unified Node listening on port ${PORT}`);
+  
+  // Boot-time cleanup: remove duplicate/typo departments
+  try {
+    const deleted = await prisma.department.deleteMany({
+      where: { name: { in: ['Soya Milk', 'soya milk', 'SOYA MILK'] } }
+    });
+    if (deleted.count > 0) console.log(`[BOOT] Cleaned up ${deleted.count} duplicate 'Soya Milk' department(s)`);
+  } catch (e) {
+    console.warn('[BOOT] Dept cleanup skipped:', e.message);
+  }
+
+  // Ensure GM and CEO departments exist
+  try {
+    for (const dept of [
+      { name: 'General Manager (GM)', type: 'Strategic', code: 'GMR', accessCode: 'GM-2026' },
+      { name: 'CEO (Chairman)', type: 'Strategic', code: 'CEO', accessCode: 'CEO-2026' },
+      { name: 'Internal consult and control (ICC)', type: 'Strategic', code: 'ICC', accessCode: 'ICC-2026' }
+    ]) {
+      await prisma.department.upsert({
+        where: { name: dept.name },
+        update: {},
+        create: dept
+      });
+    }
+    console.log('[BOOT] GM and CEO departments ensured');
+  } catch (e) {
+    console.warn('[BOOT] Dept upsert skipped:', e.message);
+  }
+});

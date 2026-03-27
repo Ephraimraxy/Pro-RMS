@@ -460,14 +460,26 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, types, init
         <div className="p-6 space-y-4">
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Target Department</label>
-            <select 
-              value={targetDeptId}
-              onChange={(e) => setTargetDeptId(e.target.value)}
-              className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-            >
-              <option value="">Select Department...</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
+            {(() => {
+              const MAJOR_NAMES = ['CEO (Chairman)', 'General Manager (GM)', 'HR', 'Audit', 'Account', 'ICC'];
+              const majorDepts = departments.filter(d => MAJOR_NAMES.some(m => d.name.toLowerCase().includes(m.toLowerCase())));
+              const otherDepts = departments.filter(d => !MAJOR_NAMES.some(m => d.name.toLowerCase().includes(m.toLowerCase())) && d.name !== 'Super Admin');
+              return (
+                <select 
+                  value={targetDeptId}
+                  onChange={(e) => setTargetDeptId(e.target.value)}
+                  className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                >
+                  <option value="">Select Department...</option>
+                  <optgroup label="── MAJOR ──">
+                    {majorDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </optgroup>
+                  <optgroup label="── OTHERS ──">
+                    {otherDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </optgroup>
+                </select>
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

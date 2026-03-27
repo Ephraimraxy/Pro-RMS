@@ -38,6 +38,9 @@ async function main() {
     { name: 'Crop Production', type: 'Operational', code: 'CRP', accessCode: 'CROP-2026' },
     { name: 'Irrigation', type: 'Operational', code: 'IRR', accessCode: 'IRRIG-2026' },
     { name: 'Super Admin', type: 'Strategic', code: 'ADM', accessCode: 'admin123' },
+    { name: 'General Manager (GM)', type: 'Strategic', code: 'GMR', accessCode: 'GM-2026' },
+    { name: 'CEO (Chairman)', type: 'Strategic', code: 'CEO', accessCode: 'CEO-2026' },
+    { name: 'Internal consult and control (ICC)', type: 'Strategic', code: 'ICC', accessCode: 'ICC-2026' },
   ];
 
   console.log('Seeding departments...');
