@@ -6,7 +6,7 @@ export const templates = {
         
         <!-- CSS Group Logo & Title -->
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="/favicon.svg" style="width: 60px; height: 60px; margin-bottom: 6px;" />
+          <img src="/logo.jpg" style="width: 70px; height: auto; margin-bottom: 6px; border-radius: 8px;" />
           <div style="font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #333;">CSS</div>
           <div style="font-size: 11px; color: #666; letter-spacing: 1px;">Group</div>
         </div>
@@ -72,8 +72,8 @@ export const templates = {
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
           <tr>
             <td style="width: 50%; vertical-align: middle;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <img src="/favicon.svg" style="width: 55px; height: 55px;" />
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <img src="/logo.jpg" style="width: 70px; height: auto; border-radius: 8px;" />
                 <div>
                   <div style="font-size: 24px; font-weight: 900; color: #1a3a6e; letter-spacing: 1px; line-height: 1;">CSS</div>
                   <div style="font-size: 10px; font-weight: 700; color: #1a3a6e; letter-spacing: 0.5px;">Global Integrated Farms Ltd</div>

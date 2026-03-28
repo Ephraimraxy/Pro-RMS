@@ -188,6 +188,7 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
           <button onClick={() => execCmd('justifyLeft')} className="p-2 hover:bg-muted text-xs font-bold rounded">Left</button>
           <button onClick={() => execCmd('justifyCenter')} className="p-2 hover:bg-muted text-xs font-bold rounded">Center</button>
           <button onClick={() => execCmd('justifyRight')} className="p-2 hover:bg-muted text-xs font-bold rounded">Right</button>
+          <button onClick={() => execCmd('justifyFull')} className="p-2 hover:bg-muted text-xs font-bold rounded">Justify</button>
         </div>
         
         {/* Native HTML Editor */}
@@ -200,8 +201,8 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
             contentEditable={true}
             onInput={handleInput}
             suppressContentEditableWarning={true}
-            className="w-full max-w-4xl mx-auto min-h-full bg-white shadow-xl outline-none"
-            style={{ padding: '10px' }} // The templates already have their own inner padding, so we keep this minimal 
+            className="w-full max-w-4xl mx-auto min-h-full bg-white shadow-xl outline-none text-justify"
+            style={{ padding: '10px', textAlign: 'justify' }} // The templates already have their own inner padding, so we keep this minimal 
           />
         </div>
       </div>
