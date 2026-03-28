@@ -19,7 +19,7 @@ export const templates = {
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 13px;">
           <tr>
             <td style="width: 85px; font-weight: 800; padding: 5px 0; vertical-align: top;">REF:</td>
-            <td style="padding: 5px 0; border-bottom: 1px solid #999;">CSSG/ISC/MO/${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\\//g, '/')}/01</td>
+            <td style="padding: 5px 0; border-bottom: 1px solid #999;">CSSG/ISC/MO/${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replaceAll('/', '/')}/01</td>
             <td style="width: 60px;"></td>
             <td style="width: 180px; font-weight: 800; text-align: right; padding: 5px 0; text-transform: uppercase; border-bottom: 1px solid #999;">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}.</td>
           </tr>
