@@ -105,58 +105,42 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
   const [title, setTitle] = useState(loadedDraft?.title || 'Untitled Document');
   const [saving, setSaving] = useState(false);
   const editorRef = useRef(null);
-  const quillInstance = useRef(null);
 
   useEffect(() => {
-    if (!editorRef.current || quillInstance.current) return;
-    
-    quillInstance.current = new Quill(editorRef.current, {
-      theme: 'snow',
-      modules: {
-        toolbar: [
-          [{ 'font': [] }, { 'size': ['small', false, 'large', 'huge'] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ 'color': [] }, { 'background': [] }],
-          [{ 'script': 'sub'}, { 'script': 'super' }],
-          [{ 'header': 1 }, { 'header': 2 }, 'blockquote', 'code-block'],
-          [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'indent': '-1'}, { 'indent': '+1' }],
-          [{ 'direction': 'rtl' }, { 'align': [] }],
-          ['link', 'image', 'video'],
-          ['clean']
-        ]
+    setTitle(loadedDraft?.title || 'Untitled Document');
+    if (editorRef.current && loadedDraft?.data) {
+      if (editorRef.current.innerHTML !== loadedDraft.data) {
+        editorRef.current.innerHTML = loadedDraft.data;
       }
-    });
-
-    if (loadedDraft?.data) {
-      quillInstance.current.root.innerHTML = loadedDraft.data;
+    } else if (editorRef.current) {
+      editorRef.current.innerHTML = '';
     }
+  }, [loadedDraft]);
 
-    quillInstance.current.on('text-change', () => {
-      setSaving(true);
-      if (window.docAutoSaveTimer) clearTimeout(window.docAutoSaveTimer);
-      window.docAutoSaveTimer = setTimeout(() => {
-        onAutosave({ title, data: quillInstance.current.root.innerHTML });
-        setSaving(false);
-      }, 1500);
-    });
-  }, [loadedDraft, onAutosave, title]);
+  const handleInput = () => {
+    setSaving(true);
+    if (window.docAutoSaveTimer) clearTimeout(window.docAutoSaveTimer);
+    window.docAutoSaveTimer = setTimeout(() => {
+      onAutosave({ title, data: editorRef.current.innerHTML });
+      setSaving(false);
+    }, 1500);
+  };
 
   useEffect(() => {
-    // Save on title change
     setSaving(true);
     if (window.docTitleTimer) clearTimeout(window.docTitleTimer);
     window.docTitleTimer = setTimeout(() => {
-      if (quillInstance.current) {
-        onAutosave({ title, data: quillInstance.current.root.innerHTML });
+      if (editorRef.current) {
+        onAutosave({ title, data: editorRef.current.innerHTML });
       }
       setSaving(false);
     }, 1500);
   }, [title]);
 
   const handleExport = useCallback(async (type) => {
-    const contentHtml = quillInstance.current?.root.innerHTML || '';
+    const contentHtml = editorRef.current?.innerHTML || '';
     if (type === 'html') {
-      const blob = new Blob([`<html><head><title>${title}</title><style>body{font-family:sans-serif;}</style></head><body>${contentHtml}</body></html>`], { type: 'text/html' });
+      const blob = new Blob([`<html><head><title>${title}</title><meta charset="utf-8"></head><body style="padding:20px;">${contentHtml}</body></html>`], { type: 'text/html' });
       const link = document.createElement('a');
       link.download = `${title}.html`;
       link.href = URL.createObjectURL(blob);
@@ -164,9 +148,11 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
     }
   }, [title]);
 
-  const exportFormats = [
-    { type: 'html', label: 'Export as HTML', icon: FileText }
-  ];
+  const execCmd = (cmd, arg = null) => {
+    document.execCommand(cmd, false, arg);
+    editorRef.current.focus();
+    handleInput();
+  };
 
   return (
     <div className="space-y-6">
@@ -188,12 +174,36 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
             <Send size={16} />
             <span>Send to Workflow</span>
           </button>
-          <ExportMenu onExport={handleExport} formats={exportFormats} />
+          <ExportMenu onExport={handleExport} formats={[{ type: 'html', label: 'Export as HTML', icon: FileText }]} />
         </div>
       </div>
 
-      <div className="glass bg-white border border-border/50 rounded-2xl shadow-sm relative z-10 overflow-hidden flex flex-col">
-          <div ref={editorRef} className="h-[600px] border-none font-sans" />
+      <div className="glass bg-slate-100 rounded-2xl shadow-sm relative z-10 flex flex-col border border-border/50 overflow-hidden">
+        {/* Simple Formatting Toolbar */}
+        <div className="bg-white border-b border-border/50 px-4 py-2 flex items-center gap-2 overflow-x-auto">
+          <button onClick={() => execCmd('bold')} className="p-2 hover:bg-muted font-bold rounded">B</button>
+          <button onClick={() => execCmd('italic')} className="p-2 hover:bg-muted italic rounded">I</button>
+          <button onClick={() => execCmd('underline')} className="p-2 hover:bg-muted underline rounded">U</button>
+          <div className="w-px h-6 bg-border/50 mx-1"></div>
+          <button onClick={() => execCmd('justifyLeft')} className="p-2 hover:bg-muted text-xs font-bold rounded">Left</button>
+          <button onClick={() => execCmd('justifyCenter')} className="p-2 hover:bg-muted text-xs font-bold rounded">Center</button>
+          <button onClick={() => execCmd('justifyRight')} className="p-2 hover:bg-muted text-xs font-bold rounded">Right</button>
+        </div>
+        
+        {/* Native HTML Editor */}
+        <div 
+          className="w-full h-[600px] overflow-y-auto outline-none"
+          style={{ padding: '20px', background: '#e5e7eb' }} // Grey outer shell so white document paper pops
+        >
+          <div 
+            ref={editorRef}
+            contentEditable={true}
+            onInput={handleInput}
+            suppressContentEditableWarning={true}
+            className="w-full max-w-4xl mx-auto min-h-full bg-white shadow-xl outline-none"
+            style={{ padding: '10px' }} // The templates already have their own inner padding, so we keep this minimal 
+          />
+        </div>
       </div>
     </div>
   );
