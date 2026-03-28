@@ -31,6 +31,7 @@ export default defineConfig({
     })
   ],
   base: '/',
+  build: { sourcemap: true },
   server: {
     proxy: {
       '/api': {
