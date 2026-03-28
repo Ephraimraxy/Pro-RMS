@@ -232,7 +232,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
 
         {/* Dynamic Content Area with Stress-Free Scrolling */}
         <main className="flex-1 overflow-y-auto custom-scrollbar relative z-10 w-full bg-[#FAF9F6]/50">
-          <div className="p-5 lg:p-10 max-w-7xl mx-auto animate-slide-up">
+          <div className="p-4 lg:p-10 max-w-7xl mx-auto animate-slide-up">
             {children}
           </div>
         </main>

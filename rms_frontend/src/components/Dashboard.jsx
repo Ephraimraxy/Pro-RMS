@@ -7,7 +7,7 @@ import { getDashboardStats, getRequisitions, getDepartments } from '../lib/store
 import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
-  <div onClick={onClick} className="glass p-6 rounded-2xl border border-border/50 relative overflow-hidden group hover:border-primary/30 transition-all cursor-pointer bg-white/60">
+  <div onClick={onClick} className="glass p-4 lg:p-6 rounded-2xl border border-border/50 relative overflow-hidden group hover:border-primary/30 transition-all cursor-pointer bg-white/60">
     <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-500/10 blur-3xl rounded-full translate-x-12 -translate-y-12`}></div>
     <div className="flex items-center justify-between relative z-10">
       <div>
@@ -22,7 +22,7 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
 );
 
 const DepartmentCard = ({ name, type }) => (
-  <div className="glass bg-white/60 p-5 rounded-2xl border border-border/50 hover:border-primary/20 transition-all cursor-pointer group flex items-center justify-between shadow-sm hover:shadow-md">
+  <div className="glass bg-white/60 p-3 lg:p-5 rounded-2xl border border-border/50 hover:border-primary/20 transition-all cursor-pointer group flex items-center justify-between shadow-sm hover:shadow-md">
     <div className="flex items-center space-x-4">
       <div className="w-10 h-10 rounded-xl bg-muted border border-border/50 flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 group-hover:border-primary/20 transition-all font-bold">
         {name[0]}
@@ -77,7 +77,7 @@ const Dashboard = ({ onViewChange }) => {
         user={user}
       />
       
-      <div className="max-w-7xl mx-auto space-y-12 pb-20">
+      <div className="max-w-7xl mx-auto space-y-8 pb-20">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight">
@@ -102,7 +102,7 @@ const Dashboard = ({ onViewChange }) => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           <StatCard label="Pending Approval" value={String(stats.pending).padStart(2, '0')} icon={Clock} color="orange" onClick={() => onViewChange('requisitions')} />
           <StatCard label="Approved" value={String(stats.approved).padStart(2, '0')} icon={CheckCircle2} color="emerald" onClick={() => onViewChange('requisitions')} />
           <StatCard label="Rejected" value={String(stats.rejected).padStart(2, '0')} icon={XCircle} color="red" onClick={() => onViewChange('requisitions')} />
@@ -189,12 +189,12 @@ const Dashboard = ({ onViewChange }) => {
               ))}
             </div>
 
-            <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4 mt-8">
+            <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4 mt-4">
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Boxes size={20} className="text-primary"/> Operational Units</h3>
               <span className="bg-muted text-muted-foreground border border-border text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">{operationalDepts.length} Units</span>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               {loadingDepts ? (
                  <div className="text-muted-foreground text-sm font-bold">Loading...</div>
               ) : operationalDepts.map(dept => (

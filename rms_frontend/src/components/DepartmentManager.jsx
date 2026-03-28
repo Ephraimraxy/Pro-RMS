@@ -5,7 +5,7 @@ import { CORPORATE_HIERARCHY } from '../constants/departments';
 import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
 
 const DeptItem = ({ name, type, onDelete }) => (
-  <div className="glass bg-white/80 p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
+  <div className="glass bg-white/80 p-3 lg:p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
     <div className="flex items-center space-x-4">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
         type === 'Strategic' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted border border-border/50 text-muted-foreground'
