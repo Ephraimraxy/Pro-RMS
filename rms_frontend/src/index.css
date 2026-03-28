@@ -2,6 +2,7 @@
 @import '@fontsource/inter/500.css';
 @import '@fontsource/inter/600.css';
 @import '@fontsource/inter/700.css';
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@400;700&family=Roboto:wght@400;700&family=Lora:ital,wght@0,400;0,700;1,400&family=Courier+Prime&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -125,3 +126,41 @@
 .animate-slide-up {
   animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ── Document Studio Editor Perfection ── */
+.editor-outer-shell {
+  width: 100%;
+  height: calc(100vh - 250px);
+  overflow-y: auto;
+  outline: none;
+  padding: 20px;
+  background: #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.editor-paper {
+  width: 100%;
+  max-width: 56rem; /* 4xl */
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 100%;
+  background: white;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  outline: none;
+  text-align: justify;
+  padding: 30px;
+}
+
+@media (max-width: 768px) {
+  .editor-outer-shell {
+    padding: 0 !important;
+    background: white !important;
+    height: calc(100vh - 220px);
+  }
+  .editor-paper {
+    padding: 15px !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+  }
+}
+

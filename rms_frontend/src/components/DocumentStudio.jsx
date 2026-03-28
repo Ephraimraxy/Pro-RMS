@@ -154,22 +154,34 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
     handleInput();
   };
 
+  const FONT_FAMILIES = [
+    { label: 'Standard (Inter)', value: "'Inter', sans-serif" },
+    { label: 'Times New Roman', value: "'Times New Roman', serif" },
+    { label: 'Playfair Display', value: "'Playfair Display', serif" },
+    { label: 'Montserrat', value: "'Montserrat', sans-serif" },
+    { label: 'Roboto', value: "'Roboto', sans-serif" },
+    { label: 'Lora', value: "'Lora', serif" },
+    { label: 'Courier Mono', value: "'Courier Prime', monospace" },
+  ];
+
+  const FONT_SIZES = ['8', '10', '11', '12', '14', '16', '18', '20', '24', '28', '32', '36'];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 lg:space-y-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-2 w-full max-w-lg">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="text-2xl font-black text-foreground bg-transparent outline-none border-b-2 border-transparent focus:border-primary/50 transition-all pb-1 w-full"
+            className="text-xl lg:text-2xl font-black text-foreground bg-transparent outline-none border-b-2 border-transparent focus:border-primary/50 transition-all pb-1 w-full"
             placeholder="Document Title..."
           />
           <SaveIndicator saving={saving} />
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 lg:space-x-3">
           <button
             onClick={onSend}
-            className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm px-5 py-3 rounded-xl transition-all shadow-lg shadow-amber-600/20"
+            className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs lg:text-sm px-4 lg:px-5 py-3 rounded-xl transition-all shadow-lg shadow-amber-600/20"
           >
             <Send size={16} />
             <span>Send to Workflow</span>
@@ -179,30 +191,83 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
       </div>
 
       <div className="glass bg-slate-100 rounded-2xl shadow-sm relative z-10 flex flex-col border border-border/50 overflow-hidden">
-        {/* Simple Formatting Toolbar */}
-        <div className="bg-white border-b border-border/50 px-4 py-2 flex items-center gap-2 overflow-x-auto">
-          <button onClick={() => execCmd('bold')} className="p-2 hover:bg-muted font-bold rounded">B</button>
-          <button onClick={() => execCmd('italic')} className="p-2 hover:bg-muted italic rounded">I</button>
-          <button onClick={() => execCmd('underline')} className="p-2 hover:bg-muted underline rounded">U</button>
-          <div className="w-px h-6 bg-border/50 mx-1"></div>
-          <button onClick={() => execCmd('justifyLeft')} className="p-2 hover:bg-muted text-xs font-bold rounded">Left</button>
-          <button onClick={() => execCmd('justifyCenter')} className="p-2 hover:bg-muted text-xs font-bold rounded">Center</button>
-          <button onClick={() => execCmd('justifyRight')} className="p-2 hover:bg-muted text-xs font-bold rounded">Right</button>
-          <button onClick={() => execCmd('justifyFull')} className="p-2 hover:bg-muted text-xs font-bold rounded">Justify</button>
+        {/* Advanced MS Word Style Toolbar */}
+        <div className="bg-white border-b border-border/40 px-3 py-2 flex items-center gap-1.5 overflow-x-auto custom-scrollbar sticky top-0 z-20">
+          
+          {/* Font Controls */}
+          <select 
+            onChange={(e) => execCmd('fontName', e.target.value)}
+            className="h-8 bg-muted/50 border border-border/40 rounded px-1.5 text-[10px] font-bold outline-none hover:bg-muted"
+          >
+            {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+          </select>
+
+          <select 
+            onChange={(e) => execCmd('fontSize', e.target.value)}
+            className="h-8 bg-muted/50 border border-border/40 rounded px-1.5 text-[10px] font-bold outline-none hover:bg-muted"
+          >
+            <option value="">Size</option>
+            {FONT_SIZES.map(s => <option key={s} value={s}>{s}pt</option>)}
+          </select>
+
+          <div className="w-px h-6 bg-border/40 mx-1 shrink-0"></div>
+
+          {/* Basic Styles */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button title="Bold" onClick={() => execCmd('bold')} className="p-1.5 hover:bg-muted font-black rounded w-8 h-8 flex items-center justify-center">B</button>
+            <button title="Italic" onClick={() => execCmd('italic')} className="p-1.5 hover:bg-muted italic rounded w-8 h-8 flex items-center justify-center font-serif">I</button>
+            <button title="Underline" onClick={() => execCmd('underline')} className="p-1.5 hover:bg-muted underline rounded w-8 h-8 flex items-center justify-center">U</button>
+          </div>
+
+          <div className="w-px h-6 bg-border/40 mx-1 shrink-0"></div>
+
+          {/* Color Pickers */}
+          <div className="flex items-center space-x-2 shrink-0 px-1">
+            <div className="flex flex-col items-center">
+              <input type="color" onChange={(e) => execCmd('foreColor', e.target.value)} className="w-5 h-5 p-0 border-none bg-transparent cursor-pointer" />
+              <span className="text-[8px] font-black uppercase opacity-60">Text</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <input type="color" onChange={(e) => execCmd('hiliteColor', e.target.value)} className="w-5 h-5 p-0 border-none bg-transparent cursor-pointer" />
+              <span className="text-[8px] font-black uppercase opacity-60">Highlight</span>
+            </div>
+          </div>
+
+          <div className="w-px h-6 bg-border/40 mx-1 shrink-0"></div>
+
+          {/* Alignment */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button onClick={() => execCmd('justifyLeft')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center"><i className="text-[10px] font-black">L</i></button>
+            <button onClick={() => execCmd('justifyCenter')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center"><i className="text-[10px] font-black">C</i></button>
+            <button onClick={() => execCmd('justifyRight')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center"><i className="text-[10px] font-black">R</i></button>
+            <button onClick={() => execCmd('justifyFull')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center"><i className="text-[10px] font-black">J</i></button>
+          </div>
+
+          <div className="w-px h-6 bg-border/40 mx-1 shrink-0"></div>
+
+          {/* Lists */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button title="Bullet List" onClick={() => execCmd('insertUnorderedList')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center">●</button>
+            <button title="Number List" onClick={() => execCmd('insertOrderedList')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center">1.</button>
+          </div>
+
+          <div className="w-px h-6 bg-border/40 mx-1 shrink-0"></div>
+
+          {/* History */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button title="Undo" onClick={() => execCmd('undo')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center">↶</button>
+            <button title="Redo" onClick={() => execCmd('redo')} className="p-1.5 hover:bg-muted rounded w-8 h-8 flex items-center justify-center">↷</button>
+          </div>
         </div>
         
-        {/* Native HTML Editor */}
-        <div 
-          className="w-full h-[600px] overflow-y-auto outline-none"
-          style={{ padding: '20px', background: '#e5e7eb' }} // Grey outer shell so white document paper pops
-        >
+        {/* Native HTML Editor - Mobile Optimized */}
+        <div className="editor-outer-shell">
           <div 
             ref={editorRef}
             contentEditable={true}
             onInput={handleInput}
             suppressContentEditableWarning={true}
-            className="w-full max-w-4xl mx-auto min-h-full bg-white shadow-xl outline-none text-justify"
-            style={{ padding: '10px', textAlign: 'justify' }} // The templates already have their own inner padding, so we keep this minimal 
+            className="editor-paper"
           />
         </div>
       </div>
