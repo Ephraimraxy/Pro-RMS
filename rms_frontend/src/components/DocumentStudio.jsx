@@ -569,7 +569,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
       };
 
       await addRequisition(requisitionData);
-      await logActivity('Document Sent', `"${loadedDraft.title}" sent to ${metadata.departmentName} for approval`);
+      await logActivity('Document Sent', `"${currentActiveDraft.title}" sent to ${metadata.departmentName} for approval`);
       toast.success('Successfully sent to workflow chain!');
       setIsSendModalOpen(false);
     } catch (err) {
