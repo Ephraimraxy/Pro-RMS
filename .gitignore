@@ -49,3 +49,7 @@ tsconfig.json
 /man/
 /share/
 /src/
+
+# Allow project runtime helpers in /lib
+!/lib/
+!/lib/**
