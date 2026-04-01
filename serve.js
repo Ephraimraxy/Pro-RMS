@@ -1165,6 +1165,9 @@ app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res)
 });
 
 // ── FRONTEND SERVING ──
+// Health check (must be before static + SPA fallback)
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
+
 const distPath = path.join(__dirname, 'rms_frontend', 'dist');
 app.use(express.static(distPath));
 
@@ -1172,9 +1175,6 @@ app.use((req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API route not found' });
   res.sendFile(path.join(distPath, 'index.html'));
 });
-
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {

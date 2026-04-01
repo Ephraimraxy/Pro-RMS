@@ -47,5 +47,10 @@ Optional:
 - `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail app password SMTP)
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` (generic SMTP)
 
+Bunny Storage (HTTP API, no S3 required):
+- `BUNNY_STORAGE_ZONE` (storage zone name)
+- `BUNNY_API_KEY` (storage zone password / access key)
+- `BUNNY_STORAGE_ENDPOINT` (optional, default `https://storage.bunnycdn.com`)
+
 ---
 *Built with excellence by Antigravity*
