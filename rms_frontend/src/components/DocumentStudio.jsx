@@ -545,16 +545,25 @@ const PresentationEditor = ({ loadedDraft, onAutosave }) => {
 };
 
 // ── SEND TO WORKFLOW MODAL ──────────────────
-const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitle }) => {
+const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitle, currentUser }) => {
   const [targetDeptIds, setTargetDeptIds] = useState([]);
   const [priority, setPriority] = useState('normal');
+  const isDeptUser = currentUser?.role === 'department';
+  const baseDepartments = departments.filter(d => d.name !== 'Super Admin');
+  const allowedDepartments = (isDeptUser && currentUser?.deptId)
+    ? baseDepartments.filter(d => d.id === currentUser.deptId)
+    : baseDepartments;
 
   useEffect(() => {
     if (!isOpen) {
       setTargetDeptIds([]);
       setPriority('normal');
+      return;
     }
-  }, [isOpen]);
+    if (isDeptUser && currentUser?.deptId) {
+      setTargetDeptIds([String(currentUser.deptId)]);
+    }
+  }, [isOpen, isDeptUser, currentUser?.deptId]);
 
   if (!isOpen) return null;
 
@@ -578,7 +587,7 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Target Departments</label>
             <div className="max-h-40 overflow-y-auto bg-muted/20 border border-border/40 rounded-xl p-3 space-y-2">
-              {departments.filter(d => d.name !== 'Super Admin').map(d => (
+              {allowedDepartments.map(d => (
                 <label key={d.id} className="flex items-center space-x-2 text-sm">
                   <input
                     type="checkbox"
@@ -587,11 +596,17 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
                       const checked = e.target.checked;
                       setTargetDeptIds(prev => checked ? [...prev, String(d.id)] : prev.filter(id => id !== String(d.id)));
                     }}
+                    disabled={isDeptUser}
                   />
                   <span>{d.name}</span>
                 </label>
               ))}
             </div>
+            {isDeptUser && (
+              <p className="text-xs text-muted-foreground">
+                Department accounts can only send to their own department.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -614,7 +629,7 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
             disabled={targetDeptIds.length === 0}
             onClick={() => onSend({ 
               departmentIds: targetDeptIds, 
-              departmentNames: departments.filter(d => targetDeptIds.includes(String(d.id))).map(d => d.name),
+              departmentNames: allowedDepartments.filter(d => targetDeptIds.includes(String(d.id))).map(d => d.name),
               priority
             })}
             className="flex-[3] py-3 px-8 bg-primary text-white font-bold text-sm rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
@@ -922,6 +937,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
           onSend={handleSendToWorkflow}
           departments={availableDepartments}
           initialTitle={currentActiveDraft?.title}
+          currentUser={user}
         />
   </>
         )}

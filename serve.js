@@ -33,6 +33,18 @@ const { sendEmail } = require('./lib/mailer');
 const app = express();
 const prisma = new PrismaClient();
 
+const normalizeTrustProxy = (value) => {
+  if (value == null) return undefined;
+  const raw = String(value).trim();
+  if (raw === '') return undefined;
+  const lower = raw.toLowerCase();
+  if (lower === 'true') return 1;
+  if (lower === 'false') return false;
+  const asNumber = Number(raw);
+  if (!Number.isNaN(asNumber)) return asNumber;
+  return raw;
+};
+
 // Configure Multer for File Uploads (memory storage for object storage)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -45,6 +57,13 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map(o => o.trim())
   .filter(Boolean);
+
+const trustProxy = normalizeTrustProxy(process.env.TRUST_PROXY);
+if (trustProxy !== undefined) {
+  app.set('trust proxy', trustProxy);
+} else if (isProd) {
+  app.set('trust proxy', 1);
+}
 
 app.use(helmet());
 app.use(cors({
@@ -64,6 +83,8 @@ if (!process.env.JWT_SECRET) {
 }
 const JWT_SECRET = process.env.JWT_SECRET;
 const APP_BASE_URL = (process.env.APP_BASE_URL || '').trim();
+const SUPER_ADMIN_ACCESS_CODE = (process.env.SUPER_ADMIN_ACCESS_CODE || '').trim();
+const SUPER_ADMIN_MFA_PIN = (process.env.SUPER_ADMIN_MFA_PIN || '').trim();
 const MASTER_KEY = getMasterKey();
 let ACTIVE_PUBLIC_KEY = null;
 let ACTIVE_PRIVATE_KEY = null;
@@ -110,6 +131,12 @@ const getNumericUserId = (user) => {
 };
 
 const normalizeRole = (role) => (role || '').toLowerCase();
+const maskSecret = (value) => {
+  const raw = String(value || '');
+  if (!raw) return '';
+  if (raw.length <= 2) return '*'.repeat(raw.length);
+  return `${'*'.repeat(raw.length - 2)}${raw.slice(-2)}`;
+};
 
 const requireRoles = (roles) => (req, res, next) => {
   const userRole = normalizeRole(req.user?.role);
@@ -509,24 +536,37 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
     });
     
     if (!dept) {
-      console.warn(`[AUTH] Failed: ${departmentName} / ${accessCode}`);
+      console.warn(`[AUTH] Failed: ${departmentName} / ${maskSecret(accessCode)}`);
       return res.status(401).json({ error: 'Invalid Department or Access Code' });
     }
 
-    const codeMatch = dept.accessCodeHash
-      ? await bcrypt.compare(accessCode.trim(), dept.accessCodeHash)
-      : dept.accessCode === accessCode.trim();
+    const isSuperAdmin = dept.name.toLowerCase() === 'super admin';
+    const trimmedAccess = accessCode.trim();
+    let codeMatch = false;
+    if (isSuperAdmin && SUPER_ADMIN_ACCESS_CODE) {
+      const provided = Buffer.from(trimmedAccess);
+      const expected = Buffer.from(SUPER_ADMIN_ACCESS_CODE);
+      codeMatch = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+    } else {
+      codeMatch = dept.accessCodeHash
+        ? await bcrypt.compare(trimmedAccess, dept.accessCodeHash)
+        : dept.accessCode === trimmedAccess;
+    }
     if (!codeMatch) {
-      console.warn(`[AUTH] Failed: ${departmentName} / ${accessCode}`);
+      console.warn(`[AUTH] Failed: ${departmentName} / ${maskSecret(accessCode)}`);
       return res.status(401).json({ error: 'Invalid Department or Access Code' });
     }
 
-    if (dept.name.toLowerCase() === 'super admin') {
-      if (mfaCode !== '123456') return res.status(401).json({ error: 'Invalid MFA PIN' });
+    if (isSuperAdmin) {
+      if (!SUPER_ADMIN_MFA_PIN) {
+        return res.status(500).json({ error: 'Super Admin MFA PIN not configured' });
+      }
+      if (String(mfaCode || '').trim() !== SUPER_ADMIN_MFA_PIN) {
+        return res.status(401).json({ error: 'Invalid MFA PIN' });
+      }
     }
     
     // Unified Role Logic: "Super Admin" department gets 'global_admin' role
-    const isSuperAdmin = dept.name.toLowerCase() === 'super admin';
     const adminUser = isSuperAdmin 
       ? await prisma.user.findFirst({ where: { role: 'global_admin' } })
       : null;

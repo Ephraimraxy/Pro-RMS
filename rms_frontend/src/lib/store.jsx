@@ -71,6 +71,11 @@ export async function addRequisition(data) {
     const result = await reqAPI.addRequisition(withClientIds);
     return result;
   } catch (err) {
+    const status = err?.response?.status;
+    if (status && status >= 400 && status < 500) {
+      // Auth/validation errors should not be queued as offline work.
+      throw err;
+    }
     console.warn("Offline: Saving to local sync queue");
     const queue = (await syncQueueStore.getItem('pending')) || [];
     withClientIds.forEach(payload => {
@@ -83,7 +88,7 @@ export async function addRequisition(data) {
       });
     });
     await syncQueueStore.setItem('pending', queue);
-    toast.info("Offline: Requisition saved locally for sync");
+    toast("Offline: Requisition saved locally for sync");
     return null;
   }
 }
