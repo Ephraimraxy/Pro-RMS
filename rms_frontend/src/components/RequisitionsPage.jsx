@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import RequisitionForm from './RequisitionForm';
 import { useAuth } from '../context/AuthContext';
-import { getRequisitions, updateRequisitionStatus } from '../lib/store';
+import { getRequisitions, updateRequisitionStatus, downloadSignedPdf } from '../lib/store';
 import { Search, Filter, Plus, Eye, CheckCircle2, XCircle, Clock, FileText as FileIcon } from 'lucide-react';
 
 const statusColors = {
@@ -31,7 +31,7 @@ const RequisitionsPage = ({ onViewChange }) => {
   useEffect(() => { loadData(); }, []);
 
   const filtered = requisitions.filter(r => {
-    const matchesSearch = r.title?.toLowerCase().includes(search.toLowerCase()) || r.id?.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = r.title?.toLowerCase().includes(search.toLowerCase()) || String(r.id).toLowerCase().includes(search.toLowerCase());
     const matchesStatus = filterStatus === 'all' || r.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -64,13 +64,20 @@ const RequisitionsPage = ({ onViewChange }) => {
               <p><span className="font-bold text-muted-foreground">Description:</span> <span className="text-foreground">{selectedReq.description}</span></p>
               <p><span className="font-bold text-muted-foreground">Date:</span> <span className="text-foreground font-mono text-xs">{new Date(selectedReq.createdAt).toLocaleString()}</span></p>
             </div>
-            {selectedReq.status === 'pending' && (
+            {selectedReq.status === 'pending' && user?.role !== 'department' && (
               <div className="flex items-center space-x-3 pt-4 border-t border-border/50">
                 <button onClick={() => handleStatusChange(selectedReq.id, 'approved')} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2 transition-all">
                   <CheckCircle2 size={16} /> <span>Approve</span>
                 </button>
                 <button onClick={() => handleStatusChange(selectedReq.id, 'rejected')} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2 transition-all">
                   <XCircle size={16} /> <span>Reject</span>
+                </button>
+              </div>
+            )}
+            {selectedReq.status === 'approved' && selectedReq.signedPdfKey && (
+              <div className="flex items-center space-x-3 pt-4 border-t border-border/50">
+                <button onClick={() => downloadSignedPdf(selectedReq.id)} className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2 transition-all">
+                  <FileIcon size={16} /> <span>Download Signed PDF</span>
                 </button>
               </div>
             )}

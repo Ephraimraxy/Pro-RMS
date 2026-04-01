@@ -20,11 +20,15 @@ model User {
   mfaSecret    String?       
   departmentId Int?
   department   Department?   @relation(fields: [departmentId], references: [id])
-  requisitions Requisition[]
+  requisitions Requisition[] @relation("RequisitionCreator")
+  actionedRequisitions Requisition[] @relation("RequisitionLastAction")
   memos        Memo[]
   activityLogs ActivityLog[]
   notifications Notification[]
   fileAccessLogs FileAccessLog[]
+  approvals    Approval[]
+  signature    UserSignature?
+  uploadedAttachments Attachment[] @relation("AttachmentUploader")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -34,30 +38,49 @@ model Department {
   code           String?       @unique // Optional short code
   name           String        @unique
   type           String        @default("Operational") // "Strategic", "Operational"
-  accessCode     String?       // For departmental login
+  accessCode     String?       // Legacy plain access code (deprecated)
+  accessCodeHash String?       // Bcrypt hash for departmental login
+  accessCodeLabel String?      // Admin-visible login code label
+  headName       String?
+  headTitle      String?
+  headEmail      String?
   parentId       Int?
   parent         Department?   @relation("Hierarchy", fields: [parentId], references: [id])
   subDepartments Department[]  @relation("Hierarchy")
   users          User[]
   requisitions   Requisition[]
   memos          Memo[]
+  stamp          DepartmentStamp?
+  signingKeys    DepartmentKey[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 }
 
 model Requisition {
   id           Int        @id @default(autoincrement())
+  clientId     String?    @unique
   title        String
   type         String     // "Cash", "Material", "Memo"
   amount       Float?
   description  String?
+  urgency      String     @default("normal")
   status       String     @default("pending")
   creatorId    Int
-  creator      User       @relation(fields: [creatorId], references: [id])
+  creator      User       @relation("RequisitionCreator", fields: [creatorId], references: [id])
   departmentId Int
   department   Department @relation(fields: [departmentId], references: [id])
   attachments  Attachment[]
+  approvals    Approval[]
   content      String?    @db.Text
+  currentStageId Int?
+  currentStage   WorkflowStage? @relation(fields: [currentStageId], references: [id])
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  lastActionById Int?
+  lastActionBy   User?     @relation("RequisitionLastAction", fields: [lastActionById], references: [id])
+  lastActionAt DateTime?
+  signedPdfKey  String?
+  signedPdfHash String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }
@@ -97,6 +120,8 @@ model WorkflowStage {
   name      String
   role      String   
   threshold Float    @default(0)
+  requisitions Requisition[]
+  approvals    Approval[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -114,10 +139,15 @@ model Notification {
 model Attachment {
   id            Int           @id @default(autoincrement())
   filename      String
-  path          String
-  fileType      String
+  path          String?
+  fileType      String?
+  storageKey    String?
+  mimeType      String?
+  size          Int?
   requisitionId Int?
   requisition   Requisition?  @relation(fields: [requisitionId], references: [id])
+  uploadedById  Int?
+  uploadedBy    User?         @relation("AttachmentUploader", fields: [uploadedById], references: [id])
   accessLogs    FileAccessLog[]
   createdAt     DateTime      @default(now())
 }
@@ -128,5 +158,74 @@ model FileAccessLog {
   attachment   Attachment @relation(fields: [attachmentId], references: [id])
   userId       Int
   user         User       @relation(fields: [userId], references: [id])
+  action       String     @default("VIEW")
   timestamp    DateTime   @default(now())
+}
+
+model Approval {
+  id            Int           @id @default(autoincrement())
+  requisitionId Int
+  requisition   Requisition   @relation(fields: [requisitionId], references: [id])
+  stageId       Int
+  stage         WorkflowStage @relation(fields: [stageId], references: [id])
+  action        String        // "approved" | "rejected"
+  remarks       String?
+  userId        Int
+  user          User          @relation(fields: [userId], references: [id])
+  signature     SignatureRecord?
+  createdAt     DateTime      @default(now())
+}
+
+model SignatureRecord {
+  id               Int      @id @default(autoincrement())
+  approvalId       Int      @unique
+  approval         Approval @relation(fields: [approvalId], references: [id])
+  payloadHash      String
+  signature        String
+  verificationCode String   @unique
+  publicKeyId      Int
+  publicKey        PublicKey @relation("SignatureRecordPublicKey", fields: [publicKeyId], references: [id])
+  createdAt        DateTime  @default(now())
+}
+
+model DepartmentStamp {
+  id           Int        @id @default(autoincrement())
+  departmentId Int        @unique
+  department   Department @relation(fields: [departmentId], references: [id])
+  imageKey     String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model UserSignature {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id])
+  imageKey  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PublicKey {
+  id        Int      @id @default(autoincrement())
+  kid       String   @unique
+  algorithm String
+  publicKey String
+  active    Boolean  @default(true)
+  signatureRecords SignatureRecord[] @relation("SignatureRecordPublicKey")
+  departmentKeys   DepartmentKey[] @relation("DepartmentKeyPublicKey")
+  createdAt DateTime @default(now())
+}
+
+model DepartmentKey {
+  id            Int       @id @default(autoincrement())
+  departmentId  Int       @unique
+  department    Department @relation(fields: [departmentId], references: [id])
+  publicKeyId   Int
+  publicKey     PublicKey @relation("DepartmentKeyPublicKey", fields: [publicKeyId], references: [id])
+  privateKeyEnc String
+  algorithm     String    @default("Ed25519")
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }

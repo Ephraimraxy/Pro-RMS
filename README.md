@@ -32,5 +32,20 @@ npm run build  # For production deployment
 ### Backend (Odoo)
 The backend is hosted on Railway: `pro-rms-production.up.railway.app`. Use the `css_rms_custom` module for local reference or future logic updates.
 
+## Environment Variables (Node API)
+Required for production:
+- `JWT_SECRET` - session signing secret
+- `SIGNING_PRIVATE_KEY` - Ed25519 private key (PEM or base64)
+- `SIGNING_PUBLIC_KEY` - Ed25519 public key (PEM or base64)
+- `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (and optional `S3_ENDPOINT`)
+
+Optional:
+- `CORS_ORIGIN` (comma-separated allowed origins)
+- `NODE_ENV=production`
+- `APP_BASE_URL` (used in email links)
+- `MAIL_FROM` (override from address)
+- `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail app password SMTP)
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` (generic SMTP)
+
 ---
 *Built with excellence by Antigravity*

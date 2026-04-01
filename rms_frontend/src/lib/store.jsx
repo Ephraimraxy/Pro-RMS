@@ -1,7 +1,7 @@
 import localforage from 'localforage';
 import { toast } from 'react-hot-toast';
 import React from 'react';
-import api, { deptAPI, reqAPI, auditAPI } from './api';
+import api, { deptAPI, reqAPI, auditAPI, userAPI } from './api';
 
 // ── Configure storage namespaces ──
 const requisitionStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'requisitions' });
@@ -15,6 +15,10 @@ const SEED_REQUISITIONS = [];
 
 // ── Initialize store with seed data ──
 let _initialized = false;
+const generateClientId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `client_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+};
 async function ensureInitialized() {
   if (_initialized) return;
 
@@ -41,8 +45,14 @@ export async function getRequisitions() {
   try {
     const remote = await reqAPI.getRequisitions();
     const data = Array.isArray(remote) ? remote : [];
-    await requisitionStore.setItem('all', data);
-    return data;
+    const normalized = data.map(r => ({
+      ...r,
+      department: r.department?.name || r.department || r.departmentName,
+      creator: r.creator?.name || r.creator || r.creatorName,
+      currentStageName: r.currentStage?.name || r.currentStageName
+    }));
+    await requisitionStore.setItem('all', normalized);
+    return normalized;
   } catch (err) {
     console.warn("Offline: Fetching cached requisitions", err);
     const local = await requisitionStore.getItem('all');
@@ -52,33 +62,77 @@ export async function getRequisitions() {
 
 export async function addRequisition(data) {
   await ensureInitialized();
+  const items = Array.isArray(data) ? data : [data];
+  const withClientIds = items.map(item => ({
+    ...item,
+    clientId: item.clientId || generateClientId()
+  }));
   try {
-    const result = await reqAPI.addRequisition(Array.isArray(data) ? data : [data]);
+    const result = await reqAPI.addRequisition(withClientIds);
     return result;
   } catch (err) {
     console.warn("Offline: Saving to local sync queue");
     const queue = (await syncQueueStore.getItem('pending')) || [];
-    queue.push(data);
+    withClientIds.forEach(payload => {
+      queue.push({
+        clientId: payload.clientId,
+        payload,
+        retryCount: 0,
+        nextAttemptAt: Date.now(),
+        lastError: null
+      });
+    });
     await syncQueueStore.setItem('pending', queue);
     toast.info("Offline: Requisition saved locally for sync");
     return null;
   }
 }
 
-export async function flushSyncQueue() {
+export async function flushSyncQueue({ force = false } = {}) {
   const queue = (await syncQueueStore.getItem('pending')) || [];
-  if (queue.length === 0) return;
+  if (queue.length === 0) return { synced: 0, pending: 0 };
 
-  try {
-    await reqAPI.addRequisition(queue);
-    await syncQueueStore.setItem('pending', []);
-    toast.success(`Synced ${queue.length} offline records to server!`);
-  } catch (err) {
-    console.error("Sync failed:", err);
+  const now = Date.now();
+  const remaining = [];
+  let synced = 0;
+
+  for (const entry of queue) {
+    if (!force && entry.nextAttemptAt && entry.nextAttemptAt > now) {
+      remaining.push(entry);
+      continue;
+    }
+    try {
+      await reqAPI.addRequisition(entry.payload);
+      synced += 1;
+    } catch (err) {
+      const retryCount = (entry.retryCount || 0) + 1;
+      const delay = Math.min(60000, 2000 * Math.pow(2, retryCount));
+      remaining.push({
+        ...entry,
+        retryCount,
+        nextAttemptAt: now + delay,
+        lastError: err?.message || 'Sync failed'
+      });
+    }
   }
+
+  await syncQueueStore.setItem('pending', remaining);
+  if (synced > 0) {
+    toast.success(`Synced ${synced} offline record(s) to server!`);
+  }
+  return { synced, pending: remaining.length };
+}
+
+export async function getSyncQueueStatus() {
+  const queue = (await syncQueueStore.getItem('pending')) || [];
+  return { pending: queue.length };
 }
 
 export async function uploadAttachments(requisitionId, files) {
+  if (!navigator.onLine) {
+    toast.error("Attachments require an active connection");
+    throw new Error('Offline - attachments blocked');
+  }
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
   
@@ -104,15 +158,35 @@ export async function getAttachments(requisitionId) {
 }
 
 export async function updateRequisitionStatus(id, newStatus) {
+  let updated;
+  if (newStatus === 'approved') {
+    updated = await reqAPI.approveRequisition(id);
+  } else if (newStatus === 'rejected') {
+    updated = await reqAPI.rejectRequisition(id);
+  } else {
+    return;
+  }
+
   const all = await getRequisitions();
   const idx = all.findIndex(r => r.id === id);
-  if (idx === -1) return;
-  all[idx].status = newStatus;
-  await requisitionStore.setItem('all', all);
+  if (idx !== -1) {
+    all[idx] = { ...all[idx], ...updated, status: updated.status || newStatus };
+    await requisitionStore.setItem('all', all);
+  }
   await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
   toast.success(`${id} has been ${newStatus}`, {
     icon: <img src="/favicon.svg" className="w-5 h-5 object-contain" alt="" />
   });
+}
+
+export async function downloadSignedPdf(id) {
+  const blob = await reqAPI.getSignedPdf(id);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `requisition-${id}.pdf`;
+  link.click();
+  window.URL.revokeObjectURL(url);
 }
 
 // ── Stats Computation ──
@@ -143,8 +217,12 @@ export async function getActivityLog() {
   try {
     const remote = await auditAPI.getAuditLogs();
     const data = Array.isArray(remote) ? remote : [];
-    await activityStore.setItem('log', data);
-    return data;
+    const normalized = data.map(a => ({
+      ...a,
+      detail: a.detail || a.details
+    }));
+    await activityStore.setItem('log', normalized);
+    return normalized;
   } catch (err) {
     console.warn("Offline: Fetching cached activity log", err);
     const local = await activityStore.getItem('log');
@@ -192,7 +270,8 @@ export async function getNotifications() {
   await ensureInitialized();
   try {
     const remote = await notificationAPI.getNotifications();
-    return Array.isArray(remote) ? remote : [];
+    const data = Array.isArray(remote) ? remote : [];
+    return data.map(n => ({ ...n, message: n.message || n.content }));
   } catch (err) {
     console.warn("Offline: Could not fetch notifications", err);
     return [];
@@ -237,6 +316,16 @@ export async function getDepartments() {
   }
 }
 
+export async function getDepartmentById(id) {
+  await ensureInitialized();
+  try {
+    return await deptAPI.getDepartment(id);
+  } catch (err) {
+    const all = await getDepartments();
+    return all.find(d => d.id === id) || null;
+  }
+}
+
 export async function addDepartment(dept) {
   await ensureInitialized();
   try {
@@ -271,4 +360,43 @@ export async function validateDepartmentLogin(deptName, code) {
   const all = await getDepartments();
   const dept = all.find(d => d.name === deptName && d.accessCode === code);
   return dept || null;
+}
+
+export async function updateDepartmentHead(deptId, payload) {
+  try {
+    const result = await deptAPI.updateHead(deptId, payload);
+    const all = await getDepartments();
+    const idx = all.findIndex(d => d.id === deptId);
+    if (idx !== -1) {
+      all[idx] = { ...all[idx], ...result };
+      await departmentStore.setItem('all', all);
+    }
+    toast.success("Department head updated");
+    return result;
+  } catch (err) {
+    toast.error("Failed to update department head");
+    throw err;
+  }
+}
+
+export async function uploadDepartmentStamp(deptId, file) {
+  try {
+    const result = await deptAPI.uploadStamp(deptId, file);
+    toast.success("Department stamp updated");
+    return result;
+  } catch (err) {
+    toast.error("Failed to upload stamp");
+    throw err;
+  }
+}
+
+export async function uploadUserSignature(userId, file) {
+  try {
+    const result = await userAPI.uploadSignature(userId, file);
+    toast.success("Signature updated");
+    return result;
+  } catch (err) {
+    toast.error("Failed to upload signature");
+    throw err;
+  }
 }

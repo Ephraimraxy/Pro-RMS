@@ -1,7 +1,27 @@
-export const templates = {
-  memo: {
-    title: "Internal Memo",
-    data: `
+const formatMemoRef = (deptCode, date) => {
+  const d = date || new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const code = (deptCode || 'CSS').toUpperCase();
+  return `CSSG/${code}/MO/${dd}/${mm}/${yyyy}/01`;
+};
+
+const formatMemoDate = (date) => {
+  const d = date || new Date();
+  return `${d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}.`;
+};
+
+const buildMemoTemplate = ({ deptCode, fromLabel, toLabel, subjectLabel, headName, headTitle, date }) => {
+  const ref = formatMemoRef(deptCode, date);
+  const memoDate = formatMemoDate(date);
+  const toText = (toLabel || 'TARGET DEPARTMENT').toUpperCase();
+  const fromText = (fromLabel || '').toUpperCase();
+  const subjectText = subjectLabel || '[ENTER SUBJECT HERE]';
+  const senderName = headName || '';
+  const senderTitle = headTitle || '';
+
+  return `
       <div style="font-family: 'Times New Roman', 'Georgia', serif; max-width: 750px; margin: 0 auto; padding: 40px 50px; color: #1a1a1a; background: white; line-height: 1.5;">
         
         <!-- CSS Group Logo & Title -->
@@ -19,23 +39,23 @@ export const templates = {
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 13px;">
           <tr>
             <td style="width: 85px; font-weight: 800; padding: 5px 0; vertical-align: top;">REF:</td>
-            <td style="padding: 5px 0; border-bottom: 1px solid #999;">CSSG/ISC/MO/${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replaceAll('/', '/')}/01</td>
+            <td style="padding: 5px 0; border-bottom: 1px solid #999;"><span data-memo-ref>${ref}</span></td>
             <td style="width: 60px;"></td>
-            <td style="width: 180px; font-weight: 800; text-align: right; padding: 5px 0; text-transform: uppercase; border-bottom: 1px solid #999;">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}.</td>
+            <td style="width: 180px; font-weight: 800; text-align: right; padding: 5px 0; text-transform: uppercase; border-bottom: 1px solid #999;"><span data-memo-date>${memoDate}</span></td>
           </tr>
         </table>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 13px;">
           <tr>
             <td style="width: 85px; font-weight: 800; padding: 4px 0;">TO:</td>
-            <td style="padding: 4px 0; font-weight: 700; text-transform: uppercase;">HHR & ADMIN</td>
+            <td style="padding: 4px 0; font-weight: 700; text-transform: uppercase;"><span data-memo-to>${toText}</span></td>
           </tr>
           <tr>
             <td style="width: 85px; font-weight: 800; padding: 4px 0;">FROM:</td>
-            <td style="padding: 4px 0; text-transform: uppercase;">ISAC</td>
+            <td style="padding: 4px 0; text-transform: uppercase;"><span data-memo-from>${fromText}</span></td>
           </tr>
           <tr>
             <td style="width: 85px; font-weight: 800; padding: 4px 0; vertical-align: top;">SUBJECT:</td>
-            <td style="padding: 4px 0; font-weight: 800; text-transform: uppercase; border-bottom: 2px solid #333;">[ENTER SUBJECT HERE]</td>
+            <td style="padding: 4px 0; font-weight: 800; text-transform: uppercase; border-bottom: 2px solid #333;"><span data-memo-subject>${subjectText}</span></td>
           </tr>
         </table>
         
@@ -57,11 +77,17 @@ export const templates = {
         
         <!-- Sender Signature Block -->
         <div style="margin-top: 50px; font-size: 13px;">
-          <p style="font-weight: 800; margin: 0 0 2px 0; font-size: 14px;">Dr. Victor Umunnakwe</p>
-          <p style="margin: 0; color: #444; font-size: 12px;">ISAC Coordinator</p>
+          <p style="font-weight: 800; margin: 0 0 2px 0; font-size: 14px;"><span data-memo-sender-name>${senderName}</span></p>
+          <p style="margin: 0; color: #444; font-size: 12px;"><span data-memo-sender-title>${senderTitle}</span></p>
         </div>
       </div>
-    `
+    `;
+};
+
+export const templates = {
+  memo: {
+    title: "Internal Memo",
+    data: buildMemoTemplate
   },
   requisition: {
     title: "Requisition Voucher",

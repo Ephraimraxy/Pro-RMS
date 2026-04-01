@@ -4,6 +4,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const hashedPassword = await bcrypt.hash('admin123', 10);
+  const hashAccessCode = async (code) => bcrypt.hash(code, 10);
 
   // 1. Create Departments (31 Units)
   const departments = [
@@ -45,10 +46,18 @@ async function main() {
 
   console.log('Seeding departments...');
   for (const dept of departments) {
+    const accessCodeHash = dept.accessCode ? await hashAccessCode(dept.accessCode) : null;
     await prisma.department.upsert({
       where: { name: dept.name },
       update: {},
-      create: dept,
+      create: {
+        name: dept.name,
+        type: dept.type,
+        code: dept.code,
+        accessCode: null,
+        accessCodeLabel: dept.accessCode,
+        accessCodeHash
+      },
     });
   }
 
@@ -97,6 +106,19 @@ async function main() {
       update: stage,
       create: stage,
     });
+  }
+
+  // 5. Seed Public Signing Key if provided
+  if (process.env.SIGNING_PUBLIC_KEY) {
+    const crypto = require('crypto');
+    const publicKey = process.env.SIGNING_PUBLIC_KEY.trim();
+    const kid = crypto.createHash('sha256').update(publicKey).digest('hex').slice(0, 16);
+    await prisma.publicKey.upsert({
+      where: { kid },
+      update: { publicKey, algorithm: 'Ed25519', active: true },
+      create: { kid, publicKey, algorithm: 'Ed25519', active: true }
+    });
+    console.log(`Seeded public key with kid=${kid}`);
   }
 
   console.log('Seeding completed.');

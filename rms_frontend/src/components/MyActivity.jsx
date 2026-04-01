@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
-import { getActivityLog } from '../lib/store';
-import { History, ArrowRight, Clock } from 'lucide-react';
+import { getActivityLog, uploadUserSignature } from '../lib/store';
+import { History, Clock, Upload } from 'lucide-react';
 
 const MyActivity = ({ onViewChange }) => {
   const { user } = useAuth();
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -18,6 +20,18 @@ const MyActivity = ({ onViewChange }) => {
     load();
   }, []);
 
+  const handleSignatureUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id || typeof user.id !== 'number') return;
+    setUploading(true);
+    try {
+      await uploadUserSignature(user.id, file);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
   return (
     <Layout user={user} currentView="activity" onViewChange={onViewChange}>
       <div className="max-w-4xl mx-auto space-y-8 pb-20">
@@ -25,6 +39,26 @@ const MyActivity = ({ onViewChange }) => {
           <h1 className="text-3xl font-bold text-foreground tracking-tight">My <span className="text-primary italic">Activity</span></h1>
           <p className="text-muted-foreground text-sm mt-1">Complete log of all your actions, submissions, and approvals.</p>
         </div>
+
+        {user?.role !== 'department' && (
+          <div className="glass bg-white/60 rounded-3xl border border-border/50 p-6 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-foreground">My Signature</h3>
+              <p className="text-xs text-muted-foreground mt-1">Upload a signature image for approval stamping.</p>
+            </div>
+            <div>
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleSignatureUpload} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="bg-primary hover:bg-primary/90 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center space-x-2 disabled:opacity-50"
+              >
+                <Upload size={14} />
+                <span>{uploading ? 'Uploading...' : 'Upload Signature'}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center py-12 text-muted-foreground animate-pulse font-mono text-xs">Loading activity log...</div>

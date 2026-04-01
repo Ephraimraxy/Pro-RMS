@@ -37,6 +37,9 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
+  login: async (email, password) => {
+    return api.post('/auth/login', { email, password });
+  },
   deptLogin: async (departmentName, accessCode, mfaCode) => {
     return api.post('/auth/dept-login', { departmentName, accessCode, mfaCode });
   },
@@ -81,11 +84,24 @@ export const deptAPI = {
   async getDepartments() {
     return api.get('/departments');
   },
+  async getDepartment(id) {
+    return api.get(`/departments/${id}`);
+  },
   async addDepartment(dept) {
     return api.post('/departments', dept);
   },
   async deleteDepartment(id) {
     return api.delete(`/departments/${id}`);
+  },
+  async uploadStamp(deptId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/departments/${deptId}/stamp`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  async updateHead(deptId, payload) {
+    return api.put(`/departments/${deptId}/head`, payload);
   }
 };
 
@@ -101,6 +117,25 @@ export const reqAPI = {
   },
   async addRequisition(data) {
     return api.post('/requisitions', data);
+  },
+  async approveRequisition(id, remarks) {
+    return api.post(`/requisitions/${id}/approve`, { remarks });
+  },
+  async rejectRequisition(id, remarks) {
+    return api.post(`/requisitions/${id}/reject`, { remarks });
+  },
+  async getSignedPdf(id) {
+    return api.get(`/requisitions/${id}/signed-pdf`, { responseType: 'blob' });
+  }
+};
+
+export const userAPI = {
+  async uploadSignature(userId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/users/${userId}/signature`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
   }
 };
 

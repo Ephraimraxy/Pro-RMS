@@ -8,11 +8,13 @@ import DocumentStudio from './components/DocumentStudio'
 import RequisitionsPage from './components/RequisitionsPage'
 import MemoManagement from './components/MemoManagement'
 import MyActivity from './components/MyActivity'
+import DepartmentHeadModal from './components/DepartmentHeadModal'
+import PublicVerify from './components/PublicVerify'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Wifi, WifiOff } from 'lucide-react'
 import { Toaster, toast } from 'react-hot-toast'
 
-import { flushSyncQueue } from './lib/store';
+import { flushSyncQueue, getDepartmentById, updateDepartmentHead } from './lib/store';
 
 const NetworkContext = createContext({ isOnline: true });
 export const useNetwork = () => useContext(NetworkContext);
@@ -85,11 +87,28 @@ const NetworkProvider = ({ children }) => {
 const AppContent = () => {
   const { user, loading } = useAuth();
   const [currentView, setCurrentView] = useState('dashboard');
+  const [deptProfile, setDeptProfile] = useState(null);
+  const [showDeptModal, setShowDeptModal] = useState(false);
 
   useEffect(() => {
     // Reset to dashboard whenever user session changes (login or logout)
     setCurrentView('dashboard');
+    setDeptProfile(null);
+    setShowDeptModal(false);
   }, [user?.id]);
+
+  useEffect(() => {
+    const loadDept = async () => {
+      if (!user || user.role !== 'department' || !user.deptId) return;
+      const dept = await getDepartmentById(user.deptId);
+      if (!dept) return;
+      setDeptProfile(dept);
+      if (!dept.headName || !dept.headTitle || !dept.headEmail) {
+        setShowDeptModal(true);
+      }
+    };
+    loadDept();
+  }, [user?.role, user?.deptId]);
 
   if (loading) {
     return (
@@ -125,10 +144,45 @@ const AppContent = () => {
     document_studio: <DocumentStudio user={user} onViewChange={setCurrentView} />
   };
 
-  return views[activeView] || views.dashboard;
+  return (
+    <>
+      {views[activeView] || views.dashboard}
+      <DepartmentHeadModal
+        isOpen={showDeptModal}
+        department={deptProfile}
+        onSave={async (payload) => {
+          if (!deptProfile) return;
+          const updated = await updateDepartmentHead(deptProfile.id, payload);
+          setDeptProfile(updated);
+          setShowDeptModal(false);
+        }}
+      />
+    </>
+  );
 };
 
 function App() {
+  if (window.location.pathname.startsWith('/verify')) {
+    return (
+      <>
+        <Toaster 
+          position="top-center" 
+          toastOptions={{ 
+            style: { 
+              background: 'hsl(var(--card))', 
+              color: 'hsl(var(--foreground))', 
+              border: '1px solid hsl(var(--border))', 
+              borderRadius: '12px', 
+              fontSize: '14px', 
+              fontWeight: '600',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
+            } 
+          }} 
+        />
+        <PublicVerify />
+      </>
+    )
+  }
   return (
     <NetworkProvider>
       <Toaster 

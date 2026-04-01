@@ -77,33 +77,36 @@ const Login = () => {
       <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-[hsl(var(--primary))] via-[hsl(var(--primary)/0.9)] to-[hsl(var(--primary)/0.7)] text-white relative overflow-hidden flex-col justify-between p-12">
         <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/3 translate-x-1/3 blur-sm"></div>
         <div className="absolute bottom-0 left-0 w-56 h-56 bg-white/5 rounded-full translate-y-1/3 -translate-x-1/3"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[440px] border border-white/10 rounded-[40px]"></div>
 
-        <div className="relative z-10">
-          <div className="w-14 h-14 bg-white/15 border border-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-            <img src="/favicon.svg" alt="Logo" className="w-9 h-9 object-contain" />
+        {/* Branding Card Wrapper */}
+        <div className="relative z-10 border border-white/20 bg-white/5 backdrop-blur-sm rounded-[40px] p-10 py-12 flex flex-col justify-center my-auto">
+          <div>
+            <div className="w-14 h-14 bg-white/15 border border-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+              <img src="/favicon.svg" alt="Logo" className="w-9 h-9 object-contain" />
+            </div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group Holdings</p>
           </div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group Holdings</p>
+
+          <div className="mt-12">
+            <h1 className="text-4xl font-bold tracking-tight leading-tight">
+              Requisition<br />
+              <span className="italic font-black text-white/90">Management</span>
+            </h1>
+            <p className="text-sm text-white/70 mt-5 leading-relaxed max-w-xs">
+              Streamlined enterprise workflow for requisitions, memos, and procurement across all CSS Group departments.
+            </p>
+            <div className="mt-8 space-y-3">
+              {['End-to-end approval tracking', 'Offline draft capability', 'Multi-department oversight'].map((item, i) => (
+                <div key={i} className="flex items-center space-x-3">
+                  <CheckCircle2 size={14} className="text-white/50 flex-shrink-0" />
+                  <span className="text-xs text-white/60">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="relative z-10">
-          <h1 className="text-4xl font-bold tracking-tight leading-tight">
-            Requisition<br />
-            <span className="italic font-black text-white/90">Management</span>
-          </h1>
-          <p className="text-sm text-white/70 mt-5 leading-relaxed max-w-xs">
-            Streamlined enterprise workflow for requisitions, memos, and procurement across all CSS Group departments.
-          </p>
-          <div className="mt-8 space-y-3">
-            {['End-to-end approval tracking', 'Offline draft capability', 'Multi-department oversight'].map((item, i) => (
-              <div key={i} className="flex items-center space-x-3">
-                <CheckCircle2 size={14} className="text-white/50 flex-shrink-0" />
-                <span className="text-xs text-white/60">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
+        {/* Footer info (Outside Card) */}
         <div className="relative z-10">
           <div className="flex items-center space-x-4 text-[9px] text-white/40 uppercase tracking-widest">
             <span>Enterprise Portal</span>

@@ -4,9 +4,9 @@ import { useNetwork } from '../App';
 import { 
   LayoutDashboard, FileText, ClipboardCheck, History, Settings, 
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
-  ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff
+  ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw
 } from 'lucide-react';
-import { getNotifications } from '../lib/store';
+import { getNotifications, getSyncQueueStatus, flushSyncQueue } from '../lib/store';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
   <div 
@@ -155,12 +155,15 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
 
 const Layout = ({ children, user, currentView, onViewChange }) => {
   const { logout } = useAuth();
+  const { isOnline } = useNetwork();
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const saved = localStorage.getItem('rms_sidebar_collapsed');
     return saved === 'true';
   });
   const [notifications, setNotifications] = useState([]);
   const [showBell, setShowBell] = useState(false);
+  const [syncPending, setSyncPending] = useState(0);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     const fetchNotifs = async () => {
@@ -173,6 +176,28 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
     const interval = setInterval(fetchNotifs, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const loadSync = async () => {
+      const status = await getSyncQueueStatus();
+      setSyncPending(status.pending || 0);
+    };
+    loadSync();
+    const interval = setInterval(loadSync, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!isOnline) return;
+    const sync = async () => {
+      setSyncing(true);
+      await flushSyncQueue();
+      const status = await getSyncQueueStatus();
+      setSyncPending(status.pending || 0);
+      setSyncing(false);
+    };
+    sync();
+  }, [isOnline]);
 
   useEffect(() => {
     localStorage.setItem('rms_sidebar_collapsed', isCollapsed);
@@ -191,6 +216,28 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         setShowBell={setShowBell}
         onLogout={logout}
       />
+
+      {syncPending > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-xs font-bold px-4 py-2 flex items-center justify-between">
+          <span>{isOnline ? `${syncPending} item(s) pending sync` : `${syncPending} item(s) queued (offline)`}</span>
+          <button
+            onClick={async () => {
+              if (!isOnline || syncing) return;
+              setSyncing(true);
+              await flushSyncQueue({ force: true });
+              const status = await getSyncQueueStatus();
+              setSyncPending(status.pending || 0);
+              setSyncing(false);
+            }}
+            className={`flex items-center space-x-2 px-3 py-1 rounded-full border text-[10px] uppercase tracking-widest ${
+              isOnline ? 'border-amber-300 hover:bg-amber-100' : 'border-amber-200 opacity-60 cursor-not-allowed'
+            }`}
+          >
+            <RefreshCcw size={12} className={syncing ? 'animate-spin' : ''} />
+            <span>{syncing ? 'Syncing' : 'Sync Now'}</span>
+          </button>
+        </div>
+      )}
       
       <div className="flex h-[calc(100vh-56px)] overflow-hidden">
         {/* Desktop Sidebar App-Tile Navigation */}

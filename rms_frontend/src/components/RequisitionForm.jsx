@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { X, Upload, Send, Save, CreditCard, Package, FileText } from 'lucide-react';
 import { addRequisition, getDepartments, getRequisitionTypes, uploadAttachments } from '../lib/store';
+import { useNetwork } from '../App';
 import { useEffect, useRef } from 'react';
 
 const RequisitionForm = ({ isOpen, onClose, user }) => {
+  const { isOnline } = useNetwork();
   const [types, setTypes] = useState([]);
   const [selectedType, setSelectedType] = useState(null);
   const [formData, setFormData] = useState({
@@ -178,10 +180,13 @@ const RequisitionForm = ({ isOpen, onClose, user }) => {
                 className="hidden" 
                 ref={fileInputRef} 
                 onChange={(e) => setFiles(prev => [...prev, ...Array.from(e.target.files)])} 
+                disabled={!isOnline}
               />
               <div 
-                onClick={() => fileInputRef.current.click()}
-                className="border-2 border-dashed border-border/50 bg-white/40 rounded-2xl p-8 flex flex-col items-center justify-center space-y-3 hover:bg-white/80 transition-all cursor-pointer group"
+                onClick={() => isOnline && fileInputRef.current.click()}
+                className={`border-2 border-dashed border-border/50 rounded-2xl p-8 flex flex-col items-center justify-center space-y-3 transition-all group ${
+                  isOnline ? 'bg-white/40 hover:bg-white/80 cursor-pointer' : 'bg-muted/30 opacity-60 cursor-not-allowed'
+                }`}
               >
                 <div className="p-3 bg-muted rounded-full text-muted-foreground group-hover:text-primary transition-colors">
                   <Upload size={24} />
@@ -189,6 +194,9 @@ const RequisitionForm = ({ isOpen, onClose, user }) => {
                 <div className="text-center">
                   <p className="text-sm text-foreground font-medium">Click to upload or drag & drop</p>
                   <p className="text-[10px] text-muted-foreground mt-1 uppercase">PDF, JPG, PNG, DOC (Max 10MB)</p>
+                  {!isOnline && (
+                    <p className="text-[10px] text-destructive mt-1 uppercase">Attachments require online connection</p>
+                  )}
                 </div>
               </div>
 

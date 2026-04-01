@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { CORPORATE_HIERARCHY } from '../constants/departments';
-import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical, ChevronDown, ChevronRight, Eye, EyeOff, Upload } from 'lucide-react';
 
-const DeptItem = ({ name, type, onDelete }) => (
+const DeptItem = ({ name, type, onDelete, onUploadStamp }) => (
   <div className="glass bg-white/80 p-3 lg:p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
     <div className="flex items-center space-x-4">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -21,6 +21,9 @@ const DeptItem = ({ name, type, onDelete }) => (
       </div>
     </div>
     <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-all">
+       <button onClick={onUploadStamp} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Upload Stamp">
+         <Upload size={14} />
+       </button>
        <button onClick={onDelete} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
          <Trash2 size={14} />
        </button>
@@ -31,7 +34,7 @@ const DeptItem = ({ name, type, onDelete }) => (
   </div>
 );
 
-import { getDepartments, addDepartment, deleteDepartment } from '../lib/store';
+import { getDepartments, addDepartment, deleteDepartment, uploadDepartmentStamp } from '../lib/store';
 import { toast } from 'react-hot-toast';
 import Modal from './Modal';
 
@@ -46,6 +49,8 @@ const DepartmentManager = ({ onViewChange }) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [pendingDept, setPendingDept] = useState(null);
   const [newDeptData, setNewDeptData] = useState({ name: '', type: 'Operational', accessCode: '' });
+  const [pendingStampDept, setPendingStampDept] = useState(null);
+  const stampInputRef = useRef(null);
 
   // Section states
   const [isStrategicOpen, setIsStrategicOpen] = useState(true);
@@ -98,6 +103,25 @@ const DepartmentManager = ({ onViewChange }) => {
   const strategic = departments.filter(d => d.type === 'Strategic');
   const operational = departments.filter(d => d.type === 'Operational');
 
+  const handleStampClick = (dept) => {
+    setPendingStampDept(dept);
+    stampInputRef.current?.click();
+  };
+
+  const handleStampSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !pendingStampDept) return;
+    setIsProcessing(true);
+    try {
+      await uploadDepartmentStamp(pendingStampDept.id, file);
+      await loadDepts();
+    } finally {
+      setIsProcessing(false);
+      setPendingStampDept(null);
+      e.target.value = '';
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center space-y-6">
@@ -114,6 +138,7 @@ const DepartmentManager = ({ onViewChange }) => {
 
   return (
     <Layout user={user} currentView="department_manager" onViewChange={onViewChange}>
+      <input ref={stampInputRef} type="file" className="hidden" onChange={handleStampSelected} />
       <div className="max-w-6xl mx-auto space-y-12 pb-20">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
@@ -176,7 +201,13 @@ const DepartmentManager = ({ onViewChange }) => {
                   <p className="text-xs text-muted-foreground italic p-4 text-center">No strategic units found</p>
                 ) : (
                   strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                    <DeptItem key={dept.id} name={dept.name} type="Strategic" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
+                    <DeptItem
+                      key={dept.id}
+                      name={dept.name}
+                      type="Strategic"
+                      onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
+                      onUploadStamp={() => handleStampClick(dept)}
+                    />
                   ))
                 )}
               </div>
@@ -211,11 +242,48 @@ const DepartmentManager = ({ onViewChange }) => {
                   <p className="text-xs text-muted-foreground italic p-4 text-center">No operational units found</p>
                 ) : (
                   operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                    <DeptItem key={dept.id} name={dept.name} type="Operational" onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} />
+                    <DeptItem
+                      key={dept.id}
+                      name={dept.name}
+                      type="Operational"
+                      onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
+                      onUploadStamp={() => handleStampClick(dept)}
+                    />
                   ))
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-foreground">Department Access Codes</h3>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{departments.length} Total</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-muted/30 text-muted-foreground text-[10px] font-bold uppercase tracking-widest border-b border-border/50">
+                  <th className="py-3 px-4">Department</th>
+                  <th className="py-3 px-4">Code</th>
+                  <th className="py-3 px-4">Login Code</th>
+                  <th className="py-3 px-4">Head</th>
+                  <th className="py-3 px-4">Head Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departments.map((dept) => (
+                  <tr key={dept.id} className="border-b border-border/40">
+                    <td className="py-3 px-4 text-sm font-semibold text-foreground">{dept.name}</td>
+                    <td className="py-3 px-4 text-xs text-muted-foreground font-mono">{dept.code || '—'}</td>
+                    <td className="py-3 px-4 text-xs text-foreground font-mono">{dept.accessCodeLabel || '—'}</td>
+                    <td className="py-3 px-4 text-xs text-muted-foreground">{dept.headName || '—'}</td>
+                    <td className="py-3 px-4 text-xs text-muted-foreground">{dept.headEmail || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

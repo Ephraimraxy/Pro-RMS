@@ -12,9 +12,9 @@ import { templates } from '../lib/templates';
 import { 
   addRequisition, 
   getDepartments, 
-  getRequisitionTypes,
   logActivity 
 } from '../lib/store';
+import { toast } from 'react-hot-toast';
 
 import { 
   FileText, Table, Download, Plus, Trash2, Save, 
@@ -28,6 +28,42 @@ const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB max offline storage per depart
 
 const getObjectSize = (obj) => {
   try { return new Blob([JSON.stringify(obj)]).size; } catch(e) { return 0; }
+};
+
+const applyMemoFields = (html, fields) => {
+  if (!html) return html;
+  const replaceField = (key, value) => {
+    const pattern = new RegExp(`(<span\\s+data-memo-${key}[^>]*>)([\\s\\S]*?)(</span>)`, 'i');
+    return html.replace(pattern, `$1${value}$3`);
+  };
+  let nextHtml = html;
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      nextHtml = replaceField(key, value);
+    }
+  });
+  return nextHtml;
+};
+
+const resolveDeptCode = (deptInfo, fallbackLabel) => {
+  if (deptInfo?.code) return deptInfo.code;
+  const name = (deptInfo?.name || fallbackLabel || '').toLowerCase();
+  if (name.includes('isac')) return 'ISC';
+  return (deptInfo?.name || fallbackLabel || 'CSS').slice(0, 3);
+};
+
+const formatMemoRef = (deptCode) => {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const code = (deptCode || 'CSS').toUpperCase();
+  return `CSSG/${code}/MO/${dd}/${mm}/${yyyy}/01`;
+};
+
+const formatMemoDate = () => {
+  const d = new Date();
+  return `${d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()}.`;
 };
 
 // ── Tab Button ──
@@ -184,7 +220,7 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
             className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs lg:text-sm px-4 lg:px-5 py-3 rounded-xl transition-all shadow-lg shadow-amber-600/20"
           >
             <Send size={16} />
-            <span>Send to Workflow</span>
+            <span>Send to Department</span>
           </button>
           <ExportMenu onExport={handleExport} formats={[{ type: 'html', label: 'Export as HTML', icon: FileText }]} />
         </div>
@@ -509,11 +545,16 @@ const PresentationEditor = ({ loadedDraft, onAutosave }) => {
 };
 
 // ── SEND TO WORKFLOW MODAL ──────────────────
-const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, types, initialTitle }) => {
-  const [targetDeptId, setTargetDeptId] = useState('');
-  const [reqType, setReqType] = useState('Cash');
-  const [desc, setDesc] = useState('');
-  const [amount, setAmount] = useState('');
+const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitle }) => {
+  const [targetDeptIds, setTargetDeptIds] = useState([]);
+  const [priority, setPriority] = useState('normal');
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTargetDeptIds([]);
+      setPriority('normal');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -524,9 +565,9 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, types, init
           <div>
             <h2 className="text-xl font-bold text-foreground flex items-center space-x-2">
               <Send size={20} className="text-primary" />
-              <span>Send to Workflow</span>
+              <span>Send to Department</span>
             </h2>
-            <p className="text-xs text-muted-foreground mt-1">Submit "{initialTitle}" for departmental approval</p>
+            <p className="text-xs text-muted-foreground mt-1">Route "{initialTitle}" to selected departments</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-muted text-muted-foreground rounded-full transition-colors">
             <X size={20} />
@@ -535,71 +576,50 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, types, init
         
         <div className="p-6 space-y-4">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Target Department</label>
-            {(() => {
-              const MAJOR_NAMES = ['CEO (Chairman)', 'General Manager (GM)', 'HR', 'Audit', 'Account', 'ICC'];
-              const majorDepts = departments.filter(d => MAJOR_NAMES.some(m => d.name.toLowerCase().includes(m.toLowerCase())));
-              const otherDepts = departments.filter(d => !MAJOR_NAMES.some(m => d.name.toLowerCase().includes(m.toLowerCase())) && d.name !== 'Super Admin');
-              return (
-                <select 
-                  value={targetDeptId}
-                  onChange={(e) => setTargetDeptId(e.target.value)}
-                  className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                >
-                  <option value="">Select Department...</option>
-                  <optgroup label="── MAJOR ──">
-                    {majorDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </optgroup>
-                  <optgroup label="── OTHERS ──">
-                    {otherDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </optgroup>
-                </select>
-              );
-            })()}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Request Type</label>
-              <select 
-                value={reqType}
-                onChange={(e) => setReqType(e.target.value)}
-                className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-              >
-                {types.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Amount (Optional)</label>
-              <input 
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-              />
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Target Departments</label>
+            <div className="max-h-40 overflow-y-auto bg-muted/20 border border-border/40 rounded-xl p-3 space-y-2">
+              {departments.filter(d => d.name !== 'Super Admin').map(d => (
+                <label key={d.id} className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={targetDeptIds.includes(String(d.id))}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setTargetDeptIds(prev => checked ? [...prev, String(d.id)] : prev.filter(id => id !== String(d.id)));
+                    }}
+                  />
+                  <span>{d.name}</span>
+                </label>
+              ))}
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Purpose/Description</label>
-            <textarea 
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              placeholder="Briefly describe the purpose of this request..."
-              className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm h-24 focus:ring-2 focus:ring-primary/20 outline-none resize-none"
-            />
+            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Priority</label>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-full bg-muted/30 border border-border/40 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+            >
+              <option value="normal">Normal</option>
+              <option value="urgent">Urgent</option>
+              <option value="critical">Critical / Emergency</option>
+            </select>
           </div>
         </div>
 
         <div className="p-6 bg-muted/20 border-t border-border/40 flex items-center gap-3">
           <button onClick={onClose} className="flex-1 py-3 font-bold text-sm text-muted-foreground hover:bg-muted rounded-xl transition-all">Cancel</button>
           <button 
-            disabled={!targetDeptId}
-            onClick={() => onSend({ departmentId: targetDeptId, departmentName: departments.find(d => String(d.id) === String(targetDeptId))?.name, type: reqType, description: desc, amount })}
+            disabled={targetDeptIds.length === 0}
+            onClick={() => onSend({ 
+              departmentIds: targetDeptIds, 
+              departmentNames: departments.filter(d => targetDeptIds.includes(String(d.id))).map(d => d.name),
+              priority
+            })}
             className="flex-[3] py-3 px-8 bg-primary text-white font-bold text-sm rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
           >
-            Submit for Approval
+            Send to Department
           </button>
         </div>
       </div>
@@ -612,17 +632,12 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, types, init
 // ══════════════════════════════════════════════
 const DocumentStudio = ({ user, onViewChange }) => {
   const [availableDepartments, setAvailableDepartments] = useState([]);
-  const [requisitionTypes, setRequisitionTypes] = useState([]);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchMetadata = async () => {
-      const [depts, types] = await Promise.all([
-        getDepartments(),
-        getRequisitionTypes()
-      ]);
+      const depts = await getDepartments();
       setAvailableDepartments(depts);
-      setRequisitionTypes(types);
     };
     fetchMetadata();
   }, []);
@@ -631,26 +646,40 @@ const DocumentStudio = ({ user, onViewChange }) => {
     if (!currentActiveDraft) return;
     
     try {
-      const type = metadata.type || (currentActiveDraft.title.toLowerCase().includes('memo') ? 'Memo' : 'Requisition');
-      const requisitionData = {
+      const type = currentActiveDraft.title.toLowerCase().includes('memo') ? 'Memo' : 'Requisition';
+      const selectedNames = metadata.departmentNames || [];
+      const toLabel = selectedNames.join(' & ') || 'TARGET DEPARTMENT';
+      const deptInfo = availableDepartments.find(d => d.id === user?.deptId) || {};
+      const deptCode = resolveDeptCode(deptInfo, user?.department);
+      const updatedContent = applyMemoFields(currentActiveDraft.data, {
+        ref: formatMemoRef(deptCode),
+        date: formatMemoDate(),
+        to: toLabel.toUpperCase(),
+        from: (deptInfo.name || user?.department || '').toUpperCase(),
+        'sender-name': deptInfo.headName || '',
+        'sender-title': deptInfo.headTitle || ''
+      });
+
+      const payloads = (metadata.departmentIds || []).map((deptId) => ({
         title: currentActiveDraft.title,
-        description: metadata.description || `Submitted from Document Studio: ${currentActiveDraft.title}`,
-        departmentId: parseInt(metadata.departmentId),
+        description: `Submitted from Document Studio: ${currentActiveDraft.title}`,
+        departmentId: parseInt(deptId),
         type: type,
         status: 'pending',
-        amount: metadata.amount ? parseFloat(metadata.amount) : 0,
-        content: currentActiveDraft.data, // Storing the HTML content in the requisition
+        amount: 0,
+        urgency: metadata.priority || 'normal',
+        content: updatedContent,
         createdBy: user?.name || 'Administrator',
         createdAt: new Date().toISOString()
-      };
+      }));
 
-      await addRequisition(requisitionData);
-      await logActivity('Document Sent', `"${currentActiveDraft.title}" sent to ${metadata.departmentName} for approval`);
-      toast.success('Successfully sent to workflow chain!');
+      await addRequisition(payloads);
+      await logActivity('Document Sent', `"${currentActiveDraft.title}" sent to ${toLabel}`);
+      toast.success('Successfully sent to selected departments!');
       setIsSendModalOpen(false);
     } catch (err) {
       console.error("Scale-to-Workflow failed:", err);
-      toast.error('Failed to send document to workflow');
+      toast.error('Failed to send document to departments');
     }
   };
   
@@ -682,13 +711,27 @@ const DocumentStudio = ({ user, onViewChange }) => {
   const initiateNewDraft = (type, templateKey = null) => {
     const newId = `draft_${Date.now()}`;
     const template = templateKey ? templates[templateKey] : null;
+    const deptInfo = availableDepartments.find(d => d.id === user?.deptId) || {};
+    const deptCode = resolveDeptCode(deptInfo, user?.department);
     
     // Pre-create the draft object to ensure it loads with template data immediately
     const newDraft = {
       id: newId,
       type,
       title: template ? template.title : (type === 'doc' ? 'Untitled Document' : type === 'sheet' ? 'Untitled Spreadsheet' : 'Untitled Presentation'),
-      data: template ? template.data : (type === 'sheet' ? [{ name: "Sheet1", celldata: [] }] : (type === 'slide' ? [{ id: Date.now(), html: '<h1 class="ql-align-center">New Slide</h1>' }] : '')),
+      data: template
+        ? (typeof template.data === 'function'
+            ? template.data({
+                deptCode,
+                fromLabel: deptInfo.name || user?.department || '',
+                toLabel: 'TARGET DEPARTMENT',
+                subjectLabel: '[ENTER SUBJECT HERE]',
+                headName: deptInfo.headName || '',
+                headTitle: deptInfo.headTitle || '',
+                date: new Date()
+              })
+            : template.data)
+        : (type === 'sheet' ? [{ name: "Sheet1", celldata: [] }] : (type === 'slide' ? [{ id: Date.now(), html: '<h1 class="ql-align-center">New Slide</h1>' }] : '')),
       updatedAt: new Date().toISOString()
     };
     
@@ -878,7 +921,6 @@ const DocumentStudio = ({ user, onViewChange }) => {
           onClose={() => setIsSendModalOpen(false)}
           onSend={handleSendToWorkflow}
           departments={availableDepartments}
-          types={requisitionTypes}
           initialTitle={currentActiveDraft?.title}
         />
   </>

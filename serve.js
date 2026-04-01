@@ -4,33 +4,92 @@ const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { z } = require('zod');
+const crypto = require('crypto');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
 const multer = require('multer');
-const fs = require('fs');
+const { 
+  putObject, 
+  getObjectStream, 
+  getObjectBuffer, 
+  generateStorageKey 
+} = require('./lib/storage');
+const { 
+  getKeyPair,
+  getMasterKey,
+  encryptPrivateKey,
+  decryptPrivateKey,
+  generateKeyPair,
+  sha256Hex, 
+  signHashHex, 
+  verifyHashHex, 
+  generateVerificationCode 
+} = require('./lib/signing');
+const { sendEmail } = require('./lib/mailer');
 
 const app = express();
 const prisma = new PrismaClient();
 
-// Configure Multer for File Uploads
-const uploadDir = 'uploads';
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ 
-  storage,
+// Configure Multer for File Uploads (memory storage for object storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
 // Middleware
-app.use(cors());
-app.use(express.json());
-app.use('/uploads', express.static(uploadDir));
+const isProd = process.env.NODE_ENV === 'production';
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+app.use(helmet());
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (!isProd && allowedOrigins.length === 0) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error('CORS blocked'));
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: '2mb' }));
 
 // ── BACKEND API ROUTES ──
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key';
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET is required in environment variables.');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const APP_BASE_URL = (process.env.APP_BASE_URL || '').trim();
+const MASTER_KEY = getMasterKey();
+let ACTIVE_PUBLIC_KEY = null;
+let ACTIVE_PRIVATE_KEY = null;
+let ACTIVE_KID = null;
+if (process.env.SIGNING_PRIVATE_KEY && process.env.SIGNING_PUBLIC_KEY) {
+  const keypair = getKeyPair();
+  ACTIVE_PUBLIC_KEY = keypair.publicKey;
+  ACTIVE_PRIVATE_KEY = keypair.privateKey;
+  ACTIVE_KID = keypair.kid;
+} else if (!MASTER_KEY) {
+  throw new Error('Signing keys missing. Set SIGNING_PRIVATE_KEY/SIGNING_PUBLIC_KEY or SIGNING_MASTER_KEY for per-department keys.');
+}
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const approvalLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -44,10 +103,382 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Auth
-app.post('/api/auth/login', async (req, res) => {
+const getNumericUserId = (user) => {
+  if (!user) return null;
+  if (typeof user.id === 'number') return user.id;
+  return null;
+};
+
+const normalizeRole = (role) => (role || '').toLowerCase();
+
+const requireRoles = (roles) => (req, res, next) => {
+  const userRole = normalizeRole(req.user?.role);
+  const allowed = roles.map(r => r.toLowerCase());
+  if (allowed.includes(userRole) || userRole === 'global_admin') return next();
+  return res.status(403).json({ error: 'Forbidden' });
+};
+
+const ensureActivePublicKey = async () => {
+  if (!ACTIVE_PUBLIC_KEY || !ACTIVE_KID) return;
+  await prisma.publicKey.upsert({
+    where: { kid: ACTIVE_KID },
+    update: { publicKey: ACTIVE_PUBLIC_KEY, algorithm: 'Ed25519', active: true },
+    create: { kid: ACTIVE_KID, publicKey: ACTIVE_PUBLIC_KEY, algorithm: 'Ed25519', active: true }
+  });
+};
+
+const getEligibleStages = async (amount = 0) => {
+  const stages = await prisma.workflowStage.findMany({ orderBy: { sequence: 'asc' } });
+  return stages.filter(s => Number(amount || 0) >= Number(s.threshold || 0));
+};
+
+const findNextStage = (eligibleStages, currentStageId) => {
+  if (!eligibleStages.length) return null;
+  const idx = eligibleStages.findIndex(s => s.id === currentStageId);
+  if (idx === -1) return eligibleStages[0];
+  return eligibleStages[idx + 1] || null;
+};
+
+const computeContentHash = (requisition) => {
+  const content = requisition.content || requisition.description || '';
+  return sha256Hex(content);
+};
+
+const computeAttachmentsHash = (attachments = []) => {
+  const normalized = attachments
+    .map(a => `${a.storageKey || ''}:${a.size || 0}:${a.mimeType || ''}`)
+    .sort()
+    .join('|');
+  return sha256Hex(normalized);
+};
+
+const getGlobalPublicKeyRecord = async () => {
+  if (!ACTIVE_PUBLIC_KEY || !ACTIVE_KID) return null;
+  return prisma.publicKey.upsert({
+    where: { kid: ACTIVE_KID },
+    update: { publicKey: ACTIVE_PUBLIC_KEY, algorithm: 'Ed25519', active: true },
+    create: { kid: ACTIVE_KID, publicKey: ACTIVE_PUBLIC_KEY, algorithm: 'Ed25519', active: true }
+  });
+};
+
+const getDepartmentSigningKey = async (departmentId) => {
+  if (MASTER_KEY) {
+    if (MASTER_KEY.length !== 32) {
+      throw new Error('SIGNING_MASTER_KEY must be 32 bytes (hex or base64 for 256-bit key)');
+    }
+    let deptKey = await prisma.departmentKey.findUnique({
+      where: { departmentId },
+      include: { publicKey: true }
+    });
+    if (!deptKey) {
+      const { publicKeyPem, privateKeyPem } = generateKeyPair();
+      const kid = sha256Hex(publicKeyPem).slice(0, 16);
+      const publicKeyRecord = await prisma.publicKey.create({
+        data: { kid, algorithm: 'Ed25519', publicKey: publicKeyPem, active: true }
+      });
+      const privateKeyEnc = encryptPrivateKey(privateKeyPem, MASTER_KEY);
+      deptKey = await prisma.departmentKey.create({
+        data: {
+          departmentId,
+          publicKeyId: publicKeyRecord.id,
+          privateKeyEnc,
+          algorithm: 'Ed25519',
+          active: true
+        },
+        include: { publicKey: true }
+      });
+      return { privateKey: privateKeyPem, publicKey: publicKeyRecord.publicKey, kid: publicKeyRecord.kid, publicKeyId: publicKeyRecord.id };
+    }
+    const privateKeyPem = decryptPrivateKey(deptKey.privateKeyEnc, MASTER_KEY);
+    return { privateKey: privateKeyPem, publicKey: deptKey.publicKey.publicKey, kid: deptKey.publicKey.kid, publicKeyId: deptKey.publicKeyId };
+  }
+
+  const globalRecord = await getGlobalPublicKeyRecord();
+  if (!globalRecord) {
+    throw new Error('Global signing key not configured.');
+  }
+  return { privateKey: ACTIVE_PRIVATE_KEY, publicKey: globalRecord.publicKey, kid: globalRecord.kid, publicKeyId: globalRecord.id };
+};
+
+const embedImageIfAvailable = async (pdfDoc, bytes) => {
+  if (!bytes) return null;
   try {
-    const { email, password } = req.body;
+    return await pdfDoc.embedPng(bytes);
+  } catch (err) {
+    return await pdfDoc.embedJpg(bytes);
+  }
+};
+
+const generateSignedPdf = async ({ requisition, approvals, departmentName, approverName, stampBytes, signatureBytes, verificationCode, payloadHash }) => {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595.28, 841.89]); // A4
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  const margin = 48;
+  let y = 800;
+
+  page.drawText('REQUISITION VOUCHER', { x: margin, y, size: 18, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
+  y -= 24;
+  page.drawText(`Department: ${departmentName}`, { x: margin, y, size: 11, font });
+  y -= 16;
+  page.drawText(`Title: ${requisition.title}`, { x: margin, y, size: 11, font });
+  y -= 16;
+  page.drawText(`Type: ${requisition.type}    Amount: ₦${Number(requisition.amount || 0).toLocaleString()}`, { x: margin, y, size: 11, font });
+  y -= 16;
+  page.drawText(`Urgency: ${requisition.urgency || 'normal'}`, { x: margin, y, size: 11, font });
+  y -= 22;
+
+  page.drawText('Description:', { x: margin, y, size: 11, font: boldFont });
+  y -= 16;
+  const desc = requisition.description || '';
+  const descLines = desc.match(/.{1,90}/g) || [''];
+  for (const line of descLines.slice(0, 6)) {
+    page.drawText(line, { x: margin, y, size: 10, font });
+    y -= 14;
+  }
+
+  y -= 10;
+  page.drawText('Approval Trail:', { x: margin, y, size: 11, font: boldFont });
+  y -= 16;
+  approvals.forEach((a) => {
+    const stamp = new Date(a.createdAt).toLocaleString();
+    const line = `${a.stage?.name || 'Stage'} - ${a.action.toUpperCase()} by ${a.user?.name || 'User'} @ ${stamp}`;
+    page.drawText(line.slice(0, 100), { x: margin, y, size: 9, font });
+    y -= 12;
+  });
+
+  const stampImage = await embedImageIfAvailable(pdfDoc, stampBytes);
+  const signatureImage = await embedImageIfAvailable(pdfDoc, signatureBytes);
+
+  if (stampImage) {
+    const stampDims = stampImage.scale(0.3);
+    page.drawImage(stampImage, { x: margin, y: 120, width: stampDims.width, height: stampDims.height, opacity: 0.9 });
+  }
+
+  if (signatureImage) {
+    const sigDims = signatureImage.scale(0.3);
+    page.drawImage(signatureImage, { x: 360, y: 120, width: sigDims.width, height: sigDims.height, opacity: 0.9 });
+    page.drawText(`Signed by ${approverName}`, { x: 360, y: 105, size: 9, font });
+  }
+
+  page.drawText(`Verification Code: ${verificationCode}`, { x: margin, y: 60, size: 9, font: boldFont });
+  page.drawText(`Payload Hash: ${payloadHash.slice(0, 20)}...`, { x: margin, y: 46, size: 8, font });
+
+  return pdfDoc.save();
+};
+
+const processApprovalAction = async ({ requisitionId, action, remarks, user }) => {
+  const userId = getNumericUserId(user);
+  if (!userId) {
+    const err = new Error('Department accounts cannot approve requisitions');
+    err.status = 403;
+    throw err;
+  }
+
+  const requisition = await prisma.requisition.findUnique({
+    where: { id: requisitionId },
+    include: { attachments: true, department: true, currentStage: true }
+  });
+  if (!requisition) {
+    const err = new Error('Requisition not found');
+    err.status = 404;
+    throw err;
+  }
+  if (requisition.status !== 'pending') {
+    const err = new Error('Requisition is not pending');
+    err.status = 400;
+    throw err;
+  }
+
+  const eligibleStages = await getEligibleStages(requisition.amount || 0);
+  const currentStage = requisition.currentStageId
+    ? eligibleStages.find(s => s.id === requisition.currentStageId)
+    : eligibleStages[0];
+
+  if (!currentStage) {
+    const err = new Error('No workflow stage configured');
+    err.status = 400;
+    throw err;
+  }
+
+  const userRole = normalizeRole(user.role);
+  if (userRole !== 'global_admin' && !userRole.includes(currentStage.role.toLowerCase())) {
+    const err = new Error('User role not authorized for this stage');
+    err.status = 403;
+    throw err;
+  }
+
+  const approval = await prisma.approval.create({
+    data: {
+      requisitionId: requisition.id,
+      stageId: currentStage.id,
+      action,
+      remarks: remarks || null,
+      userId
+    }
+  });
+
+  const payload = {
+    requisitionId: requisition.id,
+    stageId: currentStage.id,
+    departmentId: requisition.departmentId,
+    approverId: userId,
+    action,
+    timestamp: new Date().toISOString(),
+    contentHash: computeContentHash(requisition),
+    attachmentsHash: computeAttachmentsHash(requisition.attachments)
+  };
+  const payloadString = JSON.stringify(payload);
+  const payloadHash = sha256Hex(payloadString);
+  const signingKey = await getDepartmentSigningKey(requisition.departmentId);
+  const signature = signHashHex(payloadHash, signingKey.privateKey);
+
+  let verificationCode = generateVerificationCode('VER');
+  let attempts = 0;
+  while (attempts < 5) {
+    const exists = await prisma.signatureRecord.findUnique({ where: { verificationCode } });
+    if (!exists) break;
+    verificationCode = generateVerificationCode('VER');
+    attempts += 1;
+  }
+
+  await prisma.signatureRecord.create({
+    data: {
+      approvalId: approval.id,
+      payloadHash,
+      signature,
+      verificationCode,
+      publicKeyId: signingKey.publicKeyId
+    }
+  });
+
+  let updated;
+  if (action === 'approved') {
+    const nextStage = findNextStage(eligibleStages, currentStage.id);
+    if (nextStage) {
+      updated = await prisma.requisition.update({
+        where: { id: requisition.id },
+        data: {
+          currentStageId: nextStage.id,
+          lastActionById: userId,
+          lastActionAt: new Date()
+        }
+      });
+      await notifyRole(nextStage.role, `Pending Approval: ${requisition.title}`, requisition.id);
+      await notifyDepartmentHead({
+        departmentId: requisition.departmentId,
+        requisition,
+        subject: `Requisition Stage Approved: ${requisition.title}`,
+        lines: [
+          `Status: Pending next approval`,
+          `Stage Approved: ${currentStage.name} (${currentStage.role})`,
+          `Approved By: ${user.name || 'Approver'}`,
+          `Next Stage: ${nextStage.name} (${nextStage.role})`,
+          `Verification Code: ${verificationCode}`
+        ]
+      });
+    } else {
+      const stamp = await prisma.departmentStamp.findUnique({ where: { departmentId: requisition.departmentId } });
+      const signatureRecord = await prisma.userSignature.findUnique({ where: { userId } });
+
+      const stampBytes = stamp ? await getObjectBuffer(stamp.imageKey) : null;
+      const signatureBytes = signatureRecord ? await getObjectBuffer(signatureRecord.imageKey) : null;
+
+      const approvals = await prisma.approval.findMany({
+        where: { requisitionId: requisition.id },
+        include: { stage: true, user: true },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      const pdfBytes = await generateSignedPdf({
+        requisition,
+        approvals,
+        departmentName: requisition.department?.name || 'Department',
+        approverName: user.name || 'Approver',
+        stampBytes,
+        signatureBytes,
+        verificationCode,
+        payloadHash
+      });
+
+      const pdfKey = generateStorageKey(`signed/${requisition.id}`, `requisition-${requisition.id}.pdf`);
+      await putObject({ key: pdfKey, body: pdfBytes, contentType: 'application/pdf' });
+      const pdfHash = sha256Hex(pdfBytes);
+
+      updated = await prisma.requisition.update({
+        where: { id: requisition.id },
+        data: {
+          status: 'approved',
+          approvedAt: new Date(),
+          currentStageId: null,
+          lastActionById: userId,
+          lastActionAt: new Date(),
+          signedPdfKey: pdfKey,
+          signedPdfHash: pdfHash
+        }
+      });
+      await notifyRole('creator', `Requisition Fully Approved: ${requisition.title}`, requisition.id);
+      await notifyDepartmentHead({
+        departmentId: requisition.departmentId,
+        requisition,
+        subject: `Requisition Fully Approved: ${requisition.title}`,
+        lines: [
+          `Status: Approved`,
+          `Approved By: ${user.name || 'Approver'}`,
+          `Amount: ${formatCurrency(requisition.amount)}`,
+          `Verification Code: ${verificationCode}`
+        ]
+      });
+    }
+  } else {
+    updated = await prisma.requisition.update({
+      where: { id: requisition.id },
+      data: {
+        status: 'rejected',
+        rejectedAt: new Date(),
+        currentStageId: null,
+        lastActionById: userId,
+        lastActionAt: new Date()
+      }
+    });
+    await notifyRole('creator', `Requisition Rejected: ${requisition.title}`, requisition.id);
+    await notifyDepartmentHead({
+      departmentId: requisition.departmentId,
+      requisition,
+      subject: `Requisition Rejected: ${requisition.title}`,
+      lines: [
+        `Status: Rejected`,
+        `Rejected By: ${user.name || 'Approver'}`,
+        `Stage: ${currentStage.name} (${currentStage.role})`,
+        remarks ? `Remarks: ${remarks}` : null,
+        `Verification Code: ${verificationCode}`
+      ]
+    });
+  }
+
+  await prisma.activityLog.create({
+    data: {
+      userId,
+      action: `Requisition ${action}`,
+      details: `Requisition #${requisition.id} ${action}. ${remarks ? `Remarks: ${remarks}` : ''}`.trim()
+    }
+  });
+
+  return updated;
+};
+
+// Auth
+app.post('/api/auth/login', authLimiter, async (req, res) => {
+  try {
+    const parsed = z.object({
+      email: z.string().email(),
+      password: z.string().min(1)
+    }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid login payload' });
+    }
+    const { email, password } = parsed.data;
     const user = await prisma.user.findUnique({ where: { email }, include: { department: true } });
     if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Invalid credentials' });
     const userData = { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department?.name || 'General' };
@@ -57,24 +488,23 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.post('/api/auth/dept-login', async (req, res) => {
+app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
   try {
-    const { departmentName, accessCode, mfaCode } = req.body;
-    
-    if (departmentName === 'Super Admin') {
-      if (accessCode !== 'admin123') return res.status(401).json({ error: 'Invalid Super Admin Access Code' });
-      if (mfaCode !== '123456') return res.status(401).json({ error: 'Invalid MFA PIN' });
-      
-      const token = jwt.sign({ id: 0, name: 'Super Admin', role: 'global_admin', deptId: 0 }, JWT_SECRET, { expiresIn: '24h' });
-      return res.json({ token, user: { id: 0, name: 'Super Admin', role: 'global_admin', deptId: 0 } });
+    const parsed = z.object({
+      departmentName: z.string().min(1),
+      accessCode: z.string().min(1),
+      mfaCode: z.string().optional().nullable()
+    }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid login payload' });
     }
-
+    const { departmentName, accessCode, mfaCode } = parsed.data;
+    
     console.log(`[AUTH] Unified login attempt: "${departmentName?.trim()}"`);
     
     const dept = await prisma.department.findFirst({ 
       where: { 
         name: { equals: departmentName?.trim(), mode: 'insensitive' }, 
-        accessCode: accessCode?.trim() 
       } 
     });
     
@@ -82,11 +512,26 @@ app.post('/api/auth/dept-login', async (req, res) => {
       console.warn(`[AUTH] Failed: ${departmentName} / ${accessCode}`);
       return res.status(401).json({ error: 'Invalid Department or Access Code' });
     }
+
+    const codeMatch = dept.accessCodeHash
+      ? await bcrypt.compare(accessCode.trim(), dept.accessCodeHash)
+      : dept.accessCode === accessCode.trim();
+    if (!codeMatch) {
+      console.warn(`[AUTH] Failed: ${departmentName} / ${accessCode}`);
+      return res.status(401).json({ error: 'Invalid Department or Access Code' });
+    }
+
+    if (dept.name.toLowerCase() === 'super admin') {
+      if (mfaCode !== '123456') return res.status(401).json({ error: 'Invalid MFA PIN' });
+    }
     
     // Unified Role Logic: "Super Admin" department gets 'global_admin' role
     const isSuperAdmin = dept.name.toLowerCase() === 'super admin';
+    const adminUser = isSuperAdmin 
+      ? await prisma.user.findFirst({ where: { role: 'global_admin' } })
+      : null;
     const userData = { 
-      id: isSuperAdmin ? 1 : `dept_${dept.id}`, 
+      id: isSuperAdmin ? (adminUser?.id || 1) : `dept_${dept.id}`, 
       name: dept.name, 
       role: isSuperAdmin ? 'global_admin' : 'department', 
       deptId: dept.id, 
@@ -105,9 +550,22 @@ app.get('/api/auth/me', authenticateToken, (req, res) => res.json({ user: req.us
 app.get('/api/departments', async (req, res) => {
   try {
     const departments = await prisma.department.findMany({ 
-      orderBy: { name: 'asc' } 
+      orderBy: { name: 'asc' },
+      include: { stamp: true }
     });
     res.json(departments);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.get('/api/departments/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const department = await prisma.department.findUnique({ where: { id: parseInt(id) } });
+    if (!department) return res.status(404).json({ error: 'Department not found' });
+    if (req.user.role === 'department' && req.user.deptId && department.id !== req.user.deptId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    res.json(department);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -127,10 +585,15 @@ app.get('/api/workflow-stages', async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.post('/api/workflow-stages', authenticateToken, async (req, res) => {
+app.post('/api/workflow-stages', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
-    if (req.user.role !== 'global_admin') return res.status(403).json({ error: 'Forbidden' });
-    const stages = req.body; // Expects full array
+    const parsed = z.array(z.object({
+      name: z.string().min(1),
+      role: z.string().min(1),
+      threshold: z.union([z.number(), z.string()]).optional()
+    })).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid workflow payload' });
+    const stages = parsed.data; // Expects full array
     
     await prisma.$transaction([
       prisma.workflowStage.deleteMany(),
@@ -150,6 +613,58 @@ app.post('/api/workflow-stages', authenticateToken, async (req, res) => {
 
 // Notifications
 // Notifications Helper
+const escapeHtml = (value = '') =>
+  String(value).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+
+const formatCurrency = (amount) => {
+  const num = Number(amount || 0);
+  if (Number.isNaN(num)) return '₦0.00';
+  return `₦${num.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+const buildEmailContent = ({ title, lines = [], actionUrl, actionLabel }) => {
+  const safeLines = lines.filter(Boolean).map((line) => String(line));
+  const text = [title, '', ...safeLines, actionUrl ? '' : null, actionUrl ? `Open: ${actionUrl}` : null]
+    .filter(Boolean)
+    .join('\n');
+  const listItems = safeLines.map((line) => `<li style="margin-bottom:6px;">${escapeHtml(line)}</li>`).join('');
+  const button = actionUrl
+    ? `<p style="margin-top:16px;"><a href="${actionUrl}" style="display:inline-block;padding:10px 16px;background:#1a3a6e;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">${escapeHtml(actionLabel || 'Open RMS')}</a></p>`
+    : '';
+  const html = `
+    <div style="font-family:Arial, sans-serif; color:#1a1a1a;">
+      <h2 style="margin:0 0 12px 0; color:#1a3a6e;">${escapeHtml(title)}</h2>
+      <ul style="padding-left:18px; margin:0 0 12px 0;">${listItems}</ul>
+      ${button}
+      <p style="font-size:12px;color:#666;margin-top:18px;">CSS RMS Automated Notification</p>
+    </div>
+  `;
+  return { text, html };
+};
+
+async function notifyDepartmentHead({ departmentId, requisition, subject, lines }) {
+  try {
+    const dept = requisition?.department || await prisma.department.findUnique({ where: { id: departmentId } });
+    if (!dept?.headEmail) return;
+    const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
+    const { text, html } = buildEmailContent({
+      title: subject,
+      lines,
+      actionUrl,
+      actionLabel: 'Open RMS'
+    });
+    await sendEmail({ to: dept.headEmail, subject, text, html });
+  } catch (err) {
+    console.error('[MAIL] Department head notify failed:', err.message);
+  }
+}
+
 async function notifyRole(roleName, message, requisitionId) {
   try {
     // Find users with this role (Admin, Audit, etc.) or all if role is global
@@ -165,6 +680,18 @@ async function notifyRole(roleName, message, requisitionId) {
         content: message
       }))
     });
+
+    const emails = users.map(u => u.email).filter(Boolean);
+    if (emails.length > 0) {
+      const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
+      const { text, html } = buildEmailContent({
+        title: message,
+        lines: requisitionId ? [`Requisition ID: ${requisitionId}`] : [],
+        actionUrl,
+        actionLabel: 'Open RMS'
+      });
+      await Promise.allSettled(emails.map(email => sendEmail({ to: email, subject: message, text, html })));
+    }
   } catch (err) {
     console.error("Notification failed:", err);
   }
@@ -216,15 +743,20 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/requisition-types', authenticateToken, async (req, res) => {
+app.post('/api/requisition-types', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const parsed = z.object({
+      name: z.string().min(1),
+      description: z.string().optional()
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid type payload' });
+    const { name, description } = parsed.data;
     const type = await prisma.requisitionType.create({ data: { name, description: description || '' } });
     res.json(type);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.delete('/api/requisition-types/:id', authenticateToken, async (req, res) => {
+app.delete('/api/requisition-types/:id', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.requisitionType.delete({ where: { id: parseInt(id) } });
@@ -232,15 +764,24 @@ app.delete('/api/requisition-types/:id', authenticateToken, async (req, res) => 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.post('/api/departments', authenticateToken, async (req, res) => {
+app.post('/api/departments', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
-    const { name, type, accessCode } = req.body;
-    const dept = await prisma.department.create({ data: { name, type, accessCode } });
+    const parsed = z.object({
+      name: z.string().min(1),
+      type: z.string().min(1),
+      accessCode: z.string().min(4)
+    }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid department payload' });
+    }
+    const { name, type, accessCode } = parsed.data;
+    const accessCodeHash = await bcrypt.hash(accessCode, 10);
+    const dept = await prisma.department.create({ data: { name, type, accessCode: null, accessCodeHash, accessCodeLabel: accessCode } });
     res.json(dept);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.delete('/api/departments/:id', authenticateToken, async (req, res) => {
+app.delete('/api/departments/:id', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.department.delete({ where: { id: parseInt(id) } });
@@ -248,69 +789,260 @@ app.delete('/api/departments/:id', authenticateToken, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.post('/api/requisitions', authenticateToken, async (req, res) => {
+app.put('/api/departments/:id/head', authenticateToken, async (req, res) => {
   try {
-    const items = Array.isArray(req.body) ? req.body : [req.body];
-    const creatorId = typeof req.user.id === 'number' ? req.user.id : null;
-    
-    const created = await prisma.$transaction(items.map(item => prisma.requisition.create({
-      data: {
-        title: item.title || item.description,
-        type: item.type || 'Cash',
-        amount: parseFloat(item.amount) || 0,
-        description: item.description || '',
-        status: 'pending',
-        departmentId: item.departmentId || req.user.deptId || 1,
-        creatorId: creatorId || 1
-      }
-    })));
-
-    // Notify first workflow stage (default to 'Admin')
-    const firstStage = await prisma.workflowStage.findFirst({ orderBy: { sequence: 'asc' } });
-    const targetRole = firstStage ? firstStage.role : 'Admin';
-    for (const reqItem of created) {
-      await notifyRole(targetRole, `New Requisition: ${reqItem.title}`, reqItem.id);
+    const { id } = req.params;
+    const deptId = parseInt(id);
+    if (req.user.role === 'department' && req.user.deptId && req.user.deptId !== deptId) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
-
-    res.json(created);
+    const parsed = z.object({
+      headName: z.string().min(2),
+      headTitle: z.string().min(2),
+      headEmail: z.string().email()
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid department head payload' });
+    const updated = await prisma.department.update({
+      where: { id: deptId },
+      data: {
+        headName: parsed.data.headName,
+        headTitle: parsed.data.headTitle,
+        headEmail: parsed.data.headEmail
+      }
+    });
+    res.json(updated);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.post('/api/requisitions/:id/status', authenticateToken, async (req, res) => {
+// Department Stamp Upload (Admin only)
+app.post('/api/departments/:id/stamp', authenticateToken, requireRoles(['global_admin']), upload.single('file'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, remarks } = req.body;
-    
-    const requisition = await prisma.requisition.update({
-      where: { id: parseInt(id) },
-      data: { status }
+    if (!req.file) return res.status(400).json({ error: 'No stamp uploaded' });
+    const storageKey = generateStorageKey(`stamps/department-${id}`, req.file.originalname);
+    await putObject({ key: storageKey, body: req.file.buffer, contentType: req.file.mimetype });
+    const stamp = await prisma.departmentStamp.upsert({
+      where: { departmentId: parseInt(id) },
+      update: { imageKey: storageKey },
+      create: { departmentId: parseInt(id), imageKey: storageKey }
     });
+    res.json(stamp);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
 
-    // Log Activity
-    await prisma.activityLog.create({
+// User Signature Upload (User or Admin)
+app.post('/api/users/:id/signature', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = getNumericUserId(req.user);
+    const targetId = parseInt(id);
+    if (!req.file) return res.status(400).json({ error: 'No signature uploaded' });
+    if (userId !== targetId && normalizeRole(req.user.role) !== 'global_admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const storageKey = generateStorageKey(`signatures/user-${id}`, req.file.originalname);
+    await putObject({ key: storageKey, body: req.file.buffer, contentType: req.file.mimetype });
+    const signatureRecord = await prisma.userSignature.upsert({
+      where: { userId: targetId },
+      update: { imageKey: storageKey },
+      create: { userId: targetId, imageKey: storageKey }
+    });
+    res.json(signatureRecord);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/requisitions', authenticateToken, async (req, res) => {
+  try {
+    const items = Array.isArray(req.body) ? req.body : [req.body];
+    if (items.length === 0) return res.status(400).json({ error: 'No requisitions supplied' });
+
+    const systemUser = await prisma.user.findFirst({ where: { role: 'global_admin' } });
+    const creatorId = getNumericUserId(req.user) || systemUser?.id || 1;
+    const createdRecords = [];
+    const existingRecords = [];
+
+    for (const item of items) {
+      const parsed = z.object({
+        clientId: z.string().optional(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        type: z.string().optional(),
+        amount: z.union([z.string(), z.number()]).optional(),
+        departmentId: z.number().optional(),
+        urgency: z.string().optional(),
+        content: z.string().optional(),
+        isDraft: z.boolean().optional()
+      }).safeParse(item);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid requisition payload' });
+      }
+      const data = parsed.data;
+      const clientId = data.clientId || crypto.randomUUID();
+
+      const existing = await prisma.requisition.findUnique({ where: { clientId } });
+      if (existing) {
+        existingRecords.push(existing);
+        continue;
+      }
+
+      const amount = parseFloat(data.amount || 0) || 0;
+      const eligibleStages = await getEligibleStages(amount);
+      const firstStage = eligibleStages[0] || null;
+      const isDraft = Boolean(data.isDraft);
+      const targetDeptId = data.departmentId || req.user.deptId || 1;
+      if (req.user.role === 'department' && req.user.deptId && targetDeptId !== req.user.deptId) {
+        return res.status(403).json({ error: 'Department users can only create for their own department' });
+      }
+
+      const created = await prisma.requisition.create({
         data: {
-            userId: req.user.id,
-            action: `Status Update: ${status}`,
-            details: `Requisition #${id} changed to ${status}. Remarks: ${remarks || 'None'}`
+          clientId,
+          title: data.title || data.description || 'Untitled Requisition',
+          type: data.type || 'Cash',
+          amount,
+          description: data.description || '',
+          urgency: data.urgency || 'normal',
+          status: isDraft ? 'draft' : 'pending',
+          departmentId: targetDeptId,
+          creatorId,
+          content: data.content || null,
+          currentStageId: isDraft ? null : (firstStage?.id || null),
+          lastActionById: creatorId,
+          lastActionAt: new Date()
         }
-    });
+      });
 
-    // Determine next notification
-    if (status === 'approved') {
-        const nextStage = await prisma.workflowStage.findFirst({
-            where: { sequence: { gt: 0 } }, // Simplified logic: in real app, track current sequence
-            orderBy: { sequence: 'asc' }
+      if (!isDraft && firstStage?.role) {
+        await notifyRole(firstStage.role, `New Requisition: ${created.title}`, created.id);
+      }
+      if (!isDraft) {
+        const dept = await prisma.department.findUnique({ where: { id: targetDeptId } });
+        await notifyDepartmentHead({
+          departmentId: targetDeptId,
+          requisition: { ...created, department: dept || null },
+          subject: `New Requisition: ${created.title}`,
+          lines: [
+            `Department: ${dept?.name || 'Department'}`,
+            `Type: ${created.type}`,
+            `Amount: ${formatCurrency(created.amount)}`,
+            `Urgency: ${created.urgency || 'normal'}`,
+            `Status: ${created.status}`,
+            `Created By: ${req.user?.name || 'System'}`
+          ]
         });
-        if (nextStage) {
-            await notifyRole(nextStage.role, `Pending Approval: ${requisition.title}`, requisition.id);
-        } else {
-            await notifyRole('creator', `Requisition Fully Approved: ${requisition.title}`, requisition.id);
-        }
-    } else if (status === 'rejected') {
-        await notifyRole('creator', `Requisition Rejected: ${requisition.title}`, requisition.id);
+      }
+      createdRecords.push(created);
     }
 
-    res.json(requisition);
+    res.json([...createdRecords, ...existingRecords]);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/requisitions/:id/approve', authenticateToken, approvalLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({ remarks: z.string().optional() }).safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid approval payload' });
+    const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'approved', remarks: parsed.data.remarks, user: req.user });
+    res.json(updated);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.post('/api/requisitions/:id/reject', authenticateToken, approvalLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({ remarks: z.string().optional() }).safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid rejection payload' });
+    const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'rejected', remarks: parsed.data.remarks, user: req.user });
+    res.json(updated);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+// Backward compatible status endpoint
+app.post('/api/requisitions/:id/status', authenticateToken, approvalLimiter, async (req, res) => {
+  try {
+    const { status, remarks } = req.body || {};
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Unsupported status change' });
+    }
+    const updated = await processApprovalAction({ requisitionId: parseInt(req.params.id), action: status, remarks, user: req.user });
+    res.json(updated);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+app.get('/api/requisitions/:id/signed-pdf', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requisition = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
+    if (!requisition?.signedPdfKey) return res.status(404).json({ error: 'Signed PDF not available' });
+    if (req.user.role === 'department' && req.user.deptId && requisition.departmentId !== req.user.deptId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const stream = await getObjectStream(requisition.signedPdfKey);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="requisition-${id}.pdf"`);
+    stream.pipe(res);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Verification (Admin only)
+app.get('/api/verify/:code', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
+  try {
+    const { code } = req.params;
+    const record = await prisma.signatureRecord.findUnique({
+      where: { verificationCode: code },
+      include: { publicKey: true, approval: { include: { requisition: true } } }
+    });
+    if (!record) return res.status(404).json({ error: 'Verification code not found' });
+
+    const signatureValid = verifyHashHex(record.payloadHash, record.signature, record.publicKey.publicKey);
+    let pdfValid = null;
+    if (record.approval?.requisition?.signedPdfKey && record.approval?.requisition?.signedPdfHash) {
+      const pdfBytes = await getObjectBuffer(record.approval.requisition.signedPdfKey);
+      const pdfHash = sha256Hex(pdfBytes);
+      pdfValid = pdfHash === record.approval.requisition.signedPdfHash;
+    }
+
+    res.json({
+      verificationCode: code,
+      signatureValid,
+      pdfValid,
+      requisitionId: record.approval?.requisitionId,
+      approvedAt: record.approval?.createdAt
+    });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Public verification endpoint (limited fields)
+app.get('/api/public-verify/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const record = await prisma.signatureRecord.findUnique({
+      where: { verificationCode: code },
+      include: { publicKey: true, approval: { include: { requisition: true } } }
+    });
+    if (!record) return res.status(404).json({ error: 'Verification code not found' });
+    const signatureValid = verifyHashHex(record.payloadHash, record.signature, record.publicKey.publicKey);
+    let pdfValid = null;
+    if (record.approval?.requisition?.signedPdfKey && record.approval?.requisition?.signedPdfHash) {
+      const pdfBytes = await getObjectBuffer(record.approval.requisition.signedPdfKey);
+      const pdfHash = sha256Hex(pdfBytes);
+      pdfValid = pdfHash === record.approval.requisition.signedPdfHash;
+    }
+    res.json({
+      verificationCode: code,
+      signatureValid,
+      pdfValid,
+      requisitionId: record.approval?.requisitionId,
+      approvedAt: record.approval?.createdAt
+    });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -327,6 +1059,7 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
       include: { 
         department: { select: { name: true } }, 
         creator: { select: { name: true } },
+        currentStage: true,
         attachments: true
       }, 
       orderBy: { createdAt: 'desc' } 
@@ -350,19 +1083,28 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
     
     if (!files || files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
-    const attachments = await prisma.$transaction(files.map(f => prisma.attachment.create({
-      data: {
-        filename: f.originalname,
-        url: `/uploads/${f.filename}`,
-        requisitionId: parseInt(id),
-        uploaderId: req.user.id
-      }
-    })));
+    const userId = getNumericUserId(req.user);
+    const attachments = [];
+    for (const file of files) {
+      const storageKey = generateStorageKey(`attachments/${id}`, file.originalname);
+      await putObject({ key: storageKey, body: file.buffer, contentType: file.mimetype });
+      const created = await prisma.attachment.create({
+        data: {
+          filename: file.originalname,
+          storageKey,
+          mimeType: file.mimetype,
+          size: file.size,
+          requisitionId: parseInt(id),
+          uploadedById: userId || null
+        }
+      });
+      attachments.push(created);
+    }
 
     // Log Activity
     await prisma.activityLog.create({
         data: {
-            userId: req.user.id,
+            userId: userId || null,
             action: 'File Upload',
             details: `Uploaded ${files.length} files to Requisition #${id}`
         }
@@ -375,19 +1117,32 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
 app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const attachment = await prisma.attachment.findUnique({ where: { id: parseInt(id) } });
+    const attachment = await prisma.attachment.findUnique({ 
+      where: { id: parseInt(id) },
+      include: { requisition: true }
+    });
     if (!attachment) return res.status(404).json({ error: 'File not found' });
+    if (req.user.role === 'department' && req.user.deptId && attachment.requisition?.departmentId !== req.user.deptId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
     // Audit Log
-    await prisma.fileAccessLog.create({
-      data: {
-        attachmentId: attachment.id,
-        userId: req.user.id,
-        action: 'DOWNLOAD'
-      }
-    });
+    const accessUserId = getNumericUserId(req.user);
+    if (accessUserId) {
+      await prisma.fileAccessLog.create({
+        data: {
+          attachmentId: attachment.id,
+          userId: accessUserId,
+          action: 'DOWNLOAD'
+        }
+      });
+    }
 
-    res.redirect(attachment.url);
+    if (!attachment.storageKey) return res.status(404).json({ error: 'File missing from storage' });
+    const stream = await getObjectStream(attachment.storageKey);
+    res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    stream.pipe(res);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -395,9 +1150,15 @@ app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => 
 app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    if (req.user.role === 'department' && req.user.deptId) {
+      const reqCheck = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
+      if (!reqCheck || reqCheck.departmentId !== req.user.deptId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+    }
     const attachments = await prisma.attachment.findMany({
       where: { requisitionId: parseInt(id) },
-      include: { uploader: { select: { name: true } } }
+      include: { uploadedBy: { select: { name: true } } }
     });
     res.json(attachments);
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -418,6 +1179,12 @@ app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`🚀 CSS RMS Unified Node listening on port ${PORT}`);
+  try {
+    await ensureActivePublicKey();
+    console.log('[BOOT] Active signing key ensured');
+  } catch (e) {
+    console.warn('[BOOT] Signing key not ensured:', e.message);
+  }
   
   // Boot-time cleanup: remove duplicate/typo departments
   try {
@@ -436,10 +1203,18 @@ app.listen(PORT, async () => {
       { name: 'CEO (Chairman)', type: 'Strategic', code: 'CEO', accessCode: 'CEO-2026' },
       { name: 'Internal consult and control (ICC)', type: 'Strategic', code: 'ICC', accessCode: 'ICC-2026' }
     ]) {
+      const accessCodeHash = await bcrypt.hash(dept.accessCode, 10);
       await prisma.department.upsert({
         where: { name: dept.name },
         update: {},
-        create: dept
+        create: {
+          name: dept.name,
+          type: dept.type,
+          code: dept.code,
+          accessCode: null,
+          accessCodeHash,
+          accessCodeLabel: dept.accessCode
+        }
       });
     }
     console.log('[BOOT] GM and CEO departments ensured');
