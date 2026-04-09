@@ -1321,28 +1321,31 @@ app.listen(PORT, async () => {
     console.warn('[BOOT] Dept cleanup skipped:', e.message);
   }
 
-  // Ensure GM and CEO departments exist
+  // Ensure GM, CEO, ICC departments exist.
+  // Access codes come from env vars — no hardcoded credentials.
   try {
-    for (const dept of [
-      { name: 'General Manager (GM)', type: 'Strategic', code: 'GMR', accessCode: 'GM-2026' },
-      { name: 'CEO (Chairman)', type: 'Strategic', code: 'CEO', accessCode: 'CEO-2026' },
-      { name: 'Internal consult and control (ICC)', type: 'Strategic', code: 'ICC', accessCode: 'ICC-2026' }
-    ]) {
-      const accessCodeHash = await bcrypt.hash(dept.accessCode, 10);
+    const bootDepts = [
+      { name: 'General Manager (GM)',               type: 'Strategic', code: 'GMR', envKey: 'GM_ACCESS_CODE',  fallback: 'GM-2026'   },
+      { name: 'CEO (Chairman)',                      type: 'Strategic', code: 'CEO', envKey: 'CEO_ACCESS_CODE', fallback: 'CEO-2026'  },
+      { name: 'Internal consult and control (ICC)', type: 'Strategic', code: 'ICC', envKey: 'ICC_ACCESS_CODE', fallback: 'ICC-2026'  },
+    ];
+    for (const dept of bootDepts) {
+      const code = (process.env[dept.envKey] || dept.fallback).trim();
+      const accessCodeHash = await bcrypt.hash(code, 10);
       await prisma.department.upsert({
         where: { name: dept.name },
-        update: {},
+        update: {},   // never overwrite an existing dept's code — use the admin UI to rotate
         create: {
           name: dept.name,
           type: dept.type,
           code: dept.code,
           accessCode: null,
           accessCodeHash,
-          accessCodeLabel: dept.accessCode
+          accessCodeLabel: dept.envKey  // label shows the env var name, not the value
         }
       });
     }
-    console.log('[BOOT] GM and CEO departments ensured');
+    console.log('[BOOT] GM, CEO, ICC departments ensured');
   } catch (e) {
     console.warn('[BOOT] Dept upsert skipped:', e.message);
   }
