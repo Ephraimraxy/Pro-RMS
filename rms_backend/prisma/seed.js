@@ -3,7 +3,8 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const adminPass = process.env.INITIAL_ADMIN_PASSWORD || 'admin123';
+  const hashedPassword = await bcrypt.hash(adminPass, 10);
   const hashAccessCode = async (code) => bcrypt.hash(code, 10);
 
   // 1. Create Departments (31 Units)

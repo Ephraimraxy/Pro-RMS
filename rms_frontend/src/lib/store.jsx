@@ -44,8 +44,9 @@ export async function getRequisitions() {
   await ensureInitialized();
   try {
     const remote = await reqAPI.getRequisitions();
-    const data = Array.isArray(remote) ? remote : [];
-    const normalized = data.map(r => ({
+    // Handle both paginated { data, total } and legacy plain-array responses
+    const rawList = Array.isArray(remote) ? remote : (Array.isArray(remote?.data) ? remote.data : []);
+    const normalized = rawList.map(r => ({
       ...r,
       department: r.department?.name || r.department || r.departmentName,
       creator: r.creator?.name || r.creator || r.creatorName,
@@ -221,8 +222,9 @@ export async function getActivityLog() {
   await ensureInitialized();
   try {
     const remote = await auditAPI.getAuditLogs();
-    const data = Array.isArray(remote) ? remote : [];
-    const normalized = data.map(a => ({
+    // Handle both paginated { data, total } and legacy plain-array responses
+    const rawList = Array.isArray(remote) ? remote : (Array.isArray(remote?.data) ? remote.data : []);
+    const normalized = rawList.map(a => ({
       ...a,
       detail: a.detail || a.details
     }));

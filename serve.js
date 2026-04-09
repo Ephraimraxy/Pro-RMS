@@ -46,9 +46,22 @@ const normalizeTrustProxy = (value) => {
 };
 
 // Configure Multer for File Uploads (memory storage for object storage)
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv',
+]);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) return cb(null, true);
+    cb(Object.assign(new Error(`File type not allowed: ${file.mimetype}`), { status: 415 }));
+  }
 });
 
 // Middleware
@@ -108,6 +121,20 @@ const authLimiter = rateLimit({
 const approvalLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const publicVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -392,7 +419,7 @@ const processApprovalAction = async ({ requisitionId, action, remarks, user }) =
           lastActionAt: new Date()
         }
       });
-      await notifyRole(nextStage.role, `Pending Approval: ${requisition.title}`, requisition.id);
+      await notifyRole(nextStage.role, `Pending Approval: ${requisition.title}`, requisition.id, requisition.departmentId);
       await notifyDepartmentHead({
         departmentId: requisition.departmentId,
         requisition,
@@ -445,7 +472,8 @@ const processApprovalAction = async ({ requisitionId, action, remarks, user }) =
           signedPdfHash: pdfHash
         }
       });
-      await notifyRole('creator', `Requisition Fully Approved: ${requisition.title}`, requisition.id);
+      await notifyRole('creator', `Requisition Fully Approved: ${requisition.title}`, requisition.id, requisition.departmentId);
+      await notifyRole('department', `Requisition Fully Approved: ${requisition.title}`, requisition.id, requisition.departmentId);
       await notifyDepartmentHead({
         departmentId: requisition.departmentId,
         requisition,
@@ -469,7 +497,8 @@ const processApprovalAction = async ({ requisitionId, action, remarks, user }) =
         lastActionAt: new Date()
       }
     });
-    await notifyRole('creator', `Requisition Rejected: ${requisition.title}`, requisition.id);
+    await notifyRole('creator', `Requisition Rejected: ${requisition.title}`, requisition.id, requisition.departmentId);
+    await notifyRole('department', `Requisition Rejected: ${requisition.title}`, requisition.id, requisition.departmentId);
     await notifyDepartmentHead({
       departmentId: requisition.departmentId,
       requisition,
@@ -589,9 +618,19 @@ app.get('/api/auth/me', authenticateToken, (req, res) => res.json({ user: req.us
 // Data
 app.get('/api/departments', async (req, res) => {
   try {
-    const departments = await prisma.department.findMany({ 
+    // Check optional auth — authenticated users get full data, public gets minimal fields
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    let isAuthenticated = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthenticated = true; } catch (_) {}
+    }
+
+    const departments = await prisma.department.findMany({
       orderBy: { name: 'asc' },
-      include: { stamp: true }
+      select: isAuthenticated
+        ? { id: true, name: true, type: true, code: true, headName: true, headTitle: true, headEmail: true, parentId: true, stamp: true }
+        : { id: true, name: true, type: true, code: true }
     });
     res.json(departments);
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -705,21 +744,26 @@ async function notifyDepartmentHead({ departmentId, requisition, subject, lines 
   }
 }
 
-async function notifyRole(roleName, message, requisitionId) {
+async function notifyRole(roleName, message, requisitionId, departmentId = null) {
   try {
-    // Find users with this role (Admin, Audit, etc.) or all if role is global
+    // Find users with this role (Admin, Audit, etc.)
     const users = await prisma.user.findMany({
-      where: roleName === 'creator' 
+      where: roleName === 'creator'
         ? { requisitions: { some: { id: requisitionId } } }
         : { role: { contains: roleName.toLowerCase() } }
     });
-    
-    await prisma.notification.createMany({
-      data: users.map(u => ({
-        userId: u.id,
-        content: message
-      }))
-    });
+
+    const notificationData = users.map(u => ({ userId: u.id, content: message }));
+
+    // Also create a department-scoped notification so the originating department
+    // sees status updates even though they have no User row
+    if (departmentId && (roleName === 'creator' || roleName === 'department')) {
+      notificationData.push({ departmentId, content: message });
+    }
+
+    if (notificationData.length > 0) {
+      await prisma.notification.createMany({ data: notificationData });
+    }
 
     const emails = users.map(u => u.email).filter(Boolean);
     if (emails.length > 0) {
@@ -730,7 +774,12 @@ async function notifyRole(roleName, message, requisitionId) {
         actionUrl,
         actionLabel: 'Open RMS'
       });
-      await Promise.allSettled(emails.map(email => sendEmail({ to: email, subject: message, text, html })));
+      const results = await Promise.allSettled(emails.map(email => sendEmail({ to: email, subject: message, text, html })));
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') {
+          console.error(`[MAIL] Failed to send to ${emails[i]}:`, r.reason?.message);
+        }
+      });
     }
   } catch (err) {
     console.error("Notification failed:", err);
@@ -740,46 +789,28 @@ async function notifyRole(roleName, message, requisitionId) {
 // ── NOTIFICATIONS ──
 app.get('/api/notifications', authenticateToken, async (req, res) => {
   try {
-    const isDept = req.user.role === 'department';
-    const rawId = !isDept ? req.user.id : req.user.deptId;
-    
-    // Robust Integer Parsing
-    const parsedId = (typeof rawId === 'string' && rawId.startsWith('dept_')) 
-      ? parseInt(rawId.split('_')[1]) 
-      : parseInt(rawId);
+    const deptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const userId = getNumericUserId(req.user);
 
-    if (isNaN(parsedId)) {
-      console.warn("[NOTIF] Invalid ID format:", { rawId, role: req.user.role });
+    // Build an OR query: match by userId (admin) OR departmentId (dept login)
+    const orClauses = [];
+    if (userId) orClauses.push({ userId });
+    if (deptId && !isNaN(deptId)) orClauses.push({ departmentId: deptId });
+
+    if (orClauses.length === 0) {
+      console.warn("[NOTIF] No valid ID for notification query:", { role: req.user.role, id: req.user.id, deptId });
       return res.json([]);
     }
 
-    let whereClause = {};
-    if (!isDept) {
-      whereClause = { userId: parsedId };
-    } else {
-      // Find all users in this department
-      const deptUsers = await prisma.user.findMany({
-        where: { departmentId: parsedId },
-        select: { id: true }
-      });
-      const userIds = deptUsers.map(u => u.id);
-      if (userIds.length === 0) return res.json([]);
-      whereClause = { userId: { in: userIds } };
-    }
-
     const notifications = await prisma.notification.findMany({
-      where: whereClause,
+      where: { OR: orClauses },
       orderBy: { createdAt: 'desc' },
       take: 20
     });
     res.json(notifications);
   } catch (error) {
     console.error("[NOTIF] Fetch Error:", error.message);
-    res.status(500).json({ 
-      error: "Notification fetch failed", 
-      details: error.message,
-      diag: { role: req.user?.role, id: req.user?.id, deptId: req.user?.deptId } 
-    });
+    res.status(500).json({ error: "Notification fetch failed" });
   }
 });
 
@@ -850,7 +881,36 @@ app.put('/api/departments/:id/head', authenticateToken, async (req, res) => {
         headEmail: parsed.data.headEmail
       }
     });
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: 'Department Head Updated',
+        details: `Head info updated for ${updated.name} by ${req.user.name || 'user'}: ${parsed.data.headName} (${parsed.data.headTitle})`
+      }
+    });
     res.json(updated);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Access Code Reset (Admin only)
+app.put('/api/departments/:id/access-code', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({ accessCode: z.string().min(4) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Access code must be at least 4 characters' });
+    const accessCodeHash = await bcrypt.hash(parsed.data.accessCode, 10);
+    const updated = await prisma.department.update({
+      where: { id: parseInt(id) },
+      data: { accessCodeHash, accessCodeLabel: parsed.data.accessCode }
+    });
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: 'Access Code Reset',
+        details: `Access code reset for department: ${updated.name}`
+      }
+    });
+    res.json({ success: true, department: updated.name });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -891,7 +951,7 @@ app.post('/api/users/:id/signature', authenticateToken, upload.single('file'), a
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.post('/api/requisitions', authenticateToken, async (req, res) => {
+app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const items = Array.isArray(req.body) ? req.body : [req.body];
     if (items.length === 0) return res.status(400).json({ error: 'No requisitions supplied' });
@@ -1032,6 +1092,22 @@ app.get('/api/requisitions/:id/signed-pdf', authenticateToken, async (req, res) 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+// Shared helper for verifying a signature record
+async function verifySignatureRecord(record) {
+  const signatureValid = verifyHashHex(record.payloadHash, record.signature, record.publicKey.publicKey);
+  const hasPdf = !!(record.approval?.requisition?.signedPdfKey && record.approval?.requisition?.signedPdfHash);
+  let pdfValid = null;
+  if (hasPdf) {
+    const pdfBytes = await getObjectBuffer(record.approval.requisition.signedPdfKey);
+    pdfValid = sha256Hex(pdfBytes) === record.approval.requisition.signedPdfHash;
+  }
+  return {
+    signatureValid,
+    pdfValid,           // true/false if PDF was checked, null if no signed PDF exists yet
+    pdfChecked: hasPdf  // explicit flag so callers know whether pdfValid was evaluated
+  };
+}
+
 // Verification (Admin only)
 app.get('/api/verify/:code', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
@@ -1041,27 +1117,20 @@ app.get('/api/verify/:code', authenticateToken, requireRoles(['global_admin']), 
       include: { publicKey: true, approval: { include: { requisition: true } } }
     });
     if (!record) return res.status(404).json({ error: 'Verification code not found' });
-
-    const signatureValid = verifyHashHex(record.payloadHash, record.signature, record.publicKey.publicKey);
-    let pdfValid = null;
-    if (record.approval?.requisition?.signedPdfKey && record.approval?.requisition?.signedPdfHash) {
-      const pdfBytes = await getObjectBuffer(record.approval.requisition.signedPdfKey);
-      const pdfHash = sha256Hex(pdfBytes);
-      pdfValid = pdfHash === record.approval.requisition.signedPdfHash;
-    }
-
+    const { signatureValid, pdfValid, pdfChecked } = await verifySignatureRecord(record);
     res.json({
       verificationCode: code,
       signatureValid,
       pdfValid,
+      pdfChecked,
       requisitionId: record.approval?.requisitionId,
       approvedAt: record.approval?.createdAt
     });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Public verification endpoint (limited fields)
-app.get('/api/public-verify/:code', async (req, res) => {
+// Public verification endpoint (rate-limited, no auth required)
+app.get('/api/public-verify/:code', publicVerifyLimiter, async (req, res) => {
   try {
     const { code } = req.params;
     const record = await prisma.signatureRecord.findUnique({
@@ -1069,17 +1138,12 @@ app.get('/api/public-verify/:code', async (req, res) => {
       include: { publicKey: true, approval: { include: { requisition: true } } }
     });
     if (!record) return res.status(404).json({ error: 'Verification code not found' });
-    const signatureValid = verifyHashHex(record.payloadHash, record.signature, record.publicKey.publicKey);
-    let pdfValid = null;
-    if (record.approval?.requisition?.signedPdfKey && record.approval?.requisition?.signedPdfHash) {
-      const pdfBytes = await getObjectBuffer(record.approval.requisition.signedPdfKey);
-      const pdfHash = sha256Hex(pdfBytes);
-      pdfValid = pdfHash === record.approval.requisition.signedPdfHash;
-    }
+    const { signatureValid, pdfValid, pdfChecked } = await verifySignatureRecord(record);
     res.json({
       verificationCode: code,
       signatureValid,
       pdfValid,
+      pdfChecked,
       requisitionId: record.approval?.requisitionId,
       approvedAt: record.approval?.createdAt
     });
@@ -1093,25 +1157,46 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
     if (req.user.role === 'department' && req.user.deptId) {
       where.departmentId = req.user.deptId;
     }
-    
-    const records = await prisma.requisition.findMany({ 
-      where,
-      include: { 
-        department: { select: { name: true } }, 
-        creator: { select: { name: true } },
-        currentStage: true,
-        attachments: true
-      }, 
-      orderBy: { createdAt: 'desc' } 
-    });
-    res.json(records);
+
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip = (page - 1) * limit;
+
+    const [records, total] = await Promise.all([
+      prisma.requisition.findMany({
+        where,
+        include: {
+          department: { select: { name: true } },
+          creator: { select: { name: true } },
+          currentStage: true,
+          attachments: true
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit
+      }),
+      prisma.requisition.count({ where })
+    ]);
+
+    res.json({ data: records, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 app.get('/api/audit-logs', authenticateToken, async (req, res) => {
   try {
-    const logs = await prisma.activityLog.findMany({ include: { user: { select: { name: true } } }, orderBy: { timestamp: 'desc' }, take: 100 });
-    res.json(logs);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+    const skip = (page - 1) * limit;
+    const [logs, total] = await Promise.all([
+      prisma.activityLog.findMany({
+        include: { user: { select: { name: true } } },
+        orderBy: { timestamp: 'desc' },
+        skip,
+        take: limit
+      }),
+      prisma.activityLog.count()
+    ]);
+    res.json({ data: logs, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 

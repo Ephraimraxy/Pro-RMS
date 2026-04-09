@@ -8,6 +8,13 @@ _build/
 !.github
 !.mailmap
 !.weblate.json
+
+# Environment secrets — never commit; template is tracked
+!.env.example
+.env
+.env.local
+.env.production
+.env.tmp
 # compiled python files
 *.py[co]
 __pycache__/

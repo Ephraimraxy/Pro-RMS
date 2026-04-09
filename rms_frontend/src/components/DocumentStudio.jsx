@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Layout from './Layout';
+import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
@@ -145,8 +146,9 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
   useEffect(() => {
     setTitle(loadedDraft?.title || 'Untitled Document');
     if (editorRef.current && loadedDraft?.data) {
-      if (editorRef.current.innerHTML !== loadedDraft.data) {
-        editorRef.current.innerHTML = loadedDraft.data;
+      const clean = DOMPurify.sanitize(loadedDraft.data);
+      if (editorRef.current.innerHTML !== clean) {
+        editorRef.current.innerHTML = clean;
       }
     } else if (editorRef.current) {
       editorRef.current.innerHTML = '';
@@ -409,7 +411,7 @@ const PresentationEditor = ({ loadedDraft, onAutosave }) => {
     if (quillInstance.current) {
       const currentSlide = slides.find(s => s.id === activeSlideId);
       if (currentSlide && quillInstance.current.root.innerHTML !== currentSlide.html) {
-        quillInstance.current.root.innerHTML = currentSlide.html || '';
+        quillInstance.current.root.innerHTML = DOMPurify.sanitize(currentSlide.html || '');
       }
     }
   }, [activeSlideId]);
@@ -507,7 +509,7 @@ const PresentationEditor = ({ loadedDraft, onAutosave }) => {
                     </button>
                   )}
                 </div>
-                <div className="flex-1 p-2 scale-[0.35] origin-top-left w-[280%] h-[280%] pointer-events-none" dangerouslySetInnerHTML={{ __html: s.html }}></div>
+                <div className="flex-1 p-2 scale-[0.35] origin-top-left w-[280%] h-[280%] pointer-events-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(s.html || '') }}></div>
               </div>
             ))}
           </div>
@@ -527,7 +529,7 @@ const PresentationEditor = ({ loadedDraft, onAutosave }) => {
         <div className="flex-1 flex items-center justify-center p-8 relative">
           <div 
             className="w-full max-w-6xl aspect-[16/9] bg-white rounded-xl shadow-2xl p-12 overflow-hidden ql-editor"
-            dangerouslySetInnerHTML={{ __html: slides[presentIndex]?.html || '' }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(slides[presentIndex]?.html || '') }}
           />
           
           {/* Controls overlay */}
