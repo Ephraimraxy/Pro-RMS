@@ -836,7 +836,8 @@ const DocumentStudio = ({ user, onViewChange }) => {
       const payloads = (metadata.departmentIds || []).map((deptId) => ({
         title: currentActiveDraft.title,
         description: `Submitted from Document Studio: ${currentActiveDraft.title}`,
-        departmentId: parseInt(deptId),
+        departmentId: user?.deptId ? parseInt(user.deptId) : 1,
+        targetDepartmentId: parseInt(deptId),
         type: type,
         status: 'pending',
         amount: finalAmount,
