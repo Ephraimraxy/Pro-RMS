@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "prisma generate --schema=rms_backend/prisma/schema.prisma && prisma db push --schema=rms_backend/prisma/schema.prisma && node rms_backend/prisma/seed.js && cd rms_frontend && npm install --legacy-peer-deps && npm run build",
+    "postinstall": "prisma generate --schema=rms_backend/prisma/schema.prisma && cd rms_frontend && npm install --legacy-peer-deps && npm run build",
     "build": "cd rms_frontend && npm run build",
     "start": "node serve.js",
     "seed": "node rms_backend/prisma/seed.js",

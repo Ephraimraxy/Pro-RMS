@@ -45,6 +45,7 @@ const { sendEmail } = require('./lib/mailer');
 
 const app = express();
 const prisma = new PrismaClient();
+let isSystemReady = false; // Flag for database/seed readiness
 
 const normalizeTrustProxy = (value) => {
   if (value == null) return undefined;
@@ -118,8 +119,18 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '2mb' }));
 
-// ── OBSERVABILITY & LOGGING ─────────────────────────────────────────────────
 app.use(pinoHttp({ logger }));
+
+// ── BOOTING PROTECTOR MIDDLEWARE ───────────────────────────────────────────
+app.use((req, res, next) => {
+  if (!isSystemReady && req.path.startsWith('/api') && !req.path.startsWith('/api/health')) {
+    return res.status(503).json({ 
+      error: 'System Initializing', 
+      message: 'The RMS core is currently synchronizing with the database and seeding authority records. Please wait 10 seconds.' 
+    });
+  }
+  next();
+});
 
 // ── INPUT SANITIZATION (XSS PROTECTION) ─────────────────────────────────────
 const sanitizeObject = (obj) => {
@@ -2150,51 +2161,43 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, async () => {
-  console.log(`🚀 CSS RMS Unified Node listening on port ${PORT}`);
-  try {
-    await ensureActivePublicKey();
-    console.log('[BOOT] Active signing key ensured');
-  } catch (e) {
-    console.warn('[BOOT] Signing key not ensured:', e.message);
-  }
-  
-  // Boot-time cleanup: remove duplicate/typo departments
-  try {
-    const deleted = await prisma.department.deleteMany({
-      where: { name: { in: ['Soya Milk', 'soya milk', 'SOYA MILK'] } }
-    });
-    if (deleted.count > 0) console.log(`[BOOT] Cleaned up ${deleted.count} duplicate 'Soya Milk' department(s)`);
-  } catch (e) {
-    console.warn('[BOOT] Dept cleanup skipped:', e.message);
-  }
+  logger.info(`🚀 CSS RMS Unified Node listening on port ${PORT}`);
 
-  // Ensure GM, CEO, ICC departments exist.
-  // Access codes come from env vars — no hardcoded credentials.
+  // Background Boot Sequence (Allows instant PORT binding for Railway health checks)
+  const { exec } = require('child_process');
+  const runSetup = (cmd) => new Promise((resolve) => {
+    const p = exec(cmd);
+    p.stdout.pipe(process.stdout);
+    p.stderr.pipe(process.stderr);
+    p.on('exit', () => resolve());
+  });
+
   try {
-    const bootDepts = [
-      { name: 'General Manager (GM)',               type: 'Strategic', code: 'GMR', envKey: 'GM_ACCESS_CODE',  fallback: 'GM-2026'   },
-      { name: 'CEO (Chairman)',                      type: 'Strategic', code: 'CEO', envKey: 'CEO_ACCESS_CODE', fallback: 'CEO-2026'  },
-      { name: 'Internal consult and control (ICC)', type: 'Strategic', code: 'ICC', envKey: 'ICC_ACCESS_CODE', fallback: 'ICC-2026'  },
-    ];
-    for (const dept of bootDepts) {
-      const code = (process.env[dept.envKey] || dept.fallback).trim();
-      const accessCodeHash = await bcrypt.hash(code, 10);
-      await prisma.department.upsert({
-        where: { name: dept.name },
-        update: {},   // never overwrite an existing dept's code — use the admin UI to rotate
-        create: {
-          name: dept.name,
-          type: dept.type,
-          code: dept.code,
-          accessCode: null,
-          accessCodeHash,
-          accessCodeLabel: dept.envKey  // label shows the env var name, not the value
-        }
-      });
+    if (process.env.SKIP_DB_BOOT === 'true') {
+      logger.info('[BOOT] Skipping DB sync as requested');
+      isSystemReady = true;
+    } else {
+      logger.info('[BOOT] Synchronizing database schema...');
+      // Note: --accept-data-loss is used for rapid UAT iteration; usually avoided in rigid production
+      await runSetup('npx prisma db push --schema=rms_backend/prisma/schema.prisma --accept-data-loss');
+      
+      logger.info('[BOOT] Seeding core authority records...');
+      await runSetup('node rms_backend/prisma/seed.js');
+      
+      // Secondary setup tasks already in serve.js logic
+      try {
+        await ensureActivePublicKey();
+        logger.info('[BOOT] Active signing key ensured');
+      } catch (e) {
+        logger.warn('[BOOT] Signing key check deferred:', e.message);
+      }
+
+      isSystemReady = true;
+      logger.info('✅ [SYSTEM READY] Requisition Management Service fully operational.');
     }
-    logger.info('[BOOT] GM, CEO, ICC departments ensured');
-  } catch (e) {
-    logger.warn('[BOOT] Dept upsert skipped:', e.message);
+  } catch (err) {
+    logger.error('[BOOT CRITICAL] Database sync failed:', err.message);
+    // Allowing the server to stay up allows the user to see logs
   }
 });
 
