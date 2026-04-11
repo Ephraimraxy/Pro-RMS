@@ -36,7 +36,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange }) => {
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange, currentView }) => {
   const { isOnline } = useNetwork();
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -298,6 +298,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         setShowBell={setShowBell}
         onLogout={logout}
         onViewChange={onViewChange}
+        currentView={currentView}
       />
 
       {syncPending > 0 && (
