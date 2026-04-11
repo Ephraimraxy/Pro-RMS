@@ -1629,16 +1629,10 @@ app.get('/api/department/profile', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only department accounts can access this profile' });
     }
     const dept = await prisma.department.findUnique({
-      where: { id: req.user.deptId },
-      include: {
-        users: {
-          where: { email: { equals: prisma.department.findUnique({ where: { id: req.user.deptId } }).headEmail } },
-          include: { signature: true }
-        }
-      }
+      where: { id: req.user.deptId }
     });
-    // Simpler join for the signature status
-    const headUser = dept.headEmail ? await prisma.user.findFirst({
+    // Determine if head official signature is ready
+    const headUser = dept?.headEmail ? await prisma.user.findFirst({
       where: { email: dept.headEmail },
       include: { signature: true }
     }) : null;

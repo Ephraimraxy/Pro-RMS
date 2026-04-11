@@ -44,6 +44,8 @@ model Department {
   headName        String?
   headTitle       String?
   headEmail       String?
+  phone           String?
+  address         String?
   parentId        Int?
   parent          Department?      @relation("Hierarchy", fields: [parentId], references: [id])
   subDepartments  Department[]     @relation("Hierarchy")
