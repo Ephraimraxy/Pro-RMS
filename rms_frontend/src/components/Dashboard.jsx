@@ -267,7 +267,6 @@ const Dashboard = ({ onViewChange }) => {
           </div>
         </div>
       </div>
-      </div>
     </Layout>
   );
 };

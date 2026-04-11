@@ -748,7 +748,6 @@ const RequisitionsPage = ({ onViewChange }) => {
           </div>
         </div>
       </div>
-      </div>
     </Layout>
   );
 };
