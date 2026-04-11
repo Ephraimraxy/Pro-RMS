@@ -2106,6 +2106,36 @@ app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res)
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+// ── AI VOICE TRANSCRIPTION (Whisper Fallback) ──
+app.post('/api/ai/transcribe', authenticateToken, upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No audio file provided.' });
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: 'AI features are not configured.' });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    
+    // Convert buffer to a File-like object for OpenAI SDK
+    const audioFile = new File([req.file.buffer], 'recording.webm', { 
+      type: req.file.mimetype || 'audio/webm' 
+    });
+
+    const transcription = await openai.audio.transcriptions.create({
+      file: audioFile,
+      model: 'whisper-1',
+      language: 'en',
+      response_format: 'text'
+    });
+
+    res.json({ text: transcription || '' });
+  } catch (error) {
+    logger.error('Whisper Transcription Error:', error);
+    res.status(500).json({ error: 'Audio transcription failed.', details: error.message });
+  }
+});
+
 // ── AI MAGICAL REFINEMENT ──
 app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
   try {

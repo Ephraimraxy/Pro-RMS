@@ -212,6 +212,14 @@ export const userAPI = {
 export const aiAPI = {
   async refineDraft(rawDescription, mode = 'auto') {
     return api.post('/ai/refine-requisition', { rawDescription, mode });
+  },
+  async transcribeAudio(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    return api.post('/ai/transcribe', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000
+    });
   }
 };
 

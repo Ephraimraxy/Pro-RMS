@@ -5,6 +5,7 @@ import { deptAPI, aiAPI } from '../lib/api';
 import { useNetwork } from '../App';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import VoiceDictation from './VoiceDictation';
 
 // Departments whose members may route to Super Admin
 const SUPER_ADMIN_PRIVILEGED_CODES = ['GMR', 'CEO', 'HRD'];
@@ -195,14 +196,31 @@ const RequisitionForm = ({ isOpen, onClose }) => {
 
           {/* Description */}
           {!aiPreview ? (
-            <div className="space-y-1.5 border-b border-border/50 pb-6">
-              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
-                Rough Draft (What do you need?) *
-              </label>
+            <div className="space-y-3 border-b border-border/50 pb-6">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+                  Rough Draft (What do you need?) *
+                </label>
+                <span className="text-[9px] text-muted-foreground/60 font-medium tracking-wide">Type or use voice ↓</span>
+              </div>
+
+              {/* Voice Dictation */}
+              <VoiceDictation
+                disabled={submitting || refining}
+                onTranscript={(text) => {
+                  setFormData(p => ({
+                    ...p,
+                    description: p.description
+                      ? p.description.trimEnd() + ' ' + text
+                      : text
+                  }));
+                }}
+              />
+
               <textarea
                 value={formData.description}
                 onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
-                placeholder="E.g., I need 2 laptops at 250k each and a 50k router..."
+                placeholder="Type your request here, or use Voice Dictation above to speak it…"
                 disabled={submitting || refining}
                 className="w-full bg-white border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[120px] transition-all disabled:opacity-60 resize-none shadow-inner"
                 required
