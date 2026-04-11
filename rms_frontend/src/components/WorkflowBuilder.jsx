@@ -77,6 +77,7 @@ const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
 import { getWorkflows, updateWorkflows, getRequisitionTypes, addRequisitionType, deleteRequisitionType } from '../lib/store';
 import { toast } from 'react-hot-toast';
 import Modal from './Modal';
+import ConfirmModal from './ConfirmModal';
 
 const WorkflowBuilder = ({ onViewChange }) => {
   const { user } = useAuth();
@@ -282,49 +283,17 @@ const WorkflowBuilder = ({ onViewChange }) => {
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
-      <Modal 
-        isOpen={isDeleteModalOpen} 
-        onClose={() => setIsDeleteModalOpen(false)} 
-        title="Delete Workflow Stage"
-        footer={(
-          <>
-            <button 
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="flex-1 px-4 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted transition-all"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={confirmDelete}
-              disabled={isProcessing}
-              className="flex-1 px-4 py-3 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm shadow-lg shadow-destructive/20 hover:bg-destructive/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-destructive-foreground/30 border-t-destructive-foreground rounded-full animate-spin"></div>
-                  <span>Removing...</span>
-                </>
-              ) : (
-                <span>Delete Stage</span>
-              )}
-            </button>
-          </>
-        )}
-      >
-        <div className="text-center space-y-4 py-4">
-          <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mx-auto mb-2">
-            <Trash2 size={32} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Are you sure you want to delete</p>
-            <p className="text-lg font-bold text-foreground">"{activeTab === 'stages' ? pendingStage?.name : pendingType?.name}"</p>
-            <p className="text-sm font-medium text-muted-foreground">
-                {activeTab === 'stages' ? 'This will re-sequence the approval chain.' : 'This will remove this requisition type from the system.'}
-            </p>
-          </div>
-        </div>
-      </Modal>
+      <ConfirmModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        isProcessing={isProcessing}
+        title={activeTab === 'stages' ? "Delete Workflow Stage" : "Delete Requisition Type"}
+        message={activeTab === 'stages' 
+          ? `Are you sure you want to delete the "${pendingStage?.name}" stage? This will re-sequence the approval chain.`
+          : `Are you sure you want to delete the "${pendingType?.name}" requisition type? This cannot be undone.`
+        }
+      />
     </Layout>
   );
 };

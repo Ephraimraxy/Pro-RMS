@@ -37,6 +37,7 @@ const DeptItem = ({ name, type, onDelete, onUploadStamp }) => (
 import { getDepartments, addDepartment, deleteDepartment, uploadDepartmentStamp } from '../lib/store';
 import { toast } from 'react-hot-toast';
 import Modal from './Modal';
+import ConfirmModal from './ConfirmModal';
 
 const DepartmentManager = ({ onViewChange }) => {
   const { user } = useAuth();
@@ -370,47 +371,14 @@ const DepartmentManager = ({ onViewChange }) => {
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <Modal 
-        isOpen={isDeleteModalOpen} 
-        onClose={() => setIsDeleteModalOpen(false)} 
+      <ConfirmModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        isProcessing={isProcessing}
         title="Delete Department"
-        footer={(
-          <>
-            <button 
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="flex-1 px-4 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted transition-all"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={confirmDelete}
-              disabled={isProcessing}
-              className="flex-1 px-4 py-3 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm shadow-lg shadow-destructive/20 hover:bg-destructive/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-destructive-foreground/30 border-t-destructive-foreground rounded-full animate-spin"></div>
-                  <span>Deleting...</span>
-                </>
-              ) : (
-                <span>Delete Permanently</span>
-              )}
-            </button>
-          </>
-        )}
-      >
-        <div className="text-center space-y-4 py-4">
-          <div className="w-16 h-16 bg-destructive/10 text-destructive rounded-full flex items-center justify-center mx-auto mb-2">
-            <Trash2 size={32} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Are you sure you want to delete the</p>
-            <p className="text-lg font-bold text-foreground">"{pendingDept?.name}"</p>
-            <p className="text-sm font-medium text-muted-foreground">department? This action cannot be undone.</p>
-          </div>
-        </div>
-      </Modal>
+        message={`Are you sure you want to permanently delete the "${pendingDept?.name}" department? This action cannot be undone.`}
+      />
     </Layout>
   );
 };

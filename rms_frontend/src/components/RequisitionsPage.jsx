@@ -3,6 +3,7 @@ import Layout from './Layout';
 import RequisitionForm from './RequisitionForm';
 import ApprovalTimeline from './ApprovalTimeline';
 import ApprovalActionPanel from './ApprovalActionPanel';
+import ConfirmModal from './ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, getDepartments } from '../lib/store';
 import { forwardAPI } from '../lib/api';
@@ -387,6 +388,8 @@ const RequisitionsPage = ({ onViewChange }) => {
   const [selectedReq, setSelectedReq]   = useState(null);
   const [selectedIds, setSelectedIds]   = useState([]);
   const [deleting, setDeleting]         = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletePendingAction, setDeletePendingAction] = useState(null); // { type: 'single' | 'bulk', id: number | null }
 
   const loadData = async () => {
     setLoading(true);
@@ -417,7 +420,6 @@ const RequisitionsPage = ({ onViewChange }) => {
   };
 
   const handleBulkDelete = async () => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${selectedIds.length} records globally?`)) return;
     setDeleting(true);
     try {
       await reqAPI.deleteMultipleRequisitions(selectedIds);
@@ -428,19 +430,36 @@ const RequisitionsPage = ({ onViewChange }) => {
       toast.error('Failed to purge selected records. You might lack permissions.');
     } finally {
       setDeleting(false);
+      setIsDeleteModalOpen(false);
+      setDeletePendingAction(null);
     }
   };
 
-  const handleSingleDelete = async (id, e) => {
-    e.stopPropagation();
-    if (!window.confirm(`Permanently delete Record #${id}?`)) return;
+  const handleSingleDelete = async () => {
+    if (!deletePendingAction?.id) return;
+    setDeleting(true);
     try {
-      await reqAPI.deleteRequisition(id);
-      toast.success('Record purged globally!');
+      await reqAPI.deleteRequisition(deletePendingAction.id);
+      toast.success(`Record #${deletePendingAction.id} purged globally!`);
       await loadData();
     } catch (err) {
       toast.error('Deletion restricted or failed.');
+    } finally {
+      setDeleting(false);
+      setIsDeleteModalOpen(false);
+      setDeletePendingAction(null);
     }
+  };
+
+  const showBulkDeleteConfirm = () => {
+    setDeletePendingAction({ type: 'bulk' });
+    setIsDeleteModalOpen(true);
+  };
+
+  const showSingleDeleteConfirm = (id, e) => {
+    e.stopPropagation();
+    setDeletePendingAction({ type: 'single', id });
+    setIsDeleteModalOpen(true);
   };
 
   return (
@@ -457,6 +476,18 @@ const RequisitionsPage = ({ onViewChange }) => {
         />
       )}
 
+      <ConfirmModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={deletePendingAction?.type === 'bulk' ? handleBulkDelete : handleSingleDelete}
+        isProcessing={deleting}
+        title={deletePendingAction?.type === 'bulk' ? "Bulk Purge System Records" : `Delete Record #${deletePendingAction?.id}`}
+        message={deletePendingAction?.type === 'bulk' 
+          ? `Are you sure you want to permanently delete ${selectedIds.length} selected records? This cannot be undone and will remove them from all logs.`
+          : `Are you sure you want to permanently delete Requisition #${deletePendingAction?.id}? This action is immutable.`
+        }
+      />
+
       <div className="max-w-7xl mx-auto space-y-8 pb-20">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
@@ -468,7 +499,7 @@ const RequisitionsPage = ({ onViewChange }) => {
           <div className="flex gap-2">
             {selectedIds.length > 0 && (
               <button
-                onClick={handleBulkDelete}
+                onClick={showBulkDeleteConfirm}
                 disabled={deleting}
                 className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg flex items-center gap-2"
               >
@@ -607,7 +638,7 @@ const RequisitionsPage = ({ onViewChange }) => {
                             <Eye size={18} />
                           </button>
                           {(isAdmin || r.status === 'draft') && (
-                            <button onClick={e => handleSingleDelete(r.id, e)} className="p-2 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all">
+                            <button onClick={e => showSingleDeleteConfirm(r.id, e)} className="p-2 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all">
                               <Trash2 size={16} />
                             </button>
                           )}

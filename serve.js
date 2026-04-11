@@ -2069,7 +2069,12 @@ Always return a JSON object with:
       temperature: 0.1,
     });
 
+    if (!response.choices[0]?.message?.content) {
+      throw new Error('Empty response from OpenAI');
+    }
+
     const aiData = JSON.parse(response.choices[0].message.content);
+    
     // Sanitize ai output just to be safe
     return res.json({
       refinedDescription: xss(aiData.refinedDescription || aiData.description || ''),
@@ -2077,8 +2082,15 @@ Always return a JSON object with:
       documentType: aiData.documentType === 'Memo' ? 'Memo' : 'Cash'
     });
   } catch (error) {
+    // Both loggers for maximum visibility in Railway
     logger.error('OpenAI Refinement Error:', error);
-    res.status(500).json({ error: 'AI failed to process the request. Try again.' });
+    console.error('[AI_REFINEMENT_ERROR]', error.message, error.stack);
+    
+    const status = error.status || 500;
+    res.status(status).json({ 
+      error: 'AI failed to process the request.',
+      details: error.message // Pass through error message to help user diagnose (e.g. "Quota exceeded")
+    });
   }
 });
 
