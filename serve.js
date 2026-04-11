@@ -153,6 +153,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const APP_BASE_URL = (process.env.APP_BASE_URL || '').trim();
 const SUPER_ADMIN_ACCESS_CODE = (process.env.SUPER_ADMIN_ACCESS_CODE || '').trim();
 const SUPER_ADMIN_MFA_PIN = (process.env.SUPER_ADMIN_MFA_PIN || '').trim();
+const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || '').trim();
 const MASTER_KEY = getMasterKey();
 let ACTIVE_PUBLIC_KEY = null;
 let ACTIVE_PRIVATE_KEY = null;
@@ -311,14 +312,16 @@ const checkDeptReadiness = async (deptId) => {
   });
   if (!dept) return { ready: false, reason: 'Department not found' };
   if (!dept.headName || !dept.headEmail) {
+    if (dept.name === 'Super Admin' && SUPER_ADMIN_EMAIL) return { ready: true };
     return { ready: false, reason: `Department "${dept.name}" has not configured their head official's name or email.` };
   }
   // Check if a user with that email has a signature
   const headUser = await prisma.user.findFirst({
-    where: { email: dept.headEmail },
+    where: { email: dept.headEmail || SUPER_ADMIN_EMAIL },
     include: { signature: true }
   });
   if (!headUser || !headUser.signature) {
+    if (dept.name === 'Super Admin' && SUPER_ADMIN_EMAIL) return { ready: true };
     return { ready: false, reason: `Department "${dept.name}" head official (${dept.headEmail}) has not uploaded a digital signature.` };
   }
   return { ready: true };
@@ -1862,6 +1865,8 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       page.drawText(statusText, { x: margin, y, size: 9, font });
       
       // Try to embed user digital signature if available
+      const isSuperAdminSigner = app.user?.role === 'global_admin' || app.user?.email === SUPER_ADMIN_EMAIL;
+      
       if (app.user?.signature?.imageKey) {
         try {
           const sigBuffer = await getObjectBuffer(app.user.signature.imageKey);
@@ -1871,6 +1876,31 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
             page.drawImage(sigImage, { x: pageWidth - margin - dims.width - 20, y: y - 5, width: dims.width, height: dims.height });
           }
         } catch (e) { /* skip sig if fail */ }
+      } else if (isSuperAdminSigner) {
+        // Fallback Trade Mark Seal for Super Admin
+        const tmText = "GLOBAL AUTHORITY — TRADE MARK";
+        const tmWidth = font.widthOfTextAtSize(tmText, 7);
+        page.drawRectangle({
+          x: pageWidth - margin - tmWidth - 25,
+          y: y - 8,
+          width: tmWidth + 10,
+          height: 18,
+          borderColor: rgb(0.1, 0.3, 0.7),
+          borderWidth: 1,
+          opacity: 0.8
+        });
+        page.drawText(tmText, { 
+          x: pageWidth - margin - tmWidth - 20, 
+          y: y - 2, 
+          size: 7, 
+          font: boldFont, 
+          color: rgb(0.1, 0.3, 0.7) 
+        });
+      }
+      
+      // If Super Admin HAS a signature, still add the small TM label next to it
+      if (isSuperAdminSigner && app.user?.signature?.imageKey) {
+          page.drawText("TRADE MARK", { x: pageWidth - margin - 50, y: y - 12, size: 6, font: italicFont, color: rgb(0.5, 0.5, 0.5) });
       }
       y -= 15;
     }
