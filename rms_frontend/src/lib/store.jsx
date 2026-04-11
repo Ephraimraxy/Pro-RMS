@@ -301,6 +301,17 @@ export async function markAllNotificationsRead() {
   }
 }
 
+export async function clearNotifications() {
+  try {
+    const res = await notificationAPI.clearAll();
+    toast.success('Cleared all read notifications');
+    return res;
+  } catch (err) {
+    console.warn("Could not clear notifications:", err);
+    toast.error('Failed to clear notifications');
+  }
+}
+
 export async function getRequisitionDetail(id) {
   try {
     return await reqAPI.getRequisition(id);

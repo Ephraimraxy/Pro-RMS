@@ -397,6 +397,19 @@ const RequisitionsPage = ({ onViewChange }) => {
     setRequisitions(data);
     setDepartments(depts);
     setLoading(false);
+
+    // Check for deep link after data loads
+    const pendingId = localStorage.getItem('rms_pending_requisition_id');
+    if (pendingId) {
+      localStorage.removeItem('rms_pending_requisition_id');
+      const req = data.find(r => r.id === parseInt(pendingId));
+      if (req) {
+        setSelectedReq(req);
+      } else {
+        // Fetch specific if not in list
+        getRequisitionDetail(pendingId).then(setSelectedReq).catch(() => {});
+      }
+    }
   };
 
   useEffect(() => { loadData(); }, []);

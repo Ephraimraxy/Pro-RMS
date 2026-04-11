@@ -911,17 +911,36 @@ const buildEmailContent = ({ title, lines = [], actionUrl, actionLabel }) => {
 async function notifyDepartmentHead({ departmentId, requisition, subject, lines }) {
   try {
     const dept = requisition?.department || await prisma.department.findUnique({ where: { id: departmentId } });
-    if (!dept?.headEmail) return;
-    const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
+    
+    // 1. Create Platform Notification (for Dashboard bell icon)
+    if (departmentId) {
+      await prisma.notification.create({
+        data: {
+          departmentId: departmentId,
+          content: subject,
+          link: requisition?.id ? `/requisitions/${requisition.id}` : null
+        }
+      });
+    }
+
+    // 2. Send Email if address exists
+    if (!dept?.headEmail) {
+      logger.info(`[MAIL] Skipping head notify for ${dept?.name || departmentId} - no email set.`);
+      return;
+    }
+    
+    const actionUrl = APP_BASE_URL ? `${APP_BASE_URL.replace(/\/$/, '')}/requisitions/${requisition.id}` : '';
     const { text, html } = buildEmailContent({
       title: subject,
       lines,
       actionUrl,
-      actionLabel: 'Open RMS'
+      actionLabel: 'Open Requisition'
     });
+    
     await sendEmail({ to: dept.headEmail, subject, text, html });
+    logger.info(`[MAIL] Department head notified: ${dept.headEmail}`);
   } catch (err) {
-    console.error('[MAIL] Department head notify failed:', err.message);
+    logger.error('[MAIL] Department head notify failed:', err.message);
   }
 }
 
@@ -934,12 +953,13 @@ async function notifyRole(roleName, message, requisitionId, departmentId = null)
         : { role: { contains: roleName.toLowerCase() } }
     });
 
-    const notificationData = users.map(u => ({ userId: u.id, content: message }));
+    const link = requisitionId ? `/requisitions/${requisitionId}` : null;
+    const notificationData = users.map(u => ({ userId: u.id, content: message, link }));
 
     // Also create a department-scoped notification so the originating department
     // sees status updates even though they have no User row
     if (departmentId && (roleName === 'creator' || roleName === 'department')) {
-      notificationData.push({ departmentId, content: message });
+      notificationData.push({ departmentId, content: message, link });
     }
 
     if (notificationData.length > 0) {
@@ -949,12 +969,14 @@ async function notifyRole(roleName, message, requisitionId, departmentId = null)
     // Filter out fake placeholder emails (e.g. seeded @cssgroup.local)
     const emails = users.map(u => u.email).filter(e => e && !e.endsWith('@cssgroup.local'));
     if (emails.length > 0) {
-      const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
+      const actionUrl = (APP_BASE_URL && requisitionId) 
+        ? `${APP_BASE_URL.replace(/\/$/, '')}/requisitions/${requisitionId}` 
+        : (APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '');
       const { text, html } = buildEmailContent({
         title: message,
-        lines: requisitionId ? [`Requisition ID: ${requisitionId}`] : [],
+        lines: requisitionId ? [`Requisition ID: #${requisitionId}`] : [],
         actionUrl,
-        actionLabel: 'Open RMS'
+        actionLabel: 'Open Requisition'
       });
       const results = await Promise.allSettled(emails.map(email => sendEmail({ to: email, subject: message, text, html })));
       results.forEach((r, i) => {
@@ -996,6 +1018,26 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
     console.error("[NOTIF] Fetch Error:", error.message);
     res.status(500).json({ error: "Notification fetch failed" });
   }
+});
+
+// Clear all READ notifications
+app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) => {
+  try {
+    const deptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const userId = getNumericUserId(req.user);
+    const orClauses = [];
+    if (userId) orClauses.push({ userId });
+    if (deptId && !isNaN(deptId)) orClauses.push({ departmentId: deptId });
+    if (orClauses.length === 0) return res.json({ count: 0 });
+
+    const result = await prisma.notification.deleteMany({
+      where: { 
+        OR: orClauses,
+        isRead: true 
+      }
+    });
+    res.json({ count: result.count });
+  } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 // Mark single notification as read
@@ -1276,39 +1318,23 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
           ]
         });
 
-        // Notify target department if specified and activated (has headEmail)
+        // Notify target department if specified
         if (targetDepartmentId) {
-          const targetDept = await prisma.department.findUnique({ where: { id: targetDepartmentId } });
-          if (targetDept?.headEmail) {
-            const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
-            const { text, html } = buildEmailContent({
-              title: `📋 Incoming Requisition: ${created.title}`,
-              lines: [
-                `From Department: ${originDept?.name || 'Department'}`,
-                `Type: ${created.type}`,
-                `Amount: ${formatCurrency(created.amount)}`,
-                `Urgency: ${created.urgency || 'normal'}`,
-                `Description: ${created.description || '—'}`,
-                ``,
-                `Please log in to your dashboard to review and respond to this requisition.`
-              ],
-              actionUrl,
-              actionLabel: 'Open Dashboard'
-            });
-            await sendEmail({
-              to: targetDept.headEmail,
-              subject: `[CSS RMS] Incoming Requisition: ${created.title}`,
-              text,
-              html
-            });
-            // Create in-app notification for target dept
-            await prisma.notification.create({
-              data: {
-                departmentId: targetDepartmentId,
-                content: `Incoming Requisition: ${created.title} from ${originDept?.name || 'Department'}`
-              }
-            });
-          }
+          const originDept = await prisma.department.findUnique({ where: { id: originDeptId } });
+          await notifyDepartmentHead({
+            departmentId: targetDepartmentId,
+            requisition: created,
+            subject: `📋 Incoming Requisition: ${created.title}`,
+            lines: [
+              `From Department: ${originDept?.name || 'Department'}`,
+              `Type: ${created.type}`,
+              `Amount: ${formatCurrency(created.amount)}`,
+              `Urgency: ${created.urgency || 'normal'}`,
+              `Description: ${created.description || '—'}`,
+              ``,
+              `Please log in to your dashboard to review and respond to this requisition.`
+            ]
+          });
         }
       }
       createdRecords.push(created);

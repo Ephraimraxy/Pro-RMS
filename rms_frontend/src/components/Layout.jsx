@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw,
   Building2, ShieldAlert
 } from 'lucide-react';
-import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead } from '../lib/store';
+import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications } from '../lib/store';
 import { reqAPI } from '../lib/api';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
@@ -36,7 +36,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout }) => {
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange }) => {
   const { isOnline } = useNetwork();
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -45,11 +45,24 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
       await markNotificationRead(n.id);
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
     }
+    if (n.link) {
+      const match = n.link.match(/\/requisitions\/(\d+)/);
+      if (match) {
+        localStorage.setItem('rms_pending_requisition_id', match[1]);
+        onViewChange('requisitions');
+        setShowBell(false);
+      }
+    }
   };
 
-  const handleClearAll = async () => {
+  const handleMarkAllRead = async () => {
     await markAllNotificationsRead();
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
+  const handleClearRead = async () => {
+    await clearNotifications();
+    setNotifications(prev => prev.filter(n => !n.isRead));
   };
 
   return (
@@ -144,13 +157,15 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
                 )}
               </div>
               <div className="p-3 bg-muted/20 border-t border-border/40 text-center">
-                <button
-                  onClick={handleClearAll}
-                  disabled={unreadCount === 0}
-                  className="text-[10px] font-black text-primary hover:text-primary/80 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Mark All as Read
-                </button>
+                <div className="flex items-center justify-center gap-2">
+                  <button onClick={handleMarkAllRead} className="text-[9px] font-black text-primary hover:text-primary/70 uppercase tracking-widest transition-colors">
+                    Mark All Read
+                  </button>
+                  <span className="w-1 h-1 rounded-full bg-border" />
+                  <button onClick={handleClearRead} className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest transition-colors">
+                    Clear Read
+                  </button>
+                </div>
               </div>
            </div>
         )}
@@ -260,6 +275,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         showBell={showBell}
         setShowBell={setShowBell}
         onLogout={logout}
+        onViewChange={onViewChange}
       />
 
       {syncPending > 0 && (

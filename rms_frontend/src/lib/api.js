@@ -110,6 +110,9 @@ export const notificationAPI = {
   },
   async markAllRead() {
     return api.put('/notifications/read-all');
+  },
+  async clearAll() {
+    return api.delete('/notifications/clear-all');
   }
 };
 
