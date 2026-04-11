@@ -183,6 +183,16 @@ export const reqAPI = {
   },
   async getDeptProfile() {
     return api.get('/department/profile');
+  },
+  async updateDeptProfile(data) {
+    return api.put('/department/profile', data);
+  },
+  async uploadDeptSignature(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/department/signature', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
   }
 };
 
