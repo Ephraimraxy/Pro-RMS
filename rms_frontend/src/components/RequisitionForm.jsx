@@ -168,10 +168,10 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-end sm:justify-center p-0 sm:p-4 sm:pt-[5vh] overflow-hidden sm:overflow-y-auto safe-p-top">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-md" onClick={!submitting ? onClose : undefined} />
 
-      <div className="glass bg-white/90 w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl border border-border/50 shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh]">
+      <div className="glass bg-white/90 w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl border border-border/50 shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh] sm:my-auto">
         {/* Header */}
         <div className="p-5 border-b border-border/50 flex items-center justify-between shrink-0">
           <div>

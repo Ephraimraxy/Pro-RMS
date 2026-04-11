@@ -45,14 +45,22 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
       await markNotificationRead(n.id);
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
     }
+    
+    let matchedId = null;
     if (n.link) {
       const match = n.link.match(/\/requisitions\/(\d+)/);
-      if (match) {
-        localStorage.setItem('rms_pending_requisition_id', match[1]);
-        onViewChange('requisitions');
-        setShowBell(false);
-      }
+      if (match) matchedId = match[1];
     }
+
+    if (matchedId) {
+      localStorage.setItem('rms_pending_requisition_id', matchedId);
+      window.dispatchEvent(new CustomEvent('openRequisition', { detail: matchedId }));
+    }
+    
+    // Always navigate to the relevant view. If no matched ID, 
+    // we default to requisitions page list as fallback for older notifications.
+    onViewChange('requisitions');
+    setShowBell(false);
   };
 
   const handleMarkAllRead = async () => {
