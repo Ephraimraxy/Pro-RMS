@@ -47,10 +47,13 @@ Optional:
 - `GMAIL_USER` + `GMAIL_APP_PASSWORD` (Gmail app password SMTP)
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` (generic SMTP)
 
-Bunny Storage (HTTP API, no S3 required):
-- `BUNNY_STORAGE_ZONE` (storage zone name)
-- `BUNNY_API_KEY` (storage zone password / access key)
-- `BUNNY_STORAGE_ENDPOINT` (optional, default `https://storage.bunnycdn.com`)
+Cloudflare R2 Storage (S3-compatible):
+- `R2_ACCOUNT_ID` 
+- `R2_ACCESS_KEY_ID` 
+- `R2_SECRET_ACCESS_KEY`
+- `R2_BUCKET_NAME` 
+
+If no external storage is configured, files upload locally to `uploads/`.
 
 ---
 *Built with excellence by Antigravity*
