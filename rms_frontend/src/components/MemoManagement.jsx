@@ -27,10 +27,22 @@ const MemoManagement = ({ onViewChange }) => {
 
   return (
     <Layout user={user} currentView="memos" onViewChange={onViewChange}>
-      <div className="max-w-5xl mx-auto space-y-8 pb-20">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">Memo <span className="text-primary italic">Management</span></h1>
-          <p className="text-muted-foreground text-sm mt-1">View and track all memo-type requisitions across departments.</p>
+      <div className="max-w-[95rem] mx-auto space-y-10 pb-20 animate-slide-up px-2">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 px-2">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                Strategic Archive: Central
+              </div>
+            </div>
+            <h1 className="text-4xl font-black text-foreground tracking-tighter">
+              Memo <span className="text-primary italic font-serif">Management</span>
+            </h1>
+            <p className="text-muted-foreground text-sm font-medium">
+              View and track all memo-type requisitions across departments. Monitoring institutional memory.
+            </p>
+          </div>
         </div>
 
         {loading ? (

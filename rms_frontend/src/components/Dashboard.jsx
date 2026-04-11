@@ -87,48 +87,58 @@ const Dashboard = ({ onViewChange }) => {
         user={user}
       />
       
-      <div className="max-w-7xl mx-auto space-y-8 pb-20">
+      <div className="max-w-[90rem] mx-auto space-y-10 pb-20 animate-slide-up px-2">
         {user?.role === 'department' && !isDeptReady && (
-          <div className="glass bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 animate-pulse">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-600">
-                <AlertTriangle size={28} />
+          <div className="glass bg-amber-500/10 border border-amber-500/30 rounded-[2rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-amber-500/10">
+            <div className="flex items-center gap-6">
+              <div className="w-16 h-16 rounded-[1.5rem] bg-amber-500/20 flex items-center justify-center text-amber-600 shadow-inner">
+                <AlertTriangle size={32} />
               </div>
-              <div>
-                <h2 className="text-lg font-bold text-amber-800 tracking-tight">Governance Setup Incomplete</h2>
-                <p className="text-sm text-amber-700 font-medium">Your department cannot initiate requisitions until the head official's profile and signature are configured.</p>
+              <div className="space-y-1">
+                <h2 className="text-xl font-black text-amber-800 tracking-tight">Governance Setup Required</h2>
+                <p className="text-sm text-amber-700/80 font-medium leading-relaxed max-w-xl">
+                  Your department cannot initiate requisitions until the head official's profile and biological signature are registered in the system.
+                </p>
               </div>
             </div>
             <button
                onClick={() => onViewChange('dept_profile')}
-               className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg flex items-center gap-2"
+               className="bg-amber-600 hover:bg-amber-700 text-white font-black py-4 px-8 rounded-2xl transition-all shadow-xl shadow-amber-600/20 flex items-center gap-3 shrink-0 active:scale-95"
             >
-              Complete Setup Now
+              Complete Setup
+              <ShieldCheck size={20} />
             </button>
           </div>
         )}
 
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 px-2">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                RMS Global Dashboard
+              </div>
+            </div>
+            <h1 className="text-4xl font-black text-foreground tracking-tighter">
               {user?.role === 'department' ? (
                 <span>{user.name} <span className="text-primary italic">Unit Portal</span></span>
               ) : (
-                <span>Oversight <span className="text-primary italic">Dashboard</span></span>
+                <span>Oversight <span className="text-primary italic font-serif">Command</span></span>
               )}
             </h1>
-            <p className="text-muted-foreground text-sm mt-1 font-medium">
+            <p className="text-muted-foreground text-sm font-medium">
               {user?.role === 'department' 
                 ? `Operational control for the ${user.name} unit. Monitoring local activities.` 
-                : `Welcome back, ${user?.name}. Monitoring CSS Group operations.`}
+                : `Welcome back, ${user?.name}. Monitoring CSS Group strategic operations.`}
             </p>
           </div>
           <button 
             onClick={() => setIsFormOpen(true)}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center space-x-2 w-fit"
+            disabled={user?.role === 'department' && !isDeptReady}
+            className="group bg-primary hover:bg-primary/90 text-primary-foreground font-black py-4 px-8 rounded-2xl transition-all shadow-2xl shadow-primary/30 flex items-center gap-3 w-fit active:scale-95 disabled:opacity-50 disabled:grayscale"
           >
-            <span>Raise New Requisition</span>
-            <ArrowUpRight size={18} />
+            <span className="uppercase tracking-widest text-xs">Raise New Requisition</span>
+            <Plus size={20} className="group-hover:rotate-90 transition-transform" />
           </button>
         </div>
 

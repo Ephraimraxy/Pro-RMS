@@ -294,6 +294,7 @@ const DepartmentManager = ({ onViewChange }) => {
         isOpen={isAddModalOpen} 
         onClose={() => setIsAddModalOpen(false)} 
         title="Add New Department"
+        size="xl"
         footer={(
           <>
             <button 

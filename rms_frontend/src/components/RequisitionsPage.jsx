@@ -203,51 +203,67 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
   const verCode     = detail?.approvals?.slice(-1)[0]?.signature?.verificationCode;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-end sm:justify-center p-0 sm:p-4 sm:pt-[5vh] overflow-hidden sm:overflow-y-auto safe-p-top">
-      <div className="fixed inset-0 bg-background/80 backdrop-blur-md" onClick={onClose} />
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-4 sm:p-6 overflow-y-auto safe-p-top pt-[5vh] pb-10 bg-background/20 backdrop-blur-sm custom-scrollbar">
+      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" onClick={onClose} />
 
-      <div className="glass bg-white/95 w-full sm:max-w-2xl mt-auto sm:my-auto rounded-t-3xl sm:rounded-3xl border border-border/50 shadow-2xl relative flex flex-col max-h-[95vh] sm:max-h-[90vh]">
+      <div className="glass bg-white/95 w-full lg:max-w-5xl rounded-[2.5rem] border border-border/50 shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden">
+
 
         {/* Header */}
-        <div className="p-5 border-b border-border/50 flex items-start justify-between shrink-0">
-          <div className="space-y-1 flex-1 pr-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono text-muted-foreground">#{req.id}</span>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${statusColors[req.status]}`}>
+        <div className="p-6 lg:p-8 border-b border-border/50 flex items-start justify-between shrink-0 bg-white/50">
+          <div className="space-y-2 flex-1 pr-6">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                Neural Sync Active
+              </div>
+              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border shadow-sm ${statusColors[req.status]}`}>
                 {req.status}
               </span>
               {isIncoming && (
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-50 border border-blue-200 text-blue-700 animate-pulse">
-                  Incoming
-                </span>
-              )}
-              {req.urgency && req.urgency !== 'normal' && (
-                <span className={`text-[10px] font-black uppercase ${urgencyColors[req.urgency] || ''}`}>
-                  ⚡ {req.urgency}
+                <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-blue-500 border border-blue-600 text-white shadow-lg shadow-blue-500/20">
+                  Incoming Action
                 </span>
               )}
             </div>
-            <h2 className="text-base font-bold text-foreground leading-tight">{req.title}</h2>
-            <p className="text-xs text-muted-foreground">
-              From: <strong>{req.department}</strong>
-              {detail?.targetDepartment?.name && (
-                <> → To: <strong>{detail.targetDepartment.name}</strong></>
-              )}
-              {' · '}{req.type}
-              {req.amount ? ` · ₦${Number(req.amount).toLocaleString()}` : ''}
-            </p>
+            <h2 className="text-2xl font-bold text-foreground tracking-tight leading-tight">{req.title}</h2>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground font-medium">
+               <span className="flex items-center gap-1.5"><Building2 size={12}/> {req.department}</span>
+               {detail?.targetDepartment?.name && (
+                 <span className="flex items-center gap-1.5"><ArrowRight size={12}/> {detail.targetDepartment.name}</span>
+               )}
+               <span className="px-2 py-0.5 rounded-md bg-muted font-mono">{req.id}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={async () => {
-                const toastId = toast.loading('Generating PDF...');
-                try {
-                  await downloadDynamicPdf(req.id);
-                  toast.success('Report downloaded successfully!', { id: toastId });
-                } catch (err) {
-                  toast.error('Failed to generate report.', { id: toastId });
-                }
-              }}
+          <div className="flex flex-col items-end gap-3">
+             <div className="text-right">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none">Total Amount</p>
+                <p className="text-2xl font-mono font-bold text-foreground">₦{Number(req.amount || 0).toLocaleString()}</p>
+             </div>
+             <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const toastId = toast.loading('Generating PDF...');
+                    try {
+                      await downloadDynamicPdf(req.id);
+                      toast.success('Report downloaded successfully!', { id: toastId });
+                    } catch (err) {
+                      toast.error('Failed to generate report.', { id: toastId });
+                    }
+                  }}
+                  title="Generate Stage Report (PDF)"
+                  className="p-2.5 bg-background hover:bg-muted text-foreground rounded-xl transition-all border border-border shadow-sm flex items-center gap-2"
+                >
+                  <Printer size={18} />
+                   <span className="text-xs font-bold hidden sm:inline">Print</span>
+                </button>
+                <button onClick={onClose} className="p-2 bg-muted hover:bg-muted/80 rounded-xl text-muted-foreground transition-all">
+                  <X size={20} />
+                </button>
+             </div>
+          </div>
+        </div>
               title="Generate Stage Report (PDF)"
               className="p-2.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all flex items-center gap-2 border border-primary/20 shadow-sm"
             >
@@ -260,130 +276,160 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
-
-          {/* Description */}
-          {req.description && (
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Description</p>
-              <p className="text-sm text-foreground leading-relaxed bg-muted/30 p-3 rounded-xl border border-border/40">
-                {req.description}
-              </p>
-            </div>
-          )}
-
-          {/* Forward note (if any) */}
-          {detail?.forwardNote && (
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800">
-              <ArrowRightCircle size={13} className="shrink-0 mt-0.5 text-blue-600" />
-              <span><strong>Note:</strong> {detail.forwardNote}</span>
-            </div>
-          )}
-
-          {/* Current Stage Banner */}
-          {req.status === 'pending' && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
-              <Clock size={16} className="text-amber-600 shrink-0" />
-              <div>
-                <p className="text-xs font-black text-amber-800">
-                  Awaiting: {req.currentStageName || detail?.currentStage?.name || 'Approval'}
-                </p>
-                {detail?.currentStage?.role && (
-                  <p className="text-[10px] text-amber-700">Role required: {detail.currentStage.role}</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Approval Timeline */}
-          <div className="space-y-2">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Approval Trail</p>
-            {loading ? (
-              <div className="text-xs text-muted-foreground animate-pulse py-4 text-center">Loading history…</div>
-            ) : timeline.length === 0 ? (
-              <div className="text-xs text-muted-foreground py-4 text-center bg-muted/20 rounded-xl border border-border/30">
-                No approvals recorded yet.
-              </div>
-            ) : (
-              <ApprovalTimeline stages={timeline} />
-            )}
-          </div>
-
-          {/* Attachments */}
-          {attachments.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                <Paperclip size={10} /> Attachments ({attachments.length})
-              </p>
-              <div className="space-y-1.5">
-                {attachments.map(a => (
-                  <div key={a.id} className="flex items-center gap-2 p-2.5 bg-muted/30 rounded-lg border border-border/30 text-xs">
-                    <FileIcon size={12} className="text-primary shrink-0" />
-                    <span className="truncate text-foreground font-medium flex-1">{a.filename}</span>
-                    <span className="text-muted-foreground shrink-0">
-                      {a.size ? `${(a.size / 1024).toFixed(0)} KB` : ''}
-                    </span>
+        {/* Body Grid */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full grid lg:grid-cols-[1fr_350px] divide-x divide-border/50">
+            {/* Left Content Column */}
+            <div className="overflow-y-auto custom-scrollbar p-6 lg:p-10 space-y-10">
+              
+              {/* Description Section */}
+              {req.description && (
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                     <FileText size={14} className="text-primary" />
+                     <p className="text-[11px] font-black text-foreground uppercase tracking-[0.1em]">Requisition Brief</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <p className="text-sm text-foreground leading-relaxed bg-[#FAF9F6]/50 p-6 rounded-[1.5rem] border border-border/40 shadow-inner italic">
+                    {req.description}
+                  </p>
+                </div>
+              )}
 
-          {/* Verification code */}
-          {verCode && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
-              <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
-              <span className="text-emerald-800 font-mono font-bold">{verCode}</span>
-              <span className="text-emerald-700 ml-1">— Cryptographic Verification Code</span>
-            </div>
-          )}
+              {/* Action Panels */}
+              {isIncoming && req.status === 'pending' && !loading && (
+                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
+                   <RespondPanel
+                     req={req}
+                     detail={detail}
+                     departments={departments}
+                     onDone={() => { onAction(); }}
+                   />
+                </div>
+              )}
 
-          {/* Download signed PDF */}
-          {req.status === 'approved' && req.signedPdfKey && (
-            <button
-              onClick={() => downloadSignedPdf(req.id)}
-              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 rounded-xl transition-all shadow-lg shadow-primary/20 text-sm"
-            >
-              <FileIcon size={16} /> Download Signed PDF Voucher
-            </button>
-          )}
+              {canApprove && (
+                <div className="space-y-4 pt-6 border-t border-border/50">
+                  <div className="flex items-center space-x-2">
+                     <ShieldCheck size={14} className="text-primary" />
+                     <p className="text-[11px] font-black text-foreground uppercase tracking-[0.1em]">Administrative Decision</p>
+                  </div>
+                  <div className={acting ? 'opacity-60 pointer-events-none' : ''}>
+                    <ApprovalActionPanel
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onEscalate={handleEscalate}
+                    />
+                  </div>
+                </div>
+              )}
 
-          {/* ── INCOMING: Respond Panel (forward / return) ── */}
-          {isIncoming && req.status === 'pending' && !loading && (
-            <RespondPanel
-              req={req}
-              detail={detail}
-              departments={departments}
-              onDone={() => { onAction(); }}
-            />
-          )}
-
-          {/* ── APPROVAL PANEL (for admin/approver roles) ── */}
-          {canApprove && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                <ChevronRight size={10} /> Your Decision
-              </p>
-              <div className={acting ? 'opacity-60 pointer-events-none' : ''}>
-                <ApprovalActionPanel
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  onEscalate={handleEscalate}
-                />
-              </div>
-              {acting && (
-                <p className="text-xs text-center text-muted-foreground animate-pulse">Processing…</p>
+              {/* Attachments Section */}
+              {attachments.length > 0 && (
+                <div className="space-y-4 pt-6 border-t border-border/50">
+                  <div className="flex items-center space-x-2">
+                     <Paperclip size={14} className="text-primary" />
+                     <p className="text-[11px] font-black text-foreground uppercase tracking-[0.1em]">Enclosures ({attachments.length})</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {attachments.map(a => (
+                      <div key={a.id} className="flex items-center gap-3 p-4 bg-muted/20 rounded-[1rem] border border-border/30 text-xs hover:border-primary/20 transition-all group">
+                        <FileIcon size={14} className="text-primary shrink-0" />
+                        <div className="flex-1 truncate">
+                           <p className="truncate text-foreground font-bold">{a.filename}</p>
+                           <p className="text-[9px] text-muted-foreground uppercase">{a.size ? `${(a.size / 1024).toFixed(0)} KB` : 'N/A'}</p>
+                        </div>
+                        <Download size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-all cursor-pointer hover:text-primary" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-border/30 shrink-0 bg-muted/10">
-          <button onClick={onClose} className="w-full text-xs text-muted-foreground hover:text-foreground font-bold transition-colors py-1">
-            Close
-          </button>
+            {/* Right Sidebar Column */}
+            <div className="bg-muted/10 overflow-y-auto custom-scrollbar p-6 space-y-8 flex flex-col">
+              
+              {/* Status & Alerts */}
+              <div className="space-y-4">
+                 <p className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.1em]">Current Status</p>
+                 {req.status === 'pending' ? (
+                   <div className="p-4 rounded-[1.25rem] bg-amber-500/10 border border-amber-500/20 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600">
+                           <Clock size={16} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-amber-700">Awaiting Approval</p>
+                          <p className="text-[10px] text-amber-600/80 font-medium">{req.currentStageName || detail?.currentStage?.name}</p>
+                        </div>
+                      </div>
+                      {detail?.currentStage?.role && (
+                        <div className="text-[9px] font-black uppercase text-amber-800 tracking-widest px-2 py-1 bg-amber-500/20 rounded-md inline-block">
+                          REQUIRED: {detail.currentStage.role}
+                        </div>
+                      )}
+                   </div>
+                 ) : req.status === 'approved' ? (
+                   <div className="p-4 rounded-[1.25rem] bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3 text-emerald-700">
+                      <ShieldCheck size={18} />
+                      <span className="text-xs font-bold">Document Fully Authenticated</span>
+                   </div>
+                 ) : (
+                   <div className="p-4 rounded-[1.25rem] bg-destructive/10 border border-destructive/20 flex items-center gap-3 text-destructive">
+                      <ShieldAlert size={18} />
+                      <span className="text-xs font-bold">Requisition Terminated</span>
+                   </div>
+                 )}
+              </div>
+
+              {/* Timeline (Approval Trail) */}
+              <div className="space-y-4 flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.1em]">Approval Trail</p>
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[10px] font-bold">
+                    {timeline.length}
+                  </div>
+                </div>
+                {loading ? (
+                  <div className="space-y-4 animate-pulse">
+                     {[1,2,3].map(i => <div key={i} className="h-16 bg-muted/40 rounded-xl" />)}
+                  </div>
+                ) : (
+                  <div className="relative pl-1">
+                     <ApprovalTimeline stages={timeline} />
+                  </div>
+                )}
+              </div>
+
+              {/* Identity & Verification */}
+              {verCode && (
+                <div className="p-4 rounded-[1.25rem] bg-emerald-500/5 border border-emerald-500/10 space-y-3">
+                  <div className="flex items-center space-x-2 text-emerald-600">
+                     <Fingerprint size={14} />
+                     <p className="text-[9px] font-black uppercase tracking-widest">Digital Fingerprint</p>
+                  </div>
+                  <p className="font-mono text-xs font-bold text-emerald-800 break-all bg-white p-2 rounded-lg text-center border border-emerald-500/10 shadow-sm">
+                    {verCode}
+                  </p>
+                </div>
+              )}
+
+              {/* Actions Footer */}
+              <div className="pt-4 mt-auto border-t border-border/50">
+                 {req.status === 'approved' && req.signedPdfKey && (
+                    <button
+                      onClick={() => downloadSignedPdf(req.id)}
+                      className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-[1.25rem] transition-all shadow-xl shadow-primary/20 text-xs uppercase tracking-widest"
+                    >
+                      <Download size={16} /> Sign Voucher
+                    </button>
+                 )}
+                 <button onClick={onClose} className="w-full text-[10px] text-muted-foreground hover:text-foreground font-black uppercase tracking-[0.2em] transition-colors py-4">
+                  Close Document
+                 </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -533,8 +579,9 @@ const RequisitionsPage = ({ onViewChange }) => {
         }
       />
 
-      <div className="max-w-7xl mx-auto space-y-8 pb-20">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="max-w-[90rem] mx-auto space-y-10 pb-20 animate-slide-up">
+        {/* Header Section */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 px-2">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight">
               All <span className="text-primary italic">Requisitions</span>

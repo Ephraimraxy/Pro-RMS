@@ -54,12 +54,17 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
 
     if (matchedId) {
       localStorage.setItem('rms_pending_requisition_id', matchedId);
+      // Change view first
+      onViewChange('requisitions');
+      // Dispatch immediately AND after a small delay to ensure mounting
       window.dispatchEvent(new CustomEvent('openRequisition', { detail: matchedId }));
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('openRequisition', { detail: matchedId }));
+      }, 300);
+    } else {
+      onViewChange('requisitions');
     }
     
-    // Always navigate to the relevant view. If no matched ID, 
-    // we default to requisitions page list as fallback for older notifications.
-    onViewChange('requisitions');
     setShowBell(false);
   };
 
@@ -311,20 +316,17 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       <div className="flex h-[calc(100vh-56px)] overflow-hidden">
         {/* Desktop Sidebar App-Tile Navigation */}
         <aside 
-          className={`border-r border-border/30 bg-white/40 backdrop-blur-3xl sticky top-0 hidden lg:flex flex-col transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${isCollapsed ? 'w-20' : 'w-56'}`}
+          className={`border-r border-border/30 bg-white/40 backdrop-blur-3xl sticky top-0 hidden lg:flex flex-col transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${isCollapsed ? 'w-20' : 'w-64'}`}
         >
-          <div className="p-3 pt-5 flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
-            <div className="space-y-1.5">
+          <div className="p-4 pt-6 flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
+            <div className="space-y-2">
               {!isCollapsed && (
-                <p className="px-4 text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
-                  Workspace
+                <p className="px-4 text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
+                  Main Network
                 </p>
               )}
               <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} isCollapsed={isCollapsed} />
-              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} isCollapsed={isCollapsed} />
-              <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} isCollapsed={isCollapsed} />
-              <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
               
               {user?.role === 'department' && (
                 <SidebarItem 
@@ -335,13 +337,17 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
                   isCollapsed={isCollapsed} 
                 />
               )}
+              
+              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
             </div>
 
             {user?.role !== 'department' && (
-              <div className="mt-8 space-y-1.5">
+              <div className="mt-10 space-y-2">
                 {!isCollapsed && (
-                  <p className="px-4 text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
-                    Control Center
+                  <p className="px-4 text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
+                    Oversight Center
                   </p>
                 )}
                 <SidebarItem icon={Settings} label="System Studio" active={currentView === 'workflow_builder'} onClick={() => onViewChange('workflow_builder')} isCollapsed={isCollapsed} />
@@ -356,9 +362,8 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
           </div>
         </aside>
 
-        {/* Dynamic Content Area with Stress-Free Scrolling */}
         <main className="flex-1 overflow-y-auto custom-scrollbar relative z-10 w-full bg-[#FAF9F6]/50">
-          <div className="p-4 lg:p-10 max-w-7xl mx-auto animate-slide-up">
+          <div className="p-4 lg:p-10 max-w-[95rem] mx-auto animate-slide-up">
             {children}
           </div>
         </main>

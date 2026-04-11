@@ -220,13 +220,21 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
           />
           <SaveIndicator saving={saving} />
         </div>
-        <div className="flex items-center space-x-2 lg:space-x-3">
+        <div className="flex items-center space-x-2 lg:space-x-4">
+          <div className="hidden lg:block">
+             <VoiceDictation onTranscript={(text) => {
+               if (editorRef.current) {
+                 editorRef.current.innerHTML += ' ' + text;
+                 handleInput();
+               }
+             }} />
+          </div>
           <button
             onClick={onSend}
-            className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs lg:text-sm px-4 lg:px-5 py-3 rounded-xl transition-all shadow-lg shadow-amber-600/20"
+            className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs lg:text-sm px-6 py-3.5 rounded-2xl transition-all shadow-xl shadow-amber-600/20"
           >
-            <Send size={16} />
-            <span>Send to Department</span>
+            <Send size={18} />
+            <span className="uppercase tracking-widest">Send to Workflow</span>
           </button>
           <ExportMenu onExport={handleExport} formats={[{ type: 'html', label: 'Export as HTML', icon: FileText }]} />
         </div>
@@ -624,8 +632,10 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 text-left">
-      <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col border border-border/50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden max-h-[90vh]">
+    <div className="fixed inset-0 z-[150] flex flex-col items-center justify-start overflow-y-auto p-4 sm:p-6 bg-background/20 backdrop-blur-sm custom-scrollbar animate-in fade-in duration-300 pt-[5vh] pb-10">
+      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" onClick={onClose} />
+      <div className="glass bg-white/95 w-full max-w-3xl rounded-[2.5rem] border border-border/50 shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden">
+
         <div className="p-6 border-b border-border/50 flex items-center justify-between bg-muted/10 shrink-0">
           <div>
             <h2 className="text-xl font-bold text-foreground flex items-center space-x-2">

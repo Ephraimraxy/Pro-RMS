@@ -129,8 +129,17 @@ const DepartmentProfile = ({ user, onViewChange }) => {
             <div className="w-20 h-20 rounded-3xl bg-primary shadow-2xl shadow-primary/40 flex items-center justify-center text-white shrink-0">
               <Building2 size={40} />
             </div>
-            <div className="space-y-1">
-              <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="px-2 py-0.5 rounded-md bg-primary/20 border border-primary/30 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                  <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                  Neural Core: Authenticated
+                </div>
+                <div className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                  Secure Protocol: Active
+                </div>
+              </div>
+              <h1 className="text-3xl md:text-5xl font-black text-foreground tracking-tighter">
                 {profile.name || "Department Account"}
               </h1>
               <p className="text-muted-foreground font-medium flex items-center gap-2">

@@ -168,17 +168,24 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-end sm:justify-center p-0 sm:p-4 sm:pt-[5vh] overflow-hidden sm:overflow-y-auto safe-p-top">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-md" onClick={!submitting ? onClose : undefined} />
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-4 sm:p-6 overflow-y-auto safe-p-top pt-[5vh] pb-10 bg-background/20 backdrop-blur-sm">
+      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" onClick={!submitting ? onClose : undefined} />
 
-      <div className="glass bg-white/90 w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl border border-border/50 shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh] sm:my-auto">
+      <div className="glass bg-white/95 w-full lg:max-w-5xl rounded-[2.5rem] border border-border/50 shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
+
         {/* Header */}
         <div className="p-5 border-b border-border/50 flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-lg font-bold text-foreground">New Requisition</h2>
-            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">
-              Originating Dept: {user?.name || user?.department || 'CSS Group'}
-            </p>
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold text-foreground tracking-tight">Create New Requisition</h2>
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                Neural Processor Active
+              </div>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                Originating Dept: {user?.name || user?.department || 'CSS Group'}
+              </p>
+            </div>
           </div>
           <button
             onClick={!submitting ? onClose : undefined}
@@ -190,7 +197,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 lg:p-10 space-y-8 custom-scrollbar">
 
           {/* Type selector (Removed - Handled by AI) */}
 

@@ -177,7 +177,7 @@ const WorkflowBuilder = ({ onViewChange }) => {
 
   return (
     <Layout user={user} currentView="workflow_builder" onViewChange={onViewChange}>
-      <div className="max-w-4xl mx-auto space-y-8 pb-20">
+      <div className="max-w-6xl mx-auto space-y-10 pb-20 animate-slide-up">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight flex items-center space-x-3">
@@ -287,6 +287,7 @@ const WorkflowBuilder = ({ onViewChange }) => {
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={confirmDelete}
+        size="lg"
         isProcessing={isProcessing}
         title={activeTab === 'stages' ? "Delete Workflow Stage" : "Delete Requisition Type"}
         message={activeTab === 'stages' 
