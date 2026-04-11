@@ -938,8 +938,12 @@ async function notifyDepartmentHead({ departmentId, requisition, subject, lines 
       actionLabel: 'Open Requisition'
     });
     
-    await sendEmail({ to: dept.headEmail, subject, text, html });
-    logger.info(`[MAIL] Department head notified: ${dept.headEmail}`);
+    const result = await sendEmail({ to: dept.headEmail, subject, text, html });
+    if (result && result.skipped) {
+      logger.warn(`[MAIL] Send skipped for ${dept.headEmail} (Transport not configured)`);
+    } else {
+      logger.info(`[MAIL] Department head notified: ${dept.headEmail}`);
+    }
   } catch (err) {
     logger.error('[MAIL] Department head notify failed:', err.message);
   }
@@ -1404,7 +1408,38 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
       if (firstStage?.role) {
         await notifyRole(firstStage.role, `New Requisition: ${updated.title}`, updated.id);
       }
-      // You can replicate the target dept email block here if desired
+      
+      const originDeptId = userDeptId || updated.departmentId;
+      const originDept   = await prisma.department.findUnique({ where: { id: originDeptId } });
+      const currentRequisition = await prisma.requisition.findUnique({ where: { id: updated.id }, include: { department: true } });
+
+      // Notify Target Department if specified
+      if (updated.targetDepartmentId) {
+        await notifyDepartmentHead({
+          departmentId: updated.targetDepartmentId,
+          requisition: currentRequisition,
+          subject: `📋 Incoming Requisition: ${updated.title}`,
+          lines: [
+            `From Department: ${originDept?.name || 'Department'}`,
+            `Type: ${updated.type}`,
+            `Amount: ${formatCurrency(updated.amount)}`,
+            `Urgency: ${updated.urgency || 'normal'}`,
+            `Created By: ${req.user?.name || 'System'}`
+          ]
+        });
+      }
+
+      // Also notify origin department head that it's now submitted
+      await notifyDepartmentHead({
+        departmentId: originDeptId,
+        requisition: currentRequisition,
+        subject: `Requisition Submitted: ${updated.title}`,
+        lines: [
+          `Status: Moved from draft to pending`,
+          `Type: ${updated.type}`,
+          `Amount: ${formatCurrency(updated.amount)}`
+        ]
+      });
     }
     res.json(updated);
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -1518,45 +1553,35 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
 
     // Notify new target dept if applicable
     if (!returnToSender && newTargetId) {
-      const newTarget = await prisma.department.findUnique({ where: { id: newTargetId } });
-      if (newTarget?.headEmail) {
-        const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
-        const { text, html } = buildEmailContent({
-          title: `📋 Forwarded Requisition: ${requisition.title}`,
-          lines: [
-            `Originally From: ${requisition.department?.name || 'Department'}`,
-            `Forwarded By: ${requisition.targetDepartment?.name || 'Department'}`,
-            `Type: ${requisition.type}`,
-            `Amount: ${formatCurrency(requisition.amount)}`,
-            note ? `Note: ${note}` : null,
-            ``,
-            `Please log in to your dashboard to review and respond.`
-          ].filter(Boolean),
-          actionUrl,
-          actionLabel: 'Open Dashboard'
-        });
-        await sendEmail({
-          to: newTarget.headEmail,
-          subject: `[CSS RMS] Forwarded Requisition: ${requisition.title}`,
-          text,
-          html
-        });
-        await prisma.notification.create({
-          data: {
-            departmentId: newTargetId,
-            content: `Forwarded Requisition: ${requisition.title}`
-          }
-        });
-      }
+      await notifyDepartmentHead({
+        departmentId: newTargetId,
+        requisition: updated,
+        subject: `📋 Forwarded Requisition: ${updated.title}`,
+        lines: [
+          `Originally From: ${updated.department?.name || 'Department'}`,
+          `Forwarded By: ${requisition.targetDepartment?.name || 'Department'}`,
+          `Type: ${updated.type}`,
+          `Amount: ${formatCurrency(updated.amount)}`,
+          note ? `Note: ${note}` : null,
+          ``,
+          `Please log in to your dashboard to review and respond.`
+        ].filter(Boolean)
+      });
     }
 
     // Notify original sender dept on return
-    if (returnToSender && requisition.departmentId) {
-      await prisma.notification.create({
-        data: {
-          departmentId: requisition.departmentId,
-          content: `Requisition returned for clarification: ${requisition.title}${note ? ` — ${note}` : ''}`
-        }
+    if (returnToSender && updated.departmentId) {
+      await notifyDepartmentHead({
+        departmentId: updated.departmentId,
+        requisition: updated,
+        subject: `⚠️ Requisition Returned: ${updated.title}`,
+        lines: [
+          `Your requisition has been returned for clarification.`,
+          `Returned By: ${requisition.targetDepartment?.name || 'Department'}`,
+          note ? `Reason: ${note}` : `Please review the requisition for details.`,
+          ``,
+          `Log in to update the requisition and re-submit.`
+        ].filter(Boolean)
       });
     }
 
