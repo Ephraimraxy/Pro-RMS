@@ -195,6 +195,24 @@ export async function downloadSignedPdf(id) {
   window.URL.revokeObjectURL(url);
 }
 
+export async function downloadDynamicPdf(id) {
+  try {
+    const blob = await reqAPI.getDynamicPdf(id);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `CSS-REPORT-${id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    return true;
+  } catch (err) {
+    console.error('Failed to download dynamic PDF', err);
+    throw err;
+  }
+}
+
 // ── Stats Computation ──
 export async function getDashboardStats() {
   const all = await getRequisitions();

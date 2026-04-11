@@ -5,7 +5,7 @@ import ApprovalTimeline from './ApprovalTimeline';
 import ApprovalActionPanel from './ApprovalActionPanel';
 import ConfirmModal from './ConfirmModal';
 import { useAuth } from '../context/AuthContext';
-import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, getDepartments } from '../lib/store';
+import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments } from '../lib/store';
 import { forwardAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import {
@@ -235,20 +235,24 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                const token = localStorage.getItem('rms_token');
-                const baseUrl = import.meta.env.VITE_API_URL || '/api';
-                window.open(`${baseUrl}/requisitions/${req.id}/dynamic-pdf?token=${token}`, '_blank');
+              onClick={async () => {
+                const toastId = toast.loading('Generating PDF...');
+                try {
+                  await downloadDynamicPdf(req.id);
+                  toast.success('Report downloaded successfully!', { id: toastId });
+                } catch (err) {
+                  toast.error('Failed to generate report.', { id: toastId });
+                }
               }}
               title="Generate Stage Report (PDF)"
               className="p-2.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all flex items-center gap-2 border border-primary/20 shadow-sm"
             >
               <Printer size={18} />
-              <span className="text-xs font-bold hidden sm:inline">Print Report</span>
-            </button>
-            <button onClick={onClose} className="p-2 hover:bg-muted rounded-full text-muted-foreground shrink-0 transition-all">
-              <X size={18} />
-            </button>
+               <span className="text-xs font-bold hidden sm:inline">Print Report</span>
+             </button>
+             <button onClick={onClose} className="p-2 hover:bg-muted rounded-full text-muted-foreground shrink-0 transition-all">
+               <X size={18} />
+             </button>
           </div>
         </div>
 
