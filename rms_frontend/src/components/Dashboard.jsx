@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { CORPORATE_HIERARCHY } from '../constants/departments';
 import { getDashboardStats, getRequisitions, getDepartments } from '../lib/store';
 import { reqAPI } from '../lib/api';
-import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye, AlertTriangle } from 'lucide-react';
+import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye, AlertTriangle, Plus, ShieldCheck } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
   <div onClick={onClick} className="glass p-4 lg:p-6 rounded-2xl border border-border/50 relative overflow-hidden group hover:border-primary/30 transition-all cursor-pointer bg-white/60">
