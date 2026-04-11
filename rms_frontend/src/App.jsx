@@ -1,15 +1,17 @@
-import React, { useState, useEffect, createContext, useContext } from 'react'
+import React, { useState, useEffect, createContext, useContext, Suspense } from 'react'
 import Login from './components/Login'
-import Dashboard from './components/Dashboard'
-import WorkflowBuilder from './components/WorkflowBuilder'
-import DepartmentManager from './components/DepartmentManager'
-import AuditLogs from './components/AuditLogs'
-import DocumentStudio from './components/DocumentStudio'
-import RequisitionsPage from './components/RequisitionsPage'
-import MemoManagement from './components/MemoManagement'
-import MyActivity from './components/MyActivity'
-import DepartmentHeadModal from './components/DepartmentHeadModal'
 import PublicVerify from './components/PublicVerify'
+import DepartmentHeadModal from './components/DepartmentHeadModal'
+
+const Dashboard = React.lazy(() => import('./components/Dashboard'))
+const WorkflowBuilder = React.lazy(() => import('./components/WorkflowBuilder'))
+const DepartmentManager = React.lazy(() => import('./components/DepartmentManager'))
+const AuditLogs = React.lazy(() => import('./components/AuditLogs'))
+const DocumentStudio = React.lazy(() => import('./components/DocumentStudio'))
+const RequisitionsPage = React.lazy(() => import('./components/RequisitionsPage'))
+const MemoManagement = React.lazy(() => import('./components/MemoManagement'))
+const MyActivity = React.lazy(() => import('./components/MyActivity'))
+
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Wifi, WifiOff } from 'lucide-react'
 import { Toaster, toast } from 'react-hot-toast'
@@ -146,7 +148,14 @@ const AppContent = () => {
 
   return (
     <>
-      {views[activeView] || views.dashboard}
+      <Suspense fallback={
+        <div className="flex-1 flex flex-col items-center justify-center p-12">
+          <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          <p className="mt-4 text-xs font-mono text-muted-foreground animate-pulse">Loading module...</p>
+        </div>
+      }>
+        {views[activeView] || views.dashboard}
+      </Suspense>
       <DepartmentHeadModal
         isOpen={showDeptModal}
         department={deptProfile}

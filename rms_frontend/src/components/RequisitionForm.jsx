@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { addRequisition, getDepartments, getRequisitionTypes, uploadAttachments } from '../lib/store';
-import { deptAPI } from '../lib/api';
+import { deptAPI, aiAPI } from '../lib/api';
 import { useNetwork } from '../App';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,8 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   const [departments, setDepartments]   = useState([]);
   const [files, setFiles]               = useState([]);
   const [submitting, setSubmitting]     = useState(false);
+  const [refining, setRefining]         = useState(false);
+  const [aiPreview, setAiPreview]       = useState(null);
 
   // Activation check state for target department
   const [activation, setActivation]     = useState(null);   // null | { activated, headName }
@@ -46,6 +48,8 @@ const RequisitionForm = ({ isOpen, onClose }) => {
     setFiles([]);
     setActivation(null);
     setSubmitting(false);
+    setRefining(false);
+    setAiPreview(null);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -79,6 +83,27 @@ const RequisitionForm = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleRefine = async (e) => {
+    e.preventDefault();
+    if (!formData.description.trim() || formData.description.length < 5) {
+      toast.error('Please enter a longer description to refine.');
+      return;
+    }
+    setRefining(true);
+    try {
+      const res = await aiAPI.refineDraft(formData.description);
+      setAiPreview({
+        description: res.refinedDescription,
+        amount: res.totalAmount
+      });
+      toast.success('AI refinement complete. Please review the details.');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'AI refinement failed.');
+    } finally {
+      setRefining(false);
+    }
+  };
+
   const handleSubmit = async (e, isDraft = false) => {
     e.preventDefault();
     if (!selectedType || submitting) return;
@@ -96,11 +121,14 @@ const RequisitionForm = ({ isOpen, onClose }) => {
 
     setSubmitting(true);
     try {
+      const finalDesc = aiPreview ? aiPreview.description : formData.description;
+      const finalAmount = aiPreview ? aiPreview.amount : 0;
+
       const payload = {
-        description:        formData.description,
-        title:              formData.description,
+        description:        finalDesc,
+        title:              finalDesc, // Or a subset, for simplicity we trust backend/ui limits
         type:               selectedType.name,
-        amount:             formData.amount || 0,
+        amount:             finalAmount,
         departmentId:       user?.deptId || undefined,
         urgency:            formData.urgency,
         isDraft,
@@ -180,38 +208,56 @@ const RequisitionForm = ({ isOpen, onClose }) => {
           </div>
 
           {/* Description */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
-              Purpose / Description *
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
-              placeholder="Briefly describe the requirement…"
-              disabled={submitting}
-              className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[90px] transition-all disabled:opacity-60 resize-none"
-              required
-            />
-          </div>
+          {!aiPreview ? (
+            <div className="space-y-1.5 border-b border-border/50 pb-6">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+                Rough Draft (What do you need?) *
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
+                placeholder="E.g., I need 2 laptops at 250k each and a 50k router..."
+                disabled={submitting || refining}
+                className="w-full bg-white border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[120px] transition-all disabled:opacity-60 resize-none shadow-inner"
+                required
+              />
+            </div>
+          ) : (
+            <div className="space-y-4 border border-primary/20 bg-primary/5 rounded-2xl p-5 relative">
+              <div className="absolute top-4 right-4 text-[10px] uppercase font-black text-primary tracking-widest px-2 py-1 bg-primary/10 rounded-full flex items-center gap-1">
+                <CheckCircle2 size={12} /> AI Refined
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Professional Request
+                </label>
+                <div className="mt-1 text-sm text-foreground whitespace-pre-wrap">
+                  {aiPreview.description}
+                </div>
+              </div>
+              <div className="pt-3 border-t border-primary/10 flex justify-between items-center">
+                <div className="space-y-0.5">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Automatically Calculated Total
+                  </label>
+                  <p className="text-xl font-mono font-bold text-foreground">
+                    ₦ {aiPreview.amount.toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiPreview(null)}
+                  disabled={submitting}
+                  className="text-xs font-bold text-primary hover:underline disabled:opacity-50"
+                >
+                  Edit Draft
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Amount (Cash only) */}
-            {selectedType?.name.toLowerCase().includes('cash') && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
-                  Requested Amount (₦)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.amount}
-                  onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
-                  placeholder="0.00"
-                  disabled={submitting}
-                  className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono text-base disabled:opacity-60"
-                />
-              </div>
-            )}
+            {/* Removed Manual Amount input block */}
 
             {/* Urgency */}
             <div className="space-y-1.5">
@@ -341,24 +387,40 @@ const RequisitionForm = ({ isOpen, onClose }) => {
           <button
             type="button"
             onClick={e => handleSubmit(e, true)}
-            disabled={submitting || !selectedType}
+            disabled={submitting || refining || !selectedType}
             className="flex-1 border border-border bg-white hover:bg-muted text-foreground font-bold py-3.5 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Save Draft
           </button>
-          <button
-            type="button"
-            onClick={e => handleSubmit(e, false)}
-            disabled={submitting || !selectedType || (formData.targetDepartmentId && activation && !activation.activated)}
-            className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? (
-              <><Loader2 size={16} className="animate-spin" /> Submitting…</>
-            ) : (
-              <><Send size={16} /> Submit for Review</>
-            )}
-          </button>
+          
+          {!aiPreview ? (
+            <button
+              type="button"
+              onClick={handleRefine}
+              disabled={refining || !selectedType || !formData.description}
+              className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {refining ? (
+                <><Loader2 size={16} className="animate-spin" /> AI Analyzing…</>
+              ) : (
+                <>✨ Refine with AI</>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={e => handleSubmit(e, false)}
+              disabled={submitting || (formData.targetDepartmentId && activation && !activation.activated)}
+              className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+              ) : (
+                <><Send size={16} /> Confirm & Submit Request</>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

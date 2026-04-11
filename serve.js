@@ -9,6 +9,18 @@ const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
 const crypto = require('crypto');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const xss = require('xss');
+const pino = require('pino');
+const pinoHttp = require('pino-http');
+const OpenAI = require('openai');
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  transport: process.env.NODE_ENV !== 'production' ? {
+    target: 'pino-pretty',
+    options: { colorize: true }
+  } : undefined
+});
 
 const multer = require('multer');
 const { 
@@ -104,6 +116,33 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: '2mb' }));
+
+// ── OBSERVABILITY & LOGGING ─────────────────────────────────────────────────
+app.use(pinoHttp({ logger }));
+
+// ── INPUT SANITIZATION (XSS PROTECTION) ─────────────────────────────────────
+const sanitizeObject = (obj) => {
+  if (typeof obj === 'string') return xss(obj);
+  if (Array.isArray(obj)) return obj.map(item => sanitizeObject(item));
+  if (obj !== null && typeof obj === 'object') {
+    const newObj = {};
+    for (const [key, value] of Object.entries(obj)) {
+      // Don't modify keys, just values
+      newObj[key] = sanitizeObject(value);
+    }
+    return newObj;
+  }
+  return obj;
+};
+
+const sanitizePayload = (req, res, next) => {
+  if (req.body) {
+    req.body = sanitizeObject(req.body);
+  }
+  next();
+};
+
+app.use(sanitizePayload);
 
 // ── BACKEND API ROUTES ──
 if (!process.env.JWT_SECRET) {
@@ -626,6 +665,22 @@ app.post('/api/auth/logout', authenticateToken, (req, res) => {
   res.json({ ok: true, message: 'Token revoked successfully.' });
 });
 
+// Refresh Token
+app.post('/api/auth/refresh', authenticateToken, (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: 'Invalid session' });
+    
+    // Revoke old token
+    if (req.token) tokenBlacklist.add(req.token);
+
+    // Issue new 12h token
+    const userData = { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department, deptId: user.deptId };
+    const newToken = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
+    res.json({ token: newToken, user: userData });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
 app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
   try {
     const parsed = z.object({
@@ -639,7 +694,7 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
     const { departmentName, accessCode, mfaCode } = parsed.data;
     
     const deptKey = `dept:${(departmentName || '').trim().toLowerCase()}`;
-    console.log(`[AUTH] Unified login attempt: "${departmentName?.trim()}"`);
+    logger.info(`[AUTH] Unified login attempt: "${departmentName?.trim()}"`);
 
     // Account lockout check for department
     if (checkLockout(deptKey)) {
@@ -1215,7 +1270,88 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Department activation status (used by form to warn about unactivated targets)
+// Edit draft requisition
+app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({
+      title:             z.string().optional(),
+      description:       z.string().optional(),
+      type:              z.string().optional(),
+      amount:            z.union([z.string(), z.number()]).optional(),
+      urgency:           z.string().optional(),
+      content:           z.string().optional(),
+      isDraft:           z.boolean().optional(),
+      targetDepartmentId: z.number().optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload' });
+    const data = parsed.data;
+
+    const existing = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
+    if (!existing) return res.status(404).json({ error: 'Requisition not found' });
+    if (existing.status !== 'draft') return res.status(400).json({ error: 'Only drafts can be edited' });
+
+    // Verify ownership
+    const systemUser = await prisma.user.findFirst({ where: { role: 'global_admin' } });
+    const isAdmin = getNumericUserId(req.user) === systemUser?.id;
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    if (!isAdmin && existing.departmentId !== userDeptId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const amount = parseFloat(data.amount || existing.amount);
+    const eligibleStages = await getEligibleStages(amount);
+    const firstStage = eligibleStages[0] || null;
+
+    const updated = await prisma.requisition.update({
+      where: { id: parseInt(id) },
+      data: {
+        title: data.title !== undefined ? data.title : existing.title,
+        description: data.description !== undefined ? data.description : existing.description,
+        type: data.type !== undefined ? data.type : existing.type,
+        amount: data.amount !== undefined ? amount : existing.amount,
+        urgency: data.urgency !== undefined ? data.urgency : existing.urgency,
+        content: data.content !== undefined ? data.content : existing.content,
+        targetDepartmentId: data.isDraft ? existing.targetDepartmentId : data.targetDepartmentId,
+        status: data.isDraft ? 'draft' : 'pending',
+        currentStageId: data.isDraft ? null : (firstStage?.id || null),
+      }
+    });
+
+    if (!data.isDraft && existing.status === 'draft') {
+      if (firstStage?.role) {
+        await notifyRole(firstStage.role, `New Requisition: ${updated.title}`, updated.id);
+      }
+      // You can replicate the target dept email block here if desired
+    }
+    res.json(updated);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Delete draft requisition
+app.delete('/api/requisitions/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
+    if (!existing) return res.status(404).json({ error: 'Requisition not found' });
+    
+    if (existing.status !== 'draft') {
+      return res.status(400).json({ error: 'Only drafts can be deleted' });
+    }
+
+    const systemUser = await prisma.user.findFirst({ where: { role: 'global_admin' } });
+    const isAdmin = getNumericUserId(req.user) === systemUser?.id;
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    if (!isAdmin && existing.departmentId !== userDeptId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await prisma.requisition.delete({ where: { id: parseInt(id) } });
+    res.json({ ok: true, message: 'Draft deleted' });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+
 app.get('/api/departments/:id/activation', authenticateToken, async (req, res) => {
   try {
     const dept = await prisma.department.findUnique({
@@ -1609,6 +1745,48 @@ app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res)
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+// ── AI MAGICAL REFINEMENT ──
+app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
+  try {
+    const { rawDescription } = req.body;
+    if (!rawDescription || rawDescription.trim().length < 5) {
+      return res.status(400).json({ error: 'Description is too short to refine.' });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(503).json({ error: 'AI features are not configured. Please contact the administrator.' });
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert executive procurement assistant. The user will provide a rough draft of items they want to request. Your job is to rewrite it into a highly professional, polite, and clear requisition request. Extract any price quantities they mention, calculate the total mathematical sum in Nigerian Naira (₦), and return a JSON object exactly validating to the schema provided. If NO prices or amounts are mentioned anywhere, set totalAmount to 0. Use NGN or ₦ for currency formatting in the refined text."
+        },
+        {
+          role: "user",
+          content: rawDescription
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    });
+
+    const aiData = JSON.parse(response.choices[0].message.content);
+    // Sanitize ai output just to be safe
+    return res.json({
+      refinedDescription: xss(aiData.refinedDescription || aiData.description || ''),
+      totalAmount: Number(aiData.totalAmount) || 0
+    });
+  } catch (error) {
+    logger.error('OpenAI Refinement Error:', error);
+    res.status(500).json({ error: 'AI failed to process the request. Try again.' });
+  }
+});
+
 // ── FRONTEND SERVING ──
 // Health check (must be before static + SPA fallback)
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
@@ -1665,21 +1843,21 @@ const server = app.listen(PORT, async () => {
         }
       });
     }
-    console.log('[BOOT] GM, CEO, ICC departments ensured');
+    logger.info('[BOOT] GM, CEO, ICC departments ensured');
   } catch (e) {
-    console.warn('[BOOT] Dept upsert skipped:', e.message);
+    logger.warn('[BOOT] Dept upsert skipped:', e.message);
   }
 });
 
 const gracefulShutdown = (signal) => {
-  console.log(`[SHUTDOWN] ${signal} received — closing server gracefully...`);
+  logger.info(`[SHUTDOWN] ${signal} received — closing server gracefully...`);
   server.close(async () => {
     try { await prisma.$disconnect(); } catch (_) {}
-    console.log('[SHUTDOWN] Database disconnected. Exiting.');
+    logger.info('[SHUTDOWN] Database disconnected. Exiting.');
     process.exit(0);
   });
   // Force-kill if still not done after 10 s
-  setTimeout(() => { console.error('[SHUTDOWN] Timeout — forcing exit.'); process.exit(1); }, 10000).unref();
+  setTimeout(() => { logger.error('[SHUTDOWN] Timeout — forcing exit.'); process.exit(1); }, 10000).unref();
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

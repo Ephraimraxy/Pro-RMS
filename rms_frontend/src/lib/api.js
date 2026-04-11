@@ -20,18 +20,40 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response.data,
-  (error) => {
+  async (error) => {
     console.error("API Error Response:", error);
-    if (error.response?.status === 401) {
-      // Handle unauthorized (expired token)
-      // Do not reload if the error is from a login attempt
-      const configUrl = error.config?.url || '';
-      if (!configUrl.includes('/auth/login') && !configUrl.includes('/auth/dept-login')) {
+    const originalRequest = error.config;
+    
+    // Prevent infinite loops on authenticating/refresh requests
+    if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/dept-login') || originalRequest.url?.includes('/auth/refresh')) {
+      return Promise.reject(error);
+    }
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const refreshResponse = await api.post('/auth/refresh');
+        if (refreshResponse && refreshResponse.token) {
+          localStorage.setItem('rms_token', refreshResponse.token);
+          localStorage.setItem('rms_user', JSON.stringify(refreshResponse.user));
+          originalRequest.headers.Authorization = `Bearer ${refreshResponse.token}`;
+          // Re-fire original request with new token
+          const res = await axios(originalRequest);
+          return res.data; // Note: originalRequest uses raw axios which doesn't auto-unpack .data like our custom instance
+        }
+      } catch (refreshErr) {
+        console.warn('Silent refresh failed, terminating session.', refreshErr);
         localStorage.removeItem('rms_token');
         localStorage.removeItem('rms_user');
         window.location.reload();
       }
+    } else if (error.response?.status === 401) {
+      // If we already retried and failed again, log out
+      localStorage.removeItem('rms_token');
+      localStorage.removeItem('rms_user');
+      window.location.reload();
     }
+    
     return Promise.reject(error);
   }
 );
@@ -141,6 +163,12 @@ export const reqAPI = {
   async addRequisition(data) {
     return api.post('/requisitions', data);
   },
+  async updateRequisition(id, data) {
+    return api.put(`/requisitions/${id}`, data);
+  },
+  async deleteRequisition(id) {
+    return api.delete(`/requisitions/${id}`);
+  },
   async approveRequisition(id, remarks) {
     return api.post(`/requisitions/${id}/approve`, { remarks });
   },
@@ -159,6 +187,12 @@ export const userAPI = {
     return api.post(`/users/${userId}/signature`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
+  }
+};
+
+export const aiAPI = {
+  async refineDraft(rawDescription) {
+    return api.post('/ai/refine-requisition', { rawDescription });
   }
 };
 
