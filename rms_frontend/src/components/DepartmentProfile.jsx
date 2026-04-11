@@ -3,8 +3,9 @@ import {
   Building2, User, Mail, ShieldCheck, AlertCircle, 
   Upload, Save, BadgeCheck, Phone, MapPin, 
   Loader2, PenTool, CheckCircle2, ChevronLeft,
-  ArrowLeft, LayoutDashboard, Fingerprint
+  ArrowLeft, LayoutDashboard, Fingerprint, Shield
 } from 'lucide-react';
+import Layout from './Layout';
 import { reqAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 
@@ -95,42 +96,54 @@ const DepartmentProfile = ({ user, onViewChange }) => {
   const isComplete = profile.headName && profile.headEmail && profile.hasSignature;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in slide-in-from-bottom-5 duration-700 px-4 md:px-0">
-      {/* ── TOP NAVIGATION ── */}
-      <div className="flex items-center justify-between">
-        <button 
-          onClick={() => onViewChange('dashboard')}
-          className="group flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-white border border-border/50 shadow-sm hover:shadow-md hover:border-primary/30 transition-all active:scale-95"
-        >
-          <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-            <ArrowLeft size={18} />
-          </div>
-          <span className="text-sm font-bold text-muted-foreground group-hover:text-primary transition-colors">Back to Dashboard</span>
-        </button>
-
-        <div className={`hidden md:flex items-center gap-4 px-5 py-2.5 rounded-2xl border transition-all ${
-          isComplete ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-emerald-100/50' : 'bg-amber-50 border-amber-200 text-amber-700 shadow-amber-100/50'
-        } shadow-lg`}>
-          {isComplete ? <ShieldCheck size={20} className="animate-pulse" /> : <AlertCircle size={20} className="animate-bounce" />}
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest leading-tight">Identity Status</span>
-            <span className="text-xs font-bold">{isComplete ? 'VERIFIED GLOBAL AUTHORITY' : 'GOVERNANCE SETUP REQUIRED'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── HEADER ── */}
-      <div className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-primary/10 via-white to-primary/5 border border-primary/10 p-8 md:p-12 shadow-2xl shadow-primary/5">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/5 blur-3xl rounded-full -translate-x-1/2 translate-y-1/2"></div>
-        
-        <div className="relative z-10 space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center gap-6">
-            <div className="w-20 h-20 rounded-3xl bg-primary shadow-2xl shadow-primary/40 flex items-center justify-center text-white shrink-0">
-              <Building2 size={40} />
+    <Layout user={user} currentView="dept_profile" onViewChange={onViewChange}>
+      <div className="max-w-[95rem] mx-auto space-y-10 pb-20 animate-slide-up px-2">
+        {/* ── TOP HEADER ── */}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 px-4">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                Departmental Authority Profile
+              </div>
+              <div className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border tracking-widest flex items-center gap-1 ${
+                isComplete ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' : 'bg-amber-500/10 border-amber-500/20 text-amber-600'
+              }`}>
+                {isComplete ? <ShieldCheck size={10} /> : <AlertCircle size={10} />}
+                {isComplete ? 'Identity Verified' : 'Action Required'}
+              </div>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
+            <h1 className="text-4xl md:text-5xl font-black text-foreground tracking-tighter">
+              {profile.name || "Unit"} <span className="text-primary italic font-serif">Governance</span>
+            </h1>
+            <p className="text-muted-foreground text-sm font-medium flex items-center gap-2">
+              <Shield size={14} className="text-primary" />
+              <span>Authorization & Secure Protocol Center</span>
+            </p>
+          </div>
+
+          <button 
+            onClick={() => onViewChange('dashboard')}
+            className="group flex items-center gap-3 px-6 py-3 rounded-2xl bg-white border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/30 transition-all active:scale-95 shrink-0"
+          >
+            <div className="w-9 h-9 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all duration-300">
+              <ArrowLeft size={18} />
+            </div>
+            <span className="text-sm font-black text-muted-foreground group-hover:text-primary transition-colors tracking-tight">Main Command</span>
+          </button>
+        </div>
+
+        {/* ── MAIN CARD ── */}
+        <div className="relative overflow-hidden rounded-[3rem] bg-white/70 backdrop-blur-xl border border-border/50 p-8 md:p-12 shadow-2xl shadow-black/[0.03]">
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full translate-x-1/2 -translate-y-1/2 -z-10"></div>
+          <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-emerald-500/5 blur-[100px] rounded-full -translate-x-1/2 translate-y-1/2 -z-10"></div>
+          
+          <div className="relative z-10 flex flex-col lg:flex-row items-start gap-10">
+            <div className="w-24 h-24 rounded-[2rem] bg-primary shadow-2xl shadow-primary/40 flex items-center justify-center text-white shrink-0 group hover:rotate-6 transition-transform">
+              <Building2 size={48} />
+            </div>
+            <div className="space-y-4 flex-1">
+              <div className="flex items-center gap-3">
                 <div className="px-2 py-0.5 rounded-md bg-primary/20 border border-primary/30 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
                   <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
                   Neural Core: Authenticated
@@ -139,17 +152,15 @@ const DepartmentProfile = ({ user, onViewChange }) => {
                   Secure Protocol: Active
                 </div>
               </div>
-              <h1 className="text-3xl md:text-5xl font-black text-foreground tracking-tighter">
-                {profile.name || "Department Account"}
-              </h1>
-              <p className="text-muted-foreground font-medium flex items-center gap-2">
-                <ShieldCheck size={16} className="text-primary" />
-                <span>Governance & Authorization Control Center</span>
+              <h2 className="text-3xl md:text-5xl font-black text-foreground tracking-tighter leading-none">
+                {profile.name || "Authenticating..."}
+              </h2>
+              <p className="text-muted-foreground text-sm font-medium italic">
+                Strategic administrative control unit within the CSS Group ecosystem.
               </p>
             </div>
           </div>
         </div>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* ── LEFT COLUMN: MAIN FORM ── */}
@@ -350,7 +361,8 @@ const DepartmentProfile = ({ user, onViewChange }) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </Layout>
   );
 };
 
