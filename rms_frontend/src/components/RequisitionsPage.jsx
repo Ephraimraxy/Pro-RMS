@@ -10,9 +10,10 @@ import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloa
 import { forwardAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import {
-  Search, Plus, Eye, FileText as FileIcon, X,
+  Search, Plus, Eye, FileText, X,
   ChevronRight, Paperclip, ShieldCheck, Clock,
-  ArrowRightCircle, CornerDownLeft, Loader2, Send, Trash2, Printer
+  ArrowRightCircle, CornerDownLeft, Loader2, Send, Trash2, Printer,
+  Building2, ArrowRight, History, Download
 } from 'lucide-react';
 import { reqAPI } from '../lib/api';
 
@@ -321,7 +322,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {attachments.map(a => (
                       <div key={a.id} className="flex items-center gap-3 p-4 bg-muted/20 rounded-[1rem] border border-border/30 text-xs hover:border-primary/20 transition-all group">
-                        <FileIcon size={14} className="text-primary shrink-0" />
+                        <FileText size={14} className="text-primary shrink-0" />
                         <div className="flex-1 truncate">
                            <p className="truncate text-foreground font-bold">{a.filename}</p>
                            <p className="text-[9px] text-muted-foreground uppercase">{a.size ? `${(a.size / 1024).toFixed(0)} KB` : 'N/A'}</p>
