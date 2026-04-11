@@ -10,8 +10,9 @@ import { toast } from 'react-hot-toast';
 import {
   Search, Plus, Eye, FileText as FileIcon, X,
   ChevronRight, Paperclip, ShieldCheck, Clock,
-  ArrowRightCircle, CornerDownLeft, Loader2, Send
+  ArrowRightCircle, CornerDownLeft, Loader2, Send, Trash2, Printer
 } from 'lucide-react';
+import { reqAPI } from '../lib/api';
 
 const statusColors = {
   pending:  'bg-amber-50 border-amber-200 text-amber-700',
@@ -225,9 +226,23 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               {req.amount ? ` · ₦${Number(req.amount).toLocaleString()}` : ''}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-full text-muted-foreground shrink-0 transition-all">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const token = localStorage.getItem('rms_token');
+                const baseUrl = import.meta.env.VITE_API_URL || '/api';
+                window.open(`${baseUrl}/requisitions/${req.id}/dynamic-pdf?token=${token}`, '_blank');
+              }}
+              title="Generate Stage Report (PDF)"
+              className="p-2.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all flex items-center gap-2 border border-primary/20 shadow-sm"
+            >
+              <Printer size={18} />
+              <span className="text-xs font-bold hidden sm:inline">Print Report</span>
+            </button>
+            <button onClick={onClose} className="p-2 hover:bg-muted rounded-full text-muted-foreground shrink-0 transition-all">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -370,6 +385,8 @@ const RequisitionsPage = ({ onViewChange }) => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [isFormOpen, setIsFormOpen]     = useState(false);
   const [selectedReq, setSelectedReq]   = useState(null);
+  const [selectedIds, setSelectedIds]   = useState([]);
+  const [deleting, setDeleting]         = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -388,6 +405,43 @@ const RequisitionsPage = ({ onViewChange }) => {
   });
 
   const isIncoming = (r) => user?.deptId && r.targetDepartmentId === user.deptId;
+  const isAdmin = user?.role === 'global_admin';
+
+  const toggleSelect = (id) => {
+    setSelectedIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.length === filtered.length) setSelectedIds([]);
+    else setSelectedIds(filtered.map(r => r.id));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to permanently delete ${selectedIds.length} records globally?`)) return;
+    setDeleting(true);
+    try {
+      await reqAPI.deleteMultipleRequisitions(selectedIds);
+      toast.success('Records fully purged from the entire system!');
+      setSelectedIds([]);
+      await loadData();
+    } catch (err) {
+      toast.error('Failed to purge selected records. You might lack permissions.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSingleDelete = async (id, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Permanently delete Record #${id}?`)) return;
+    try {
+      await reqAPI.deleteRequisition(id);
+      toast.success('Record purged globally!');
+      await loadData();
+    } catch (err) {
+      toast.error('Deletion restricted or failed.');
+    }
+  };
 
   return (
     <Layout user={user} currentView="requisitions" onViewChange={onViewChange}>
@@ -411,12 +465,24 @@ const RequisitionsPage = ({ onViewChange }) => {
             </h1>
             <p className="text-muted-foreground text-sm mt-1">{filtered.length} records found</p>
           </div>
-          <button
-            onClick={() => setIsFormOpen(true)}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center gap-2 w-fit"
-          >
-            <Plus size={18} /> New Requisition
-          </button>
+          <div className="flex gap-2">
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg flex items-center gap-2"
+              >
+                {deleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                Purge {selectedIds.length} Selected
+              </button>
+            )}
+            <button
+              onClick={() => setIsFormOpen(true)}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center gap-2 w-fit"
+            >
+              <Plus size={18} /> New Requisition
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -458,6 +524,9 @@ const RequisitionsPage = ({ onViewChange }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-muted/30 text-muted-foreground text-[10px] font-bold uppercase tracking-widest border-b border-border/50">
+                    <th className="py-4 px-3 w-10">
+                      <input type="checkbox" className="rounded" checked={filtered.length > 0 && selectedIds.length === filtered.length} onChange={toggleAll} />
+                    </th>
                     <th className="py-4 px-5">Ref ID</th>
                     <th className="py-4 px-5">Type</th>
                     <th className="py-4 px-5">Title</th>
@@ -476,7 +545,10 @@ const RequisitionsPage = ({ onViewChange }) => {
                         isIncoming(r) ? 'bg-blue-50/40' : ''
                       }`}
                     >
-                      <td className="py-4 px-5">
+                      <td className="py-4 px-3" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" className="rounded" checked={selectedIds.includes(r.id)} onChange={() => toggleSelect(r.id)} />
+                      </td>
+                      <td className="py-4 px-5 cursor-pointer" onClick={() => setSelectedReq(r)}>
                         <span className="text-xs font-bold text-primary">#{r.id}</span>
                         <div className="text-[10px] text-muted-foreground font-mono">
                           {new Date(r.createdAt).toLocaleDateString()}
@@ -529,19 +601,23 @@ const RequisitionsPage = ({ onViewChange }) => {
                           {r.status}
                         </span>
                       </td>
-                      <td className="py-4 px-5 text-right">
-                        <button
-                          onClick={() => setSelectedReq(r)}
-                          className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-all"
-                        >
-                          <Eye size={16} />
-                        </button>
+                      <td className="py-4 px-5 text-right w-24">
+                        <div className="flex justify-end gap-3 items-center">
+                          <button onClick={() => setSelectedReq(r)} className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all">
+                            <Eye size={18} />
+                          </button>
+                          {(isAdmin || r.status === 'draft') && (
+                            <button onClick={e => handleSingleDelete(r.id, e)} className="p-2 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all">
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan="8" className="py-12 text-center text-muted-foreground text-sm">
+                      <td colSpan="9" className="py-12 text-center text-muted-foreground text-sm">
                         No requisitions match your filters.
                       </td>
                     </tr>

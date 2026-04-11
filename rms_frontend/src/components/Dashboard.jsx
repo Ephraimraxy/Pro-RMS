@@ -4,7 +4,8 @@ import RequisitionForm from './RequisitionForm';
 import { useAuth } from '../context/AuthContext';
 import { CORPORATE_HIERARCHY } from '../constants/departments';
 import { getDashboardStats, getRequisitions, getDepartments } from '../lib/store';
-import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye } from 'lucide-react';
+import { reqAPI } from '../lib/api';
+import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye, AlertTriangle } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
   <div onClick={onClick} className="glass p-4 lg:p-6 rounded-2xl border border-border/50 relative overflow-hidden group hover:border-primary/30 transition-all cursor-pointer bg-white/60">
@@ -56,6 +57,15 @@ const Dashboard = ({ onViewChange }) => {
     setLoadingDepts(false);
   };
 
+  const [isDeptReady, setIsDeptReady] = useState(true);
+  useEffect(() => {
+    if (user?.role === 'department') {
+      reqAPI.getDeptProfile().then(p => {
+        setIsDeptReady(p.hasSignature && p.headEmail && p.headName);
+      }).catch(() => {});
+    }
+  }, [user]);
+
   useEffect(() => {
     loadDashboard();
   }, []);
@@ -78,6 +88,26 @@ const Dashboard = ({ onViewChange }) => {
       />
       
       <div className="max-w-7xl mx-auto space-y-8 pb-20">
+        {user?.role === 'department' && !isDeptReady && (
+          <div className="glass bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 animate-pulse">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-600">
+                <AlertTriangle size={28} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-amber-800 tracking-tight">Governance Setup Incomplete</h2>
+                <p className="text-sm text-amber-700 font-medium">Your department cannot initiate requisitions until the head official's profile and signature are configured.</p>
+              </div>
+            </div>
+            <button
+               onClick={() => onViewChange('dept_profile')}
+               className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg flex items-center gap-2"
+            >
+              Complete Setup Now
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight">

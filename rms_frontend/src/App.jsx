@@ -10,6 +10,7 @@ const AuditLogs = React.lazy(() => import('./components/AuditLogs'))
 const DocumentStudio = React.lazy(() => import('./components/DocumentStudio'))
 const RequisitionsPage = React.lazy(() => import('./components/RequisitionsPage'))
 const MemoManagement = React.lazy(() => import('./components/MemoManagement'))
+const DepartmentProfile = React.lazy(() => import('./components/DepartmentProfile'))
 const MyActivity = React.lazy(() => import('./components/MyActivity'))
 
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -143,7 +144,8 @@ const AppContent = () => {
     workflow_builder: <WorkflowBuilder onViewChange={setCurrentView} />,
     department_manager: <DepartmentManager onViewChange={setCurrentView} />,
     audit_logs: <AuditLogs onViewChange={setCurrentView} />,
-    document_studio: <DocumentStudio user={user} onViewChange={setCurrentView} />
+    document_studio: <DocumentStudio user={user} onViewChange={setCurrentView} />,
+    dept_profile: <DepartmentProfile user={user} onViewChange={setCurrentView} />
   };
 
   return (

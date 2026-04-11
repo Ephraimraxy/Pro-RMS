@@ -4,9 +4,11 @@ import { useNetwork } from '../App';
 import { 
   LayoutDashboard, FileText, ClipboardCheck, History, Settings, 
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
-  ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw
+  ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw,
+  Building2, ShieldAlert
 } from 'lucide-react';
 import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead } from '../lib/store';
+import { reqAPI } from '../lib/api';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
   <div 
@@ -206,6 +208,19 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
     return () => clearInterval(interval);
   }, []);
 
+  const [deptStatus, setDeptStatus] = useState({ isReady: true });
+  useEffect(() => {
+    if (user?.role === 'department') {
+      const checkStats = async () => {
+        try {
+          const profile = await reqAPI.getDeptProfile();
+          setDeptStatus({ isReady: profile.hasSignature && profile.headName && profile.headEmail });
+        } catch (e) {}
+      };
+      checkStats();
+    }
+  }, [user]);
+
   useEffect(() => {
     const loadSync = async () => {
       const status = await getSyncQueueStatus();
@@ -286,6 +301,16 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} isCollapsed={isCollapsed} />
               <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} isCollapsed={isCollapsed} />
               <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
+              
+              {user?.role === 'department' && (
+                <SidebarItem 
+                  icon={deptStatus.isReady ? Building2 : ShieldAlert} 
+                  label="Dept Profile" 
+                  active={currentView === 'dept_profile'} 
+                  onClick={() => onViewChange('dept_profile')} 
+                  isCollapsed={isCollapsed} 
+                />
+              )}
             </div>
 
             {user?.role !== 'department' && (

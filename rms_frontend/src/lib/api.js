@@ -169,6 +169,9 @@ export const reqAPI = {
   async deleteRequisition(id) {
     return api.delete(`/requisitions/${id}`);
   },
+  async deleteMultipleRequisitions(ids) {
+    return api.post(`/requisitions/bulk-delete`, { ids });
+  },
   async approveRequisition(id, remarks) {
     return api.post(`/requisitions/${id}/approve`, { remarks });
   },

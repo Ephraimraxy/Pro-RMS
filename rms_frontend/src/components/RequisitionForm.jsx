@@ -92,9 +92,18 @@ const RequisitionForm = ({ isOpen, onClose }) => {
     setRefining(true);
     try {
       const res = await aiAPI.refineDraft(formData.description);
+      
+      const newTypeStr = res.documentType?.toLowerCase() || 'cash';
+      const matchedType = types.find(t => 
+        newTypeStr === 'memo' ? t.name.toLowerCase().includes('memo') : t.name.toLowerCase().includes('cash')
+      ) || types[0];
+
+      setSelectedType(matchedType);
+
       setAiPreview({
         description: res.refinedDescription,
-        amount: res.totalAmount
+        amount: res.totalAmount,
+        typeLabel: matchedType?.name || 'Requisition'
       });
       toast.success('AI refinement complete. Please review the details.');
     } catch (err) {
@@ -181,31 +190,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
 
-          {/* Type selector */}
-          <div className="grid grid-cols-3 gap-3">
-            {types.map(t => {
-              const Icon  = t.name.toLowerCase().includes('material') ? Package
-                          : t.name.toLowerCase().includes('memo') ? FileText : CreditCard;
-              const color = t.name.toLowerCase().includes('material') ? 'primary'
-                          : t.name.toLowerCase().includes('memo') ? 'amber' : 'emerald';
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => setSelectedType(t)}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col items-center space-y-2 ${
-                    selectedType?.id === t.id
-                      ? `bg-${color}-500/10 border-${color}-500/30 text-${color}-700 shadow-md`
-                      : 'bg-white/50 border-border/50 text-muted-foreground hover:border-border'
-                  }`}
-                >
-                  <Icon size={22} />
-                  <span className="text-[10px] font-black uppercase tracking-tight">{t.name}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Type selector (Removed - Handled by AI) */}
 
           {/* Description */}
           {!aiPreview ? (
@@ -225,7 +210,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
           ) : (
             <div className="space-y-4 border border-primary/20 bg-primary/5 rounded-2xl p-5 relative">
               <div className="absolute top-4 right-4 text-[10px] uppercase font-black text-primary tracking-widest px-2 py-1 bg-primary/10 rounded-full flex items-center gap-1">
-                <CheckCircle2 size={12} /> AI Refined
+                <CheckCircle2 size={12} /> AI Classified as: {aiPreview.typeLabel}
               </div>
               <div>
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">

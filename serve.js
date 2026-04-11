@@ -13,6 +13,7 @@ const xss = require('xss');
 const pino = require('pino');
 const pinoHttp = require('pino-http');
 const OpenAI = require('openai');
+const fs = require('fs');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -239,7 +240,7 @@ function clearLoginAttempts(key) {
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
   if (!token) return res.status(401).json({ error: 'Access Denied: No Token' });
 
   // Check blacklist
@@ -299,7 +300,28 @@ const findNextStage = (eligibleStages, currentStageId) => {
 
 const computeContentHash = (requisition) => {
   const content = requisition.content || requisition.description || '';
-  return sha256Hex(content);
+  return crypto.createHash('sha256').update(content).digest('hex');
+};
+
+const checkDeptReadiness = async (deptId) => {
+  if (!deptId) return { ready: false, reason: 'Department ID missing' };
+  const dept = await prisma.department.findUnique({
+    where: { id: deptId },
+    include: { users: { include: { signature: true } } }
+  });
+  if (!dept) return { ready: false, reason: 'Department not found' };
+  if (!dept.headName || !dept.headEmail) {
+    return { ready: false, reason: `Department "${dept.name}" has not configured their head official's name or email.` };
+  }
+  // Check if a user with that email has a signature
+  const headUser = await prisma.user.findFirst({
+    where: { email: dept.headEmail },
+    include: { signature: true }
+  });
+  if (!headUser || !headUser.signature) {
+    return { ready: false, reason: `Department "${dept.name}" head official (${dept.headEmail}) has not uploaded a digital signature.` };
+  }
+  return { ready: true };
 };
 
 const computeAttachmentsHash = (attachments = []) => {
@@ -1191,6 +1213,15 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
         }
       }
 
+      // STRICT GOVERNANCE CHECK
+      const originReady = await checkDeptReadiness(originDeptId);
+      if (!originReady.ready) return res.status(400).json({ error: originReady.reason });
+      
+      if (targetDepartmentId) {
+        const targetReady = await checkDeptReadiness(targetDepartmentId);
+        if (!targetReady.ready) return res.status(400).json({ error: targetReady.reason });
+      }
+
       const created = await prisma.requisition.create({
         data: {
           clientId,
@@ -1335,19 +1366,46 @@ app.delete('/api/requisitions/:id', authenticateToken, async (req, res) => {
     const existing = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
     if (!existing) return res.status(404).json({ error: 'Requisition not found' });
     
-    if (existing.status !== 'draft') {
-      return res.status(400).json({ error: 'Only drafts can be deleted' });
+    const systemUser = await prisma.user.findFirst({ where: { role: 'global_admin' } });
+    const isAdmin = getNumericUserId(req.user) === systemUser?.id;
+
+    if (!isAdmin) {
+      if (existing.status !== 'draft') {
+        return res.status(400).json({ error: 'Only drafts can be deleted' });
+      }
+      const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+      if (existing.departmentId !== userDeptId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
     }
+
+    await prisma.requisition.delete({ where: { id: parseInt(id) } });
+    res.json({ ok: true, message: 'Deleted successfully' });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/requisitions/bulk-delete', authenticateToken, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'No IDs provided' });
 
     const systemUser = await prisma.user.findFirst({ where: { role: 'global_admin' } });
     const isAdmin = getNumericUserId(req.user) === systemUser?.id;
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
-    if (!isAdmin && existing.departmentId !== userDeptId) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
 
-    await prisma.requisition.delete({ where: { id: parseInt(id) } });
-    res.json({ ok: true, message: 'Draft deleted' });
+    if (isAdmin) {
+      await prisma.requisition.deleteMany({ where: { id: { in: ids } } });
+      return res.json({ ok: true, message: 'Deleted successfully' });
+    } else {
+      await prisma.requisition.deleteMany({
+        where: {
+          id: { in: ids },
+          status: 'draft',
+          departmentId: userDeptId
+        }
+      });
+      return res.json({ ok: true, message: 'Deleted allowed drafts' });
+    }
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -1546,6 +1604,85 @@ app.get('/api/verify/:code', authenticateToken, requireRoles(['global_admin']), 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+// ── DEPARTMENT PROFILE & GOVERNANCE ROUTES ───────────────────────────────────
+
+app.get('/api/department/profile', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'department' || !req.user.deptId) {
+      return res.status(403).json({ error: 'Only department accounts can access this profile' });
+    }
+    const dept = await prisma.department.findUnique({
+      where: { id: req.user.deptId },
+      include: {
+        users: {
+          where: { email: { equals: prisma.department.findUnique({ where: { id: req.user.deptId } }).headEmail } },
+          include: { signature: true }
+        }
+      }
+    });
+    // Simpler join for the signature status
+    const headUser = dept.headEmail ? await prisma.user.findFirst({
+      where: { email: dept.headEmail },
+      include: { signature: true }
+    }) : null;
+
+    res.json({
+      ...dept,
+      hasSignature: !!headUser?.signature
+    });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.put('/api/department/profile', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'department' || !req.user.deptId) return res.status(403).json({ error: 'Forbidden' });
+    const { headName, headEmail, headTitle, phone, address } = req.body;
+    const updated = await prisma.department.update({
+      where: { id: req.user.deptId },
+      data: { headName, headEmail, headTitle, phone, address }
+    });
+    res.json(updated);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.post('/api/department/signature', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'department' || !req.user.deptId) return res.status(403).json({ error: 'Forbidden' });
+    if (!req.file) return res.status(400).json({ error: 'No signature file uploaded' });
+
+    const dept = await prisma.department.findUnique({ where: { id: req.user.deptId } });
+    if (!dept.headEmail) return res.status(400).json({ error: 'Please set a head official email first' });
+
+    // Find or create the user for this email to attach the signature
+    let headUser = await prisma.user.findFirst({ where: { email: dept.headEmail } });
+    if (!headUser) {
+      // Create a placeholder user if they don't exist
+      headUser = await prisma.user.create({
+        data: {
+          email: dept.headEmail,
+          name: dept.headName || 'Department Head',
+          role: 'department',
+          departmentId: dept.id,
+          password: crypto.randomBytes(8).toString('hex') // placeholder
+        }
+      });
+    }
+
+    const storageKey = generateStorageKey(`signatures/head-${dept.id}`, req.file.originalname);
+    await putObject({ key: storageKey, body: req.file.buffer, contentType: req.file.mimetype });
+
+    await prisma.userSignature.upsert({
+      where: { userId: headUser.id },
+      update: { imageKey: storageKey },
+      create: { userId: headUser.id, imageKey: storageKey }
+    });
+
+    res.json({ success: true, message: 'Department head signature updated successfully' });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// ── END GOVERNANCE ROUTES ───────────────────────────────────────────────────
+
 // Public verification endpoint (rate-limited, no auth required)
 app.get('/api/public-verify/:code', publicVerifyLimiter, async (req, res) => {
   try {
@@ -1598,6 +1735,158 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
     }
     res.json(requisition);
   } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requisition = await prisma.requisition.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        department: true,
+        targetDepartment: true,
+        approvals: {
+          include: {
+            stage: true,
+            user: { include: { signature: true } }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
+
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+    
+    let y = 800;
+    const margin = 50;
+    const pageWidth = 595.28;
+
+    // 1. Embed Logo
+    try {
+      if (fs.existsSync(path.join(__dirname, 'samples', 'logo.jpg'))) {
+        const logoBytes = fs.readFileSync(path.join(__dirname, 'samples', 'logo.jpg'));
+        const logoImage = await pdfDoc.embedJpg(logoBytes);
+        const logoDims = logoImage.scale(0.2);
+        page.drawImage(logoImage, {
+          x: margin,
+          y: y - logoDims.height,
+          width: logoDims.width,
+          height: logoDims.height
+        });
+      }
+    } catch (e) { logger.warn('Logo embed failed:', e.message); }
+
+    // 2. Company Header Info
+    const isMemo = requisition.type === 'Memo';
+    page.drawText('CSS GLOBAL INTEGRATED FARMS LTD', { x: 150, y: y - 15, size: 14, font: boldFont, color: rgb(0.1, 0.2, 0.4) });
+    page.drawText('Km 10, Abuja-Keffi Expressway, Nasarawa State.', { x: 150, y: y - 30, size: 9, font });
+    page.drawText('www.cssgroup.com.ng | info@cssgroup.com.ng', { x: 150, y: y - 42, size: 9, font });
+    
+    y -= 80;
+    page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1.5, color: rgb(0.1, 0.2, 0.4) });
+    y -= 30;
+
+    // 3. Document Title
+    const title = isMemo ? 'INTERNAL MEMORANDUM' : 'REQUISITION VOUCHER';
+    page.drawText(title, { 
+      x: pageWidth / 2 - (boldFont.widthOfTextAtSize(title, 16) / 2), 
+      y, 
+      size: 16, 
+      font: boldFont,
+      decoration: { type: 'underline' }
+    });
+    y -= 40;
+
+    // 4. Metadata Block
+    if (isMemo) {
+      page.drawText(`REF: CSSG/${(requisition.department?.code || 'CSS').toUpperCase()}/MO/${id}`, { x: margin, y, size: 10, font: boldFont });
+      page.drawText(`DATE: ${new Date(requisition.createdAt).toLocaleDateString().toUpperCase()}`, { x: pageWidth - 160, y, size: 10, font: boldFont });
+      y -= 20;
+      page.drawText(`TO: ${(requisition.targetDepartment?.name || 'TARGET DEPT').toUpperCase()}`, { x: margin, y, size: 10, font: boldFont });
+      y -= 15;
+      page.drawText(`FROM: ${(requisition.department?.name || 'ORIGIN DEPT').toUpperCase()}`, { x: margin, y, size: 10, font: boldFont });
+      y -= 15;
+      page.drawText(`SUBJECT: ${requisition.title.toUpperCase()}`, { x: margin, y, size: 11, font: boldFont });
+      y -= 10;
+      page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1 });
+    } else {
+      page.drawText(`Voucher No: #${id}`, { x: margin, y, size: 11, font: boldFont });
+      page.drawText(`Date: ${new Date(requisition.createdAt).toLocaleDateString()}`, { x: pageWidth - 160, y, size: 11, font: boldFont });
+      y -= 25;
+      page.drawText(`Originating Department: ${requisition.department?.name}`, { x: margin, y, size: 10, font });
+      y -= 15;
+      page.drawText(`Target Department: ${requisition.targetDepartment?.name || 'Processing Department'}`, { x: margin, y, size: 10, font });
+      y -= 15;
+      page.drawText(`Requisition Title: ${requisition.title}`, { x: margin, y, size: 10, font: boldFont });
+    }
+
+    y -= 40;
+
+    // 5. Description Body
+    page.drawText('DESCRIPTION / CONTENT:', { x: margin, y, size: 9, font: boldFont });
+    y -= 20;
+    
+    const content = requisition.description || 'No content provided.';
+    const lines = content.match(/.{1,85}/g) || [];
+    for (const line of lines) {
+      if (y < 120) { page.drawText('... (continued on next page)', { x: margin, y, size: 8, font: italicFont }); break; }
+      page.drawText(line, { x: margin + 10, y, size: 10, font });
+      y -= 15;
+    }
+
+    if (!isMemo && requisition.amount > 0) {
+      y -= 20;
+      page.drawText(`TOTAL AMOUNT:`, { x: margin, y, size: 12, font: boldFont });
+      const amtStr = `NGN ${Number(requisition.amount).toLocaleString()}`;
+      page.drawText(amtStr, { x: pageWidth - margin - boldFont.widthOfTextAtSize(amtStr, 12), y, size: 12, font: boldFont });
+      y -= 20;
+    }
+
+    // 6. Approval & Signatures Trail
+    y = 250; 
+    page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 0.5, color: rgb(0.7,0.7,0.7) });
+    y -= 20;
+    page.drawText('AUTHORIZATION & APPROVAL TRAIL', { x: margin, y, size: 9, font: boldFont, color: rgb(0.4, 0.4, 0.4) });
+    y -= 25;
+
+    for (const app of requisition.approvals) {
+      if (y < 60) break;
+      const stamp = new Date(app.createdAt).toLocaleString();
+      const statusText = `[${app.action.toUpperCase()}] ${app.stage?.name || 'Processed'} by ${app.user?.name} on ${stamp}`;
+      page.drawText(statusText, { x: margin, y, size: 9, font });
+      
+      // Try to embed user digital signature if available
+      if (app.user?.signature?.imageKey) {
+        try {
+          const sigBuffer = await getObjectBuffer(app.user.signature.imageKey);
+          const sigImage = await embedImageIfAvailable(pdfDoc, sigBuffer);
+          if (sigImage) {
+            const dims = sigImage.scale(0.15);
+            page.drawImage(sigImage, { x: pageWidth - margin - dims.width - 20, y: y - 5, width: dims.width, height: dims.height });
+          }
+        } catch (e) { /* skip sig if fail */ }
+      }
+      y -= 15;
+    }
+
+    // 7. Footer
+    const footerText = `Generated dynamically by CSS-RMS on ${new Date().toLocaleString()}`;
+    page.drawText(footerText, { x: pageWidth / 2 - (font.widthOfTextAtSize(footerText, 8) / 2), y: 30, size: 8, font: italicFont, color: rgb(0.5, 0.5, 0.5) });
+
+    const pdfBytes = await pdfDoc.save();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="CSS-REPORT-${id}.pdf"`);
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) { 
+    logger.error('Dynamic PDF Error:', error);
+    res.status(500).json({ error: error.message }); 
+  }
 });
 
 app.get('/api/requisitions', authenticateToken, async (req, res) => {
@@ -1764,7 +2053,12 @@ app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "You are an expert executive procurement assistant. The user will provide a rough draft of items they want to request. Your job is to rewrite it into a highly professional, polite, and clear requisition request. Extract any price quantities they mention, calculate the total mathematical sum in Nigerian Naira (₦), and return a JSON object exactly validating to the schema provided. If NO prices or amounts are mentioned anywhere, set totalAmount to 0. Use NGN or ₦ for currency formatting in the refined text."
+          content: `You are an expert executive procurement and correspondence assistant. The user will provide a rough draft. 
+If the draft is a list of items to buy, budget, or requests for money/pricing, format it as a professional itemized requisition breakdown and set documentType to "Cash".
+If the draft is just a general communication, notice, internal penalty/fine statement (e.g. money captured just as text but no actual funding request), or administrative text with no funding authorization needed, format it as a polite professional memorandum and set documentType to "Memo".
+Extract any math/prices mentioned. If NO prices are requested for funding, set totalAmount to 0. 
+Always return a JSON object with: 
+{ "refinedDescription": string, "totalAmount": number, "documentType": "Cash" | "Memo" }`
         },
         {
           role: "user",
@@ -1779,7 +2073,8 @@ app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
     // Sanitize ai output just to be safe
     return res.json({
       refinedDescription: xss(aiData.refinedDescription || aiData.description || ''),
-      totalAmount: Number(aiData.totalAmount) || 0
+      totalAmount: Number(aiData.totalAmount) || 0,
+      documentType: aiData.documentType === 'Memo' ? 'Memo' : 'Cash'
     });
   } catch (error) {
     logger.error('OpenAI Refinement Error:', error);
