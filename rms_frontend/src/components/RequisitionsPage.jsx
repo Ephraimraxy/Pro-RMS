@@ -52,7 +52,7 @@ function buildTimeline(approvals = [], currentStage = null, reqStatus = '') {
 
 // ── Respond Panel (for target dept to forward or return) ──────────────────
 const RespondPanel = ({ req, detail, departments, onDone }) => {
-  const [mode, setMode]         = useState(null); // 'forward' | 'return'
+  const [mode, setMode]         = useState(null); // 'forward' | null
   const [targetId, setTargetId] = useState('');
   const [note, setNote]         = useState('');
   const [acting, setActing]     = useState(false);
@@ -61,85 +61,91 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
     d.id !== req.departmentId && d.id !== detail?.targetDepartmentId
   );
 
-  const submit = async () => {
-    if (mode === 'forward' && !targetId) {
-      toast.error('Please select a department to forward to.'); return;
+  const submit = async (actionMode) => {
+    if (actionMode === 'forward' && !targetId) {
+      setMode('forward'); // Open forward selector
+      return;
     }
+    if (actionMode === 'return' && !note.trim()) {
+      toast.error('Please add a review or note explaining why you are returning this.');
+      return;
+    }
+    
     setActing(true);
     try {
       await forwardAPI.forward(req.id, {
-        targetDepartmentId: mode === 'forward' ? parseInt(targetId) : null,
+        targetDepartmentId: actionMode === 'forward' ? parseInt(targetId) : null,
         note,
-        returnToSender: mode === 'return'
+        returnToSender: actionMode === 'return'
       });
-      toast.success(mode === 'return' ? 'Requisition returned to sender.' : 'Requisition forwarded successfully.');
+      toast.success(actionMode === 'return' ? 'Requisition returned to sender.' : 'Requisition forwarded successfully.');
       onDone();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Action failed');
     } finally { setActing(false); }
   };
 
-  if (!mode) {
-    return (
-      <div className="space-y-3">
-        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Your Response</p>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => setMode('forward')}
-            className="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-sm transition-all"
-          >
-            <ArrowRightCircle size={18} /> Forward
-          </button>
-          <button
-            onClick={() => setMode('return')}
-            className="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-sm transition-all"
-          >
-            <CornerDownLeft size={18} /> Return to Sender
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3 border border-border/50 rounded-2xl p-4 bg-white/60">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-black text-foreground uppercase tracking-widest">
-          {mode === 'forward' ? 'Forward To' : 'Return to Sender'}
-        </p>
-        <button onClick={() => setMode(null)} className="text-muted-foreground hover:text-foreground text-xs">
-          Cancel
-        </button>
-      </div>
-
-      {mode === 'forward' && (
-        <select
-          value={targetId}
-          onChange={e => setTargetId(e.target.value)}
-          className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none"
-        >
-          <option value="">— Select department —</option>
-          {forwardDepts.map(d => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
-      )}
-
+    <div className="space-y-4 border border-border/50 rounded-2xl p-5 bg-white/60 shadow-sm relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-primary/30" />
+      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">
+        Add Review / Comment
+      </p>
+      
       <textarea
         value={note}
         onChange={e => setNote(e.target.value)}
-        placeholder={mode === 'return' ? 'Reason for returning (required for clarity)…' : 'Note for next department (optional)…'}
-        className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[70px] resize-none"
+        placeholder="Enter your official response, review, or note here (required for returning)..."
+        className="w-full bg-white border border-border rounded-xl p-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[90px] resize-none shadow-inner"
       />
 
-      <button
-        onClick={submit}
-        disabled={acting || (mode === 'forward' && !targetId)}
-        className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm"
-      >
-        {acting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-        {acting ? 'Processing…' : mode === 'return' ? 'Return to Sender' : 'Forward'}
-      </button>
+      {mode === 'forward' && (
+        <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
+          <label className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center justify-between">
+            <span>Select Target Department</span>
+            <button onClick={() => setMode(null)} className="text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-black/5">Cancel</button>
+          </label>
+          <select
+            value={targetId}
+            onChange={e => setTargetId(e.target.value)}
+            className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none shadow-sm"
+          >
+            <option value="">— Select department to forward to —</option>
+            {forwardDepts.map(d => (
+             <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => submit('forward')}
+            disabled={!targetId || acting}
+            className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md"
+          >
+            {acting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            Confirm Forward
+          </button>
+        </div>
+      )}
+
+      {mode !== 'forward' && (
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <button
+            onClick={() => submit('forward')}
+            className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-sm transition-all shadow-sm"
+          >
+            <ArrowRightCircle size={20} />
+            <span>Forward...</span>
+          </button>
+          
+          <button
+            onClick={() => submit('return')}
+            disabled={acting}
+            className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-sm transition-all disabled:opacity-50 shadow-sm"
+          >
+            {acting ? <Loader2 size={20} className="animate-spin" /> : <CornerDownLeft size={20} />}
+            <span>Return to Sender</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
