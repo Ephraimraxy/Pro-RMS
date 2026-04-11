@@ -163,12 +163,12 @@ export async function getAttachments(requisitionId) {
   }
 }
 
-export async function updateRequisitionStatus(id, newStatus) {
+export async function updateRequisitionStatus(id, newStatus, remarks = '') {
   let updated;
   if (newStatus === 'approved') {
-    updated = await reqAPI.approveRequisition(id);
+    updated = await reqAPI.approveRequisition(id, remarks);
   } else if (newStatus === 'rejected') {
-    updated = await reqAPI.rejectRequisition(id);
+    updated = await reqAPI.rejectRequisition(id, remarks);
   } else {
     return;
   }
@@ -282,6 +282,31 @@ export async function getNotifications() {
   } catch (err) {
     console.warn("Offline: Could not fetch notifications", err);
     return [];
+  }
+}
+
+export async function markNotificationRead(id) {
+  try {
+    return await notificationAPI.markRead(id);
+  } catch (err) {
+    console.warn("Could not mark notification read:", err);
+  }
+}
+
+export async function markAllNotificationsRead() {
+  try {
+    return await notificationAPI.markAllRead();
+  } catch (err) {
+    console.warn("Could not mark all notifications read:", err);
+  }
+}
+
+export async function getRequisitionDetail(id) {
+  try {
+    return await reqAPI.getRequisition(id);
+  } catch (err) {
+    console.warn("Could not fetch requisition detail:", err);
+    return null;
   }
 }
 

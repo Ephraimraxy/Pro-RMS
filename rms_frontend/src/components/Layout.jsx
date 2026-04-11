@@ -6,7 +6,7 @@ import {
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
   ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw
 } from 'lucide-react';
-import { getNotifications, getSyncQueueStatus, flushSyncQueue } from '../lib/store';
+import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead } from '../lib/store';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
   <div 
@@ -34,8 +34,22 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, setShowBell, onLogout }) => {
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout }) => {
   const { isOnline } = useNetwork();
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const handleNotifClick = async (n) => {
+    if (!n.isRead) {
+      await markNotificationRead(n.id);
+      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
+    }
+  };
+
+  const handleClearAll = async () => {
+    await markAllNotificationsRead();
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
   return (
   <nav className="h-14 border-b border-border/40 bg-white/70 backdrop-blur-xl sticky top-0 z-[60] flex items-center justify-between px-4 lg:px-6">
     <div className="flex items-center space-x-3 lg:space-x-5">
@@ -75,13 +89,15 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
       </div>
       
       <div className="relative">
-        <button 
+        <button
           onClick={() => setShowBell(!showBell)}
           className={`relative transition-all p-1.5 rounded-lg ${showBell ? 'bg-foreground text-background shadow-md' : 'text-muted-foreground hover:bg-muted hover:text-primary'}`}
         >
           <Bell size={18} />
-          {notifications.length > 0 && (
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-primary rounded-full border-2 border-background shadow-xs"></span>
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-primary rounded-full border-2 border-background text-[8px] font-black text-primary-foreground flex items-center justify-center px-0.5 shadow-sm">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
           )}
         </button>
 
@@ -89,7 +105,9 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
            <div className="fixed inset-x-4 top-[60px] sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-80 bg-white rounded-2xl border border-border/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
               <div className="p-4 border-b border-border/40 bg-muted/30 flex items-center justify-between">
                 <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Notifications</h3>
-                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{notifications.length} New</span>
+                {unreadCount > 0 && (
+                  <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{unreadCount} Unread</span>
+                )}
               </div>
               <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                 {notifications.length === 0 ? (
@@ -97,20 +115,25 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
                     <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto opacity-50">
                       <Bell size={20} className="text-muted-foreground" />
                     </div>
-                    <p className="text-xs text-muted-foreground font-medium">No new alerts yet.</p>
+                    <p className="text-xs text-muted-foreground font-medium">No notifications yet.</p>
                   </div>
                 ) : (
                   notifications.map(n => (
-                    <div key={n.id} className="p-4 border-b border-border/20 last:border-0 hover:bg-primary/5 transition-colors cursor-pointer group">
+                    <div
+                      key={n.id}
+                      onClick={() => handleNotifClick(n)}
+                      className={`p-4 border-b border-border/20 last:border-0 hover:bg-primary/5 transition-colors cursor-pointer group ${!n.isRead ? 'bg-primary/[0.03]' : ''}`}
+                    >
                       <div className="flex items-start space-x-3">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform ${!n.isRead ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
                           <Inbox size={14} />
                         </div>
                         <div className="flex-1 space-y-1">
-                          <p className="text-[11px] font-bold text-foreground leading-tight">{n.message}</p>
+                          <p className={`text-[11px] leading-tight ${!n.isRead ? 'font-bold text-foreground' : 'font-medium text-muted-foreground'}`}>{n.message}</p>
                           <div className="flex items-center space-x-2 opacity-60">
                             <Clock size={10} />
                             <span className="text-[9px] font-medium">{new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-primary ml-1" />}
                           </div>
                         </div>
                       </div>
@@ -119,7 +142,13 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, showBell, set
                 )}
               </div>
               <div className="p-3 bg-muted/20 border-t border-border/40 text-center">
-                <button className="text-[10px] font-black text-primary hover:text-primary/80 uppercase tracking-widest transition-colors">Clear All Notifications</button>
+                <button
+                  onClick={handleClearAll}
+                  disabled={unreadCount === 0}
+                  className="text-[10px] font-black text-primary hover:text-primary/80 uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Mark All as Read
+                </button>
               </div>
            </div>
         )}
@@ -207,11 +236,12 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-foreground selection:bg-primary/30 font-sans antialiased overflow-x-hidden">
-      <Navbar 
-        user={user} 
-        toggleSidebar={toggleSidebar} 
-        isCollapsed={isCollapsed} 
+      <Navbar
+        user={user}
+        toggleSidebar={toggleSidebar}
+        isCollapsed={isCollapsed}
         notifications={notifications}
+        setNotifications={setNotifications}
         showBell={showBell}
         setShowBell={setShowBell}
         onLogout={logout}

@@ -1,244 +1,363 @@
-import React, { useState } from 'react';
-import { X, Upload, Send, Save, CreditCard, Package, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { addRequisition, getDepartments, getRequisitionTypes, uploadAttachments } from '../lib/store';
+import { deptAPI } from '../lib/api';
 import { useNetwork } from '../App';
-import { useEffect, useRef } from 'react';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
-const RequisitionForm = ({ isOpen, onClose, user }) => {
+// Departments whose members may route to Super Admin
+const SUPER_ADMIN_PRIVILEGED_CODES = ['GMR', 'CEO', 'HRD'];
+
+const RequisitionForm = ({ isOpen, onClose }) => {
+  const { user } = useAuth();
   const { isOnline } = useNetwork();
-  const [types, setTypes] = useState([]);
+
+  const [types, setTypes]               = useState([]);
   const [selectedType, setSelectedType] = useState(null);
+  const [departments, setDepartments]   = useState([]);
+  const [files, setFiles]               = useState([]);
+  const [submitting, setSubmitting]     = useState(false);
+
+  // Activation check state for target department
+  const [activation, setActivation]     = useState(null);   // null | { activated, headName }
+  const [checkingActivation, setCheckingActivation] = useState(false);
+
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
-    departmentId: user?.deptId || '',
-    notes: '',
-    urgency: 'normal'
+    urgency: 'normal',
+    targetDepartmentId: ''
   });
-  const [departments, setDepartments] = useState([]);
-  const [files, setFiles] = useState([]);
+
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    const fetch = async () => {
-      const [allDepts, allTypes] = await Promise.all([
-        getDepartments(),
-        getRequisitionTypes()
-      ]);
+    if (!isOpen) return;
+    const load = async () => {
+      const [allDepts, allTypes] = await Promise.all([getDepartments(), getRequisitionTypes()]);
       setDepartments(allDepts);
       setTypes(allTypes);
       if (allTypes.length > 0) setSelectedType(allTypes[0]);
-      
-      if (user?.role !== 'department' && !formData.departmentId && allDepts.length > 0) {
-        setFormData(prev => ({ ...prev, departmentId: allDepts[0].id }));
-      }
     };
-    fetch();
-  }, []);
+    load();
+    // reset form when opened
+    setFormData({ description: '', amount: '', urgency: 'normal', targetDepartmentId: '' });
+    setFiles([]);
+    setActivation(null);
+    setSubmitting(false);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  // Determine which departments are selectable as "Send To" targets
+  const senderCode = user?.deptCode || '';
+  const isPrivileged = SUPER_ADMIN_PRIVILEGED_CODES.includes(senderCode) || user?.role === 'global_admin';
+
+  // Filter: exclude the sender's own dept from the target list; Super Admin is shown but restricted
+  const targetableDepts = departments.filter(d => {
+    if (d.id === user?.deptId) return false; // can't send to yourself
+    return true;
+  });
+
+  const isSuperAdmin = (dept) => dept?.name?.toLowerCase() === 'super admin';
+
+  const handleTargetChange = async (deptIdStr) => {
+    setFormData(prev => ({ ...prev, targetDepartmentId: deptIdStr }));
+    setActivation(null);
+    if (!deptIdStr) return;
+
+    const deptId = parseInt(deptIdStr);
+    setCheckingActivation(true);
+    try {
+      const result = await deptAPI.checkActivation(deptId);
+      setActivation(result);
+    } catch {
+      setActivation(null);
+    } finally {
+      setCheckingActivation(false);
+    }
+  };
+
   const handleSubmit = async (e, isDraft = false) => {
     e.preventDefault();
-    if (!selectedType) return;
-    
-    try {
-      const result = await addRequisition({ 
-        ...formData, 
-        typeId: selectedType.id,
-        type: selectedType.name,
-        isDraft, 
-        createdBy: user?.name || 'Administrator' 
-      });
+    if (!selectedType || submitting) return;
 
-      // If there are files and creation was successful, upload them
+    if (!formData.description.trim()) {
+      toast.error('Please enter a purpose / description.');
+      return;
+    }
+
+    // Block if target department chosen but not activated (and not draft)
+    if (!isDraft && formData.targetDepartmentId && activation && !activation.activated) {
+      toast.error('Selected target department has not activated their dashboard. Please choose another.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        description:        formData.description,
+        title:              formData.description,
+        type:               selectedType.name,
+        amount:             formData.amount || 0,
+        departmentId:       user?.deptId || undefined,
+        urgency:            formData.urgency,
+        isDraft,
+        targetDepartmentId: formData.targetDepartmentId ? parseInt(formData.targetDepartmentId) : undefined
+      };
+
+      const result = await addRequisition(payload);
+
+      // Upload attachments if created successfully
       if (result && result.length > 0 && files.length > 0) {
-        const reqId = result[0].id;
-        await uploadAttachments(reqId, files);
+        try {
+          await uploadAttachments(result[0].id, files);
+        } catch {
+          toast.error('Requisition created but file upload failed. You can add files later.');
+        }
       }
-      
-      setFormData({ description: '', amount: '', departmentId: user?.deptId || '', notes: '', urgency: 'normal' });
-      setFiles([]);
+
+      toast.success(isDraft ? 'Draft saved.' : 'Requisition submitted successfully.');
       onClose();
     } catch (err) {
-      console.error("Submission failed:", err);
+      const msg = err?.response?.data?.error || err?.message || 'Submission failed';
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-md" onClick={onClose} />
-      
-      <div className="glass bg-white/80 w-full max-w-2xl rounded-3xl border border-border/50 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-md" onClick={!submitting ? onClose : undefined} />
+
+      <div className="glass bg-white/90 w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl border border-border/50 shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh]">
         {/* Header */}
-        <div className="p-6 border-b border-border/50 flex items-center justify-between">
+        <div className="p-5 border-b border-border/50 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-foreground">New Requisition</h2>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-0.5">Originating Dept: {user?.department_id?.[1] || 'CSS Group'}</p>
+            <h2 className="text-lg font-bold text-foreground">New Requisition</h2>
+            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">
+              Originating Dept: {user?.name || user?.department || 'CSS Group'}
+            </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-full text-muted-foreground transition-all">
+          <button
+            onClick={!submitting ? onClose : undefined}
+            disabled={submitting}
+            className="p-2 hover:bg-muted rounded-full text-muted-foreground transition-all disabled:opacity-40"
+          >
             <X size={20} />
           </button>
         </div>
 
-        {/* Form Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          {/* Type Selector */}
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+
+          {/* Type selector */}
           <div className="grid grid-cols-3 gap-3">
             {types.map(t => {
-              const Icon = t.name.toLowerCase().includes('material') ? Package : (t.name.toLowerCase().includes('memo') ? FileText : CreditCard);
-              const color = t.name.toLowerCase().includes('material') ? 'primary' : (t.name.toLowerCase().includes('memo') ? 'amber' : 'emerald');
-              
+              const Icon  = t.name.toLowerCase().includes('material') ? Package
+                          : t.name.toLowerCase().includes('memo') ? FileText : CreditCard;
+              const color = t.name.toLowerCase().includes('material') ? 'primary'
+                          : t.name.toLowerCase().includes('memo') ? 'amber' : 'emerald';
               return (
                 <button
                   key={t.id}
                   type="button"
+                  disabled={submitting}
                   onClick={() => setSelectedType(t)}
                   className={`p-4 rounded-2xl border transition-all flex flex-col items-center space-y-2 ${
-                    selectedType?.id === t.id 
-                    ? `bg-${color}/10 border-${color}/50 text-${color} shadow-lg shadow-${color}/10` 
-                    : 'bg-white/50 border-border/50 text-muted-foreground hover:border-border'
+                    selectedType?.id === t.id
+                      ? `bg-${color}-500/10 border-${color}-500/30 text-${color}-700 shadow-md`
+                      : 'bg-white/50 border-border/50 text-muted-foreground hover:border-border'
                   }`}
                 >
-                  <Icon size={24} />
-                  <span className="text-[10px] font-bold uppercase tracking-tight line-clamp-1">{t.name}</span>
+                  <Icon size={22} />
+                  <span className="text-[10px] font-black uppercase tracking-tight">{t.name}</span>
                 </button>
               );
             })}
           </div>
 
-          <form className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Purpose / Description</label>
-              <textarea
-                value={formData.description}
-                onChange={e => setFormData({...formData, description: e.target.value})}
-                placeholder="Briefly describe the requirement..."
-                className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[100px] transition-all"
-                required
-              />
-            </div>
+          {/* Description */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+              Purpose / Description *
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
+              placeholder="Briefly describe the requirement…"
+              disabled={submitting}
+              className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[90px] transition-all disabled:opacity-60 resize-none"
+              required
+            />
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {selectedType?.name.toLowerCase().includes('cash') && (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Requested Amount (₦)</label>
-                  <input
-                    type="number"
-                    value={formData.amount}
-                    onChange={e => setFormData({...formData, amount: e.target.value})}
-                    placeholder="0.00"
-                    className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono text-lg"
-                    required
-                  />
-                </div>
-              )}
-              
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Assigned Unit / Dept</label>
-                {user?.role === 'department' ? (
-                  <input
-                    type="text"
-                    value={user.name}
-                    readOnly
-                    className="w-full bg-muted/20 border border-border rounded-2xl p-4 text-foreground opacity-70 cursor-not-allowed transition-all"
-                  />
-                ) : (
-                  <select
-                    value={formData.departmentId}
-                    onChange={e => setFormData({...formData, departmentId: parseInt(e.target.value)})}
-                    className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none cursor-pointer"
-                  >
-                    {departments.map(d => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
-                )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Amount (Cash only) */}
+            {selectedType?.name.toLowerCase().includes('cash') && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+                  Requested Amount (₦)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.amount}
+                  onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
+                  placeholder="0.00"
+                  disabled={submitting}
+                  className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono text-base disabled:opacity-60"
+                />
               </div>
+            )}
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Urgency Level</label>
-                <select 
-                   value={formData.urgency}
-                   onChange={e => setFormData({...formData, urgency: e.target.value})}
-                   className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer transition-all"
-                >
-                  <option value="normal" className="bg-background">Normal</option>
-                  <option value="urgent" className="bg-background">Urgent</option>
-                  <option value="critical" className="bg-background text-destructive">Critical / Emergency</option>
-                </select>
-              </div>
-            </div>
-
-
-            {/* File Upload Area */}
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest ml-1">Supporting Documents (FIRS Compliant)</label>
-              <input 
-                type="file" 
-                multiple 
-                className="hidden" 
-                ref={fileInputRef} 
-                onChange={(e) => setFiles(prev => [...prev, ...Array.from(e.target.files)])} 
-                disabled={!isOnline}
-              />
-              <div 
-                onClick={() => isOnline && fileInputRef.current.click()}
-                className={`border-2 border-dashed border-border/50 rounded-2xl p-8 flex flex-col items-center justify-center space-y-3 transition-all group ${
-                  isOnline ? 'bg-white/40 hover:bg-white/80 cursor-pointer' : 'bg-muted/30 opacity-60 cursor-not-allowed'
-                }`}
+            {/* Urgency */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+                Urgency Level
+              </label>
+              <select
+                value={formData.urgency}
+                onChange={e => setFormData(p => ({ ...p, urgency: e.target.value }))}
+                disabled={submitting}
+                className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer transition-all disabled:opacity-60"
               >
-                <div className="p-3 bg-muted rounded-full text-muted-foreground group-hover:text-primary transition-colors">
-                  <Upload size={24} />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-foreground font-medium">Click to upload or drag & drop</p>
-                  <p className="text-[10px] text-muted-foreground mt-1 uppercase">PDF, JPG, PNG, DOC (Max 10MB)</p>
-                  {!isOnline && (
-                    <p className="text-[10px] text-destructive mt-1 uppercase">Attachments require online connection</p>
-                  )}
-                </div>
-              </div>
+                <option value="normal">Normal</option>
+                <option value="urgent">Urgent</option>
+                <option value="critical">Critical / Emergency</option>
+              </select>
+            </div>
+          </div>
 
-              {files.length > 0 && (
-                <div className="grid grid-cols-1 gap-2 mt-4">
-                  {files.map((f, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-white/60 rounded-xl border border-border/40 text-xs shadow-sm">
-                      <div className="flex items-center space-x-3 truncate">
-                        <FileText size={14} className="text-primary shrink-0" />
-                        <span className="font-medium truncate">{f.name}</span>
-                        <span className="text-[10px] text-muted-foreground">({(f.size / 1024).toFixed(1)} KB)</span>
-                      </div>
-                      <button 
-                        type="button"
-                        onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
-                        className="text-muted-foreground hover:text-destructive p-1"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
+          {/* ── Send To Department ── */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+              Send To Department (optional)
+            </label>
+            <select
+              value={formData.targetDepartmentId}
+              onChange={e => handleTargetChange(e.target.value)}
+              disabled={submitting}
+              className="w-full bg-white/80 border border-border rounded-2xl p-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer transition-all disabled:opacity-60"
+            >
+              <option value="">— Route through normal workflow —</option>
+              {targetableDepts.map(d => {
+                const superAdmin = isSuperAdmin(d);
+                const blocked    = superAdmin && !isPrivileged;
+                return (
+                  <option
+                    key={d.id}
+                    value={d.id}
+                    disabled={blocked}
+                    className={blocked ? 'text-muted-foreground' : ''}
+                  >
+                    {d.name}{d.type === 'Strategic' ? ' ★' : ''}
+                    {superAdmin ? ' (Admin — restricted)' : ''}
+                  </option>
+                );
+              })}
+            </select>
+
+            {/* Activation feedback */}
+            {checkingActivation && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse px-1">
+                <Loader2 size={12} className="animate-spin" />
+                Checking department status…
+              </div>
+            )}
+            {!checkingActivation && formData.targetDepartmentId && activation !== null && (
+              activation.activated ? (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
+                  <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-emerald-600" />
+                  <span>
+                    <strong>{activation.headName || 'Department'}</strong> is activated and will receive an email notification.
+                  </span>
                 </div>
+              ) : (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+                  <span>
+                    This department <strong>has not activated</strong> their dashboard yet (no head email configured).
+                    Please ask them to complete their profile, or choose another department.
+                  </span>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* File upload */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+              Supporting Documents (FIRS Compliant)
+            </label>
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              ref={fileInputRef}
+              onChange={e => setFiles(prev => [...prev, ...Array.from(e.target.files)])}
+              disabled={!isOnline || submitting}
+            />
+            <div
+              onClick={() => isOnline && !submitting && fileInputRef.current?.click()}
+              className={`border-2 border-dashed border-border/50 rounded-2xl p-6 flex flex-col items-center justify-center space-y-2 transition-all ${
+                isOnline && !submitting
+                  ? 'bg-white/40 hover:bg-white/80 cursor-pointer'
+                  : 'bg-muted/30 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <Upload size={22} className="text-muted-foreground" />
+              <p className="text-xs text-foreground font-medium text-center">Click to upload · PDF, JPG, PNG, DOC (max 10 MB)</p>
+              {!isOnline && (
+                <p className="text-[10px] text-destructive uppercase font-bold">Attachments require online connection</p>
               )}
             </div>
-          </form>
+
+            {files.length > 0 && (
+              <div className="space-y-1.5">
+                {files.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2.5 bg-white/60 rounded-xl border border-border/40 text-xs">
+                    <FileText size={12} className="text-primary shrink-0" />
+                    <span className="font-medium truncate flex-1">{f.name}</span>
+                    <span className="text-muted-foreground shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-6 border-t border-border/50 flex items-center space-x-4 bg-muted/20">
-          <button 
+        {/* Footer actions */}
+        <div className="p-5 border-t border-border/50 flex items-center gap-3 bg-muted/10 shrink-0">
+          <button
+            type="button"
             onClick={e => handleSubmit(e, true)}
-            className="flex-1 border border-border bg-white hover:bg-muted text-foreground font-bold py-4 rounded-2xl transition-all flex items-center justify-center space-x-2 shadow-sm"
+            disabled={submitting || !selectedType}
+            className="flex-1 border border-border bg-white hover:bg-muted text-foreground font-bold py-3.5 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save size={18} />
-            <span>Save as Draft</span>
+            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Save Draft
           </button>
-          <button 
+          <button
+            type="button"
             onClick={e => handleSubmit(e, false)}
-            className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 rounded-2xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center space-x-2"
+            disabled={submitting || !selectedType || (formData.targetDepartmentId && activation && !activation.activated)}
+            className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send size={18} />
-            <span>Submit for Review</span>
+            {submitting ? (
+              <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+            ) : (
+              <><Send size={16} /> Submit for Review</>
+            )}
           </button>
         </div>
       </div>

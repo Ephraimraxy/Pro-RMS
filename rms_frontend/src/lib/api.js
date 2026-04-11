@@ -77,6 +77,12 @@ export const typeAPI = {
 export const notificationAPI = {
   async getNotifications() {
     return api.get('/notifications');
+  },
+  async markRead(id) {
+    return api.put(`/notifications/${id}/read`);
+  },
+  async markAllRead() {
+    return api.put('/notifications/read-all');
   }
 };
 
@@ -86,6 +92,9 @@ export const deptAPI = {
   },
   async getDepartment(id) {
     return api.get(`/departments/${id}`);
+  },
+  async checkActivation(id) {
+    return api.get(`/departments/${id}/activation`);
   },
   async addDepartment(dept) {
     return api.post('/departments', dept);
@@ -105,6 +114,12 @@ export const deptAPI = {
   }
 };
 
+export const forwardAPI = {
+  async forward(id, payload) {
+    return api.post(`/requisitions/${id}/forward`, payload);
+  }
+};
+
 export const auditAPI = {
   async getAuditLogs() {
     return api.get('/audit-logs');
@@ -114,6 +129,9 @@ export const auditAPI = {
 export const reqAPI = {
   async getRequisitions() {
     return api.get('/requisitions');
+  },
+  async getRequisition(id) {
+    return api.get(`/requisitions/${id}`);
   },
   async addRequisition(data) {
     return api.post('/requisitions', data);

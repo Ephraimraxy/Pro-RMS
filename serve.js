@@ -814,6 +814,33 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
   }
 });
 
+// Mark single notification as read
+app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
+  try {
+    const deptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const userId = getNumericUserId(req.user);
+    const orClauses = [];
+    if (userId) orClauses.push({ userId });
+    if (deptId && !isNaN(deptId)) orClauses.push({ departmentId: deptId });
+    if (orClauses.length === 0) return res.json({ count: 0 });
+    const result = await prisma.notification.updateMany({
+      where: { OR: orClauses, isRead: false },
+      data: { isRead: true }
+    });
+    res.json({ count: result.count });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    await prisma.notification.update({
+      where: { id: parseInt(req.params.id) },
+      data: { isRead: true }
+    });
+    res.json({ success: true });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
 app.post('/api/requisition-types', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
     const parsed = z.object({
@@ -963,15 +990,16 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
 
     for (const item of items) {
       const parsed = z.object({
-        clientId: z.string().optional(),
-        title: z.string().optional(),
-        description: z.string().optional(),
-        type: z.string().optional(),
-        amount: z.union([z.string(), z.number()]).optional(),
-        departmentId: z.number().optional(),
-        urgency: z.string().optional(),
-        content: z.string().optional(),
-        isDraft: z.boolean().optional()
+        clientId:          z.string().optional(),
+        title:             z.string().optional(),
+        description:       z.string().optional(),
+        type:              z.string().optional(),
+        amount:            z.union([z.string(), z.number()]).optional(),
+        departmentId:      z.number().optional(),
+        urgency:           z.string().optional(),
+        content:           z.string().optional(),
+        isDraft:           z.boolean().optional(),
+        targetDepartmentId: z.number().optional(),
       }).safeParse(item);
       if (!parsed.success) {
         return res.status(400).json({ error: 'Invalid requisition payload' });
@@ -989,9 +1017,29 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
       const eligibleStages = await getEligibleStages(amount);
       const firstStage = eligibleStages[0] || null;
       const isDraft = Boolean(data.isDraft);
-      const targetDeptId = data.departmentId || req.user.deptId || 1;
-      if (req.user.role === 'department' && req.user.deptId && targetDeptId !== req.user.deptId) {
+      const originDeptId = data.departmentId || req.user.deptId || 1;
+      if (req.user.role === 'department' && req.user.deptId && originDeptId !== req.user.deptId) {
         return res.status(403).json({ error: 'Department users can only create for their own department' });
+      }
+
+      // Validate target department if supplied
+      let targetDepartmentId = data.targetDepartmentId || null;
+      if (targetDepartmentId) {
+        const targetDept = await prisma.department.findUnique({ where: { id: targetDepartmentId } });
+        if (!targetDept) {
+          return res.status(400).json({ error: 'Target department not found' });
+        }
+        // Only Global Admin / GM / CEO / HR may route to Super Admin dept
+        const superAdminDept = await prisma.department.findFirst({ where: { name: 'Super Admin' } });
+        const senderDept = await prisma.department.findUnique({ where: { id: originDeptId } });
+        const privilegedCodes = ['GMR', 'CEO', 'HRD'];
+        if (
+          superAdminDept && targetDepartmentId === superAdminDept.id &&
+          normalizeRole(req.user.role) !== 'global_admin' &&
+          !privilegedCodes.includes(senderDept?.code)
+        ) {
+          return res.status(403).json({ error: 'Only GM, CEO, or HR may send to Super Admin' });
+        }
       }
 
       const created = await prisma.requisition.create({
@@ -1003,38 +1051,177 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
           description: data.description || '',
           urgency: data.urgency || 'normal',
           status: isDraft ? 'draft' : 'pending',
-          departmentId: targetDeptId,
+          departmentId: originDeptId,
           creatorId,
           content: data.content || null,
           currentStageId: isDraft ? null : (firstStage?.id || null),
           lastActionById: creatorId,
-          lastActionAt: new Date()
+          lastActionAt: new Date(),
+          targetDepartmentId: isDraft ? null : targetDepartmentId,
         }
       });
 
-      if (!isDraft && firstStage?.role) {
-        await notifyRole(firstStage.role, `New Requisition: ${created.title}`, created.id);
-      }
       if (!isDraft) {
-        const dept = await prisma.department.findUnique({ where: { id: targetDeptId } });
+        if (firstStage?.role) {
+          await notifyRole(firstStage.role, `New Requisition: ${created.title}`, created.id);
+        }
+        const originDept = await prisma.department.findUnique({ where: { id: originDeptId } });
         await notifyDepartmentHead({
-          departmentId: targetDeptId,
-          requisition: { ...created, department: dept || null },
-          subject: `New Requisition: ${created.title}`,
+          departmentId: originDeptId,
+          requisition: { ...created, department: originDept || null },
+          subject: `New Requisition Submitted: ${created.title}`,
           lines: [
-            `Department: ${dept?.name || 'Department'}`,
+            `Department: ${originDept?.name || 'Department'}`,
             `Type: ${created.type}`,
             `Amount: ${formatCurrency(created.amount)}`,
             `Urgency: ${created.urgency || 'normal'}`,
-            `Status: ${created.status}`,
             `Created By: ${req.user?.name || 'System'}`
           ]
         });
+
+        // Notify target department if specified and activated (has headEmail)
+        if (targetDepartmentId) {
+          const targetDept = await prisma.department.findUnique({ where: { id: targetDepartmentId } });
+          if (targetDept?.headEmail) {
+            const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
+            const { text, html } = buildEmailContent({
+              title: `📋 Incoming Requisition: ${created.title}`,
+              lines: [
+                `From Department: ${originDept?.name || 'Department'}`,
+                `Type: ${created.type}`,
+                `Amount: ${formatCurrency(created.amount)}`,
+                `Urgency: ${created.urgency || 'normal'}`,
+                `Description: ${created.description || '—'}`,
+                ``,
+                `Please log in to your dashboard to review and respond to this requisition.`
+              ],
+              actionUrl,
+              actionLabel: 'Open Dashboard'
+            });
+            await sendEmail({
+              to: targetDept.headEmail,
+              subject: `[CSS RMS] Incoming Requisition: ${created.title}`,
+              text,
+              html
+            });
+            // Create in-app notification for target dept
+            await prisma.notification.create({
+              data: {
+                departmentId: targetDepartmentId,
+                content: `Incoming Requisition: ${created.title} from ${originDept?.name || 'Department'}`
+              }
+            });
+          }
+        }
       }
       createdRecords.push(created);
     }
 
     res.json([...createdRecords, ...existingRecords]);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Department activation status (used by form to warn about unactivated targets)
+app.get('/api/departments/:id/activation', authenticateToken, async (req, res) => {
+  try {
+    const dept = await prisma.department.findUnique({
+      where: { id: parseInt(req.params.id) },
+      select: { id: true, name: true, headName: true, headEmail: true }
+    });
+    if (!dept) return res.status(404).json({ error: 'Department not found' });
+    res.json({ activated: Boolean(dept.headEmail), headName: dept.headName, headEmail: dept.headEmail });
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Forward / Return-to-Sender a requisition (target department response)
+app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({
+      targetDepartmentId: z.number().nullable().optional(),
+      note: z.string().optional(),
+      returnToSender: z.boolean().optional()
+    }).safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload' });
+
+    const { targetDepartmentId, note, returnToSender } = parsed.data;
+
+    const requisition = await prisma.requisition.findUnique({
+      where: { id: parseInt(id) },
+      include: { department: true, targetDepartment: true }
+    });
+    if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
+
+    // Only the current target department or admin may forward/return
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+    if (!isAdmin && userDeptId !== requisition.targetDepartmentId) {
+      return res.status(403).json({ error: 'Only the current target department may forward or return' });
+    }
+
+    const newTargetId = returnToSender ? null : (targetDepartmentId ?? null);
+    const updated = await prisma.requisition.update({
+      where: { id: parseInt(id) },
+      data: {
+        targetDepartmentId: newTargetId,
+        forwardNote: note || null
+      },
+      include: { department: true, targetDepartment: true }
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: returnToSender ? 'Requisition Returned' : 'Requisition Forwarded',
+        details: `Req #${id}: ${returnToSender ? 'returned to sender' : `forwarded to dept #${newTargetId}`}. Note: ${note || 'none'}`
+      }
+    });
+
+    // Notify new target dept if applicable
+    if (!returnToSender && newTargetId) {
+      const newTarget = await prisma.department.findUnique({ where: { id: newTargetId } });
+      if (newTarget?.headEmail) {
+        const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
+        const { text, html } = buildEmailContent({
+          title: `📋 Forwarded Requisition: ${requisition.title}`,
+          lines: [
+            `Originally From: ${requisition.department?.name || 'Department'}`,
+            `Forwarded By: ${requisition.targetDepartment?.name || 'Department'}`,
+            `Type: ${requisition.type}`,
+            `Amount: ${formatCurrency(requisition.amount)}`,
+            note ? `Note: ${note}` : null,
+            ``,
+            `Please log in to your dashboard to review and respond.`
+          ].filter(Boolean),
+          actionUrl,
+          actionLabel: 'Open Dashboard'
+        });
+        await sendEmail({
+          to: newTarget.headEmail,
+          subject: `[CSS RMS] Forwarded Requisition: ${requisition.title}`,
+          text,
+          html
+        });
+        await prisma.notification.create({
+          data: {
+            departmentId: newTargetId,
+            content: `Forwarded Requisition: ${requisition.title}`
+          }
+        });
+      }
+    }
+
+    // Notify original sender dept on return
+    if (returnToSender && requisition.departmentId) {
+      await prisma.notification.create({
+        data: {
+          departmentId: requisition.departmentId,
+          content: `Requisition returned for clarification: ${requisition.title}${note ? ` — ${note}` : ''}`
+        }
+      });
+    }
+
+    res.json(updated);
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -1150,26 +1337,65 @@ app.get('/api/public-verify/:code', publicVerifyLimiter, async (req, res) => {
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
+app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requisition = await prisma.requisition.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        department:       { select: { name: true, headName: true, headEmail: true } },
+        targetDepartment: { select: { name: true, headEmail: true, headName: true } },
+        creator:          { select: { name: true } },
+        currentStage:     true,
+        attachments:      true,
+        approvals: {
+          include: {
+            stage:     true,
+            user:      { select: { name: true, role: true } },
+            signature: { select: { verificationCode: true, payloadHash: true } }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+    if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
+    if (
+      req.user.role === 'department' && req.user.deptId &&
+      requisition.departmentId !== req.user.deptId &&
+      requisition.targetDepartmentId !== req.user.deptId
+    ) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    res.json(requisition);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
 app.get('/api/requisitions', authenticateToken, async (req, res) => {
   try {
-    const where = {};
-    // RBAC: Department users only see their own department's requisitions
+    let where = {};
+    // RBAC: Department users see their own requisitions AND incoming ones targeted at them
     if (req.user.role === 'department' && req.user.deptId) {
-      where.departmentId = req.user.deptId;
+      where = {
+        OR: [
+          { departmentId: req.user.deptId },
+          { targetDepartmentId: req.user.deptId }
+        ]
+      };
     }
 
-    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
-    const skip = (page - 1) * limit;
+    const skip  = (page - 1) * limit;
 
     const [records, total] = await Promise.all([
       prisma.requisition.findMany({
         where,
         include: {
-          department: { select: { name: true } },
-          creator: { select: { name: true } },
-          currentStage: true,
-          attachments: true
+          department:       { select: { name: true } },
+          targetDepartment: { select: { name: true, headEmail: true } },
+          creator:          { select: { name: true } },
+          currentStage:     true,
+          attachments:      { select: { id: true, filename: true, size: true, mimeType: true } }
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -1302,7 +1528,7 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`🚀 CSS RMS Unified Node listening on port ${PORT}`);
   try {
     await ensureActivePublicKey();
@@ -1350,3 +1576,17 @@ app.listen(PORT, async () => {
     console.warn('[BOOT] Dept upsert skipped:', e.message);
   }
 });
+
+const gracefulShutdown = (signal) => {
+  console.log(`[SHUTDOWN] ${signal} received — closing server gracefully...`);
+  server.close(async () => {
+    try { await prisma.$disconnect(); } catch (_) {}
+    console.log('[SHUTDOWN] Database disconnected. Exiting.');
+    process.exit(0);
+  });
+  // Force-kill if still not done after 10 s
+  setTimeout(() => { console.error('[SHUTDOWN] Timeout — forcing exit.'); process.exit(1); }, 10000).unref();
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
