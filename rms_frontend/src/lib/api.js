@@ -194,8 +194,8 @@ export const userAPI = {
 };
 
 export const aiAPI = {
-  async refineDraft(rawDescription) {
-    return api.post('/ai/refine-requisition', { rawDescription });
+  async refineDraft(rawDescription, mode = 'auto') {
+    return api.post('/ai/refine-requisition', { rawDescription, mode });
   }
 };
 

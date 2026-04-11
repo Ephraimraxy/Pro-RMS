@@ -2037,7 +2037,7 @@ app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res)
 // ── AI MAGICAL REFINEMENT ──
 app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
   try {
-    const { rawDescription } = req.body;
+    const { rawDescription, mode } = req.body;
     if (!rawDescription || rawDescription.trim().length < 5) {
       return res.status(400).json({ error: 'Description is too short to refine.' });
     }
@@ -2048,12 +2048,21 @@ app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     
+    const isProMode = mode === 'pro';
+    
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are an expert executive procurement and correspondence assistant. The user will provide a rough draft. 
+          content: isProMode 
+            ? `You are an expert editor. The user provides a document. 
+Focus on fixing grammar, punctuation, and clarity errors without changing the core meaning or structure. 
+Verify the Category: 
+- "Cash" if it contains itemized requests for funds/pricing.
+- "Memo" if it is administrative or a notice.
+Return JSON: { "refinedDescription": string, "totalAmount": number, "documentType": "Cash" | "Memo" }`
+            : `You are an expert executive procurement and correspondence assistant. The user will provide a rough draft. 
 If the draft is a list of items to buy, budget, or requests for money/pricing, format it as a professional itemized requisition breakdown and set documentType to "Cash".
 If the draft is just a general communication, notice, internal penalty/fine statement (e.g. money captured just as text but no actual funding request), or administrative text with no funding authorization needed, format it as a polite professional memorandum and set documentType to "Memo".
 Extract any math/prices mentioned. If NO prices are requested for funding, set totalAmount to 0. 
