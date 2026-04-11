@@ -122,8 +122,9 @@ const RequisitionForm = ({ isOpen, onClose }) => {
       return;
     }
 
-    // Block if target department chosen but not activated (and not draft)
-    if (!isDraft && formData.targetDepartmentId && activation && !activation.activated) {
+    // Block if target department chosen but not activated (and not draft) - Bypass for Global Admin
+    const isGlobalAdmin = user?.role === 'global_admin';
+    if (!isDraft && formData.targetDepartmentId && activation && !activation.activated && !isGlobalAdmin) {
       toast.error('Selected target department has not activated their dashboard. Please choose another.');
       return;
     }

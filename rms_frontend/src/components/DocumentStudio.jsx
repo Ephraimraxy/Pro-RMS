@@ -684,7 +684,8 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
                 {allowedDepartments.map(d => {
                   const status = activationMap[d.id];
                   const loading = checkingActivation[d.id];
-                  const isBlocked = status && !status.activated;
+                  const isGlobalAdmin = currentUser?.role === 'global_admin';
+                  const isBlocked = status && !status.activated && !isGlobalAdmin;
                   
                   return (
                     <div key={d.id} className="group">

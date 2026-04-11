@@ -180,6 +180,9 @@ export const reqAPI = {
   },
   async getSignedPdf(id) {
     return api.get(`/requisitions/${id}/signed-pdf`, { responseType: 'blob' });
+  },
+  async getDeptProfile() {
+    return api.get('/department/profile');
   }
 };
 

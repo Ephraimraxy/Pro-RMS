@@ -311,17 +311,16 @@ const checkDeptReadiness = async (deptId) => {
     include: { users: { include: { signature: true } } }
   });
   if (!dept) return { ready: false, reason: 'Department not found' };
+  if (dept.name === 'Super Admin') return { ready: true };
   if (!dept.headName || !dept.headEmail) {
-    if (dept.name === 'Super Admin' && SUPER_ADMIN_EMAIL) return { ready: true };
     return { ready: false, reason: `Department "${dept.name}" has not configured their head official's name or email.` };
   }
   // Check if a user with that email has a signature
   const headUser = await prisma.user.findFirst({
-    where: { email: dept.headEmail || SUPER_ADMIN_EMAIL },
+    where: { email: dept.headEmail },
     include: { signature: true }
   });
   if (!headUser || !headUser.signature) {
-    if (dept.name === 'Super Admin' && SUPER_ADMIN_EMAIL) return { ready: true };
     return { ready: false, reason: `Department "${dept.name}" head official (${dept.headEmail}) has not uploaded a digital signature.` };
   }
   return { ready: true };
@@ -1216,13 +1215,17 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
         }
       }
 
-      // STRICT GOVERNANCE CHECK
-      const originReady = await checkDeptReadiness(originDeptId);
-      if (!originReady.ready) return res.status(400).json({ error: originReady.reason });
+      // GLOBAL GOVERNANCE CHECK (Bypassed for Global Admins)
+      const isGlobalAdmin = normalizeRole(req.user.role) === 'global_admin';
       
-      if (targetDepartmentId) {
-        const targetReady = await checkDeptReadiness(targetDepartmentId);
-        if (!targetReady.ready) return res.status(400).json({ error: targetReady.reason });
+      if (!isGlobalAdmin) {
+        const originReady = await checkDeptReadiness(originDeptId);
+        if (!originReady.ready) return res.status(400).json({ error: originReady.reason });
+        
+        if (targetDepartmentId) {
+          const targetReady = await checkDeptReadiness(targetDepartmentId);
+          if (!targetReady.ready) return res.status(400).json({ error: targetReady.reason });
+        }
       }
 
       const created = await prisma.requisition.create({
