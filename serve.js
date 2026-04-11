@@ -417,7 +417,8 @@ const generateSignedPdf = async ({ requisition, approvals, departmentName, appro
   y -= 16;
   page.drawText(`Title: ${requisition.title}`, { x: margin, y, size: 11, font });
   y -= 16;
-  page.drawText(`Type: ${requisition.type}    Amount: ₦${Number(requisition.amount || 0).toLocaleString()}`, { x: margin, y, size: 11, font });
+  y -= 16;
+  page.drawText(`Type: ${requisition.type}    Amount: NGN ${Number(requisition.amount || 0).toLocaleString()}`, { x: margin, y, size: 11, font });
   y -= 16;
   page.drawText(`Urgency: ${requisition.urgency || 'normal'}`, { x: margin, y, size: 11, font });
   y -= 22;
@@ -963,7 +964,14 @@ async function notifyRole(roleName, message, requisitionId, departmentId = null)
     }
 
     if (notificationData.length > 0) {
-      await prisma.notification.createMany({ data: notificationData });
+      try {
+        await prisma.notification.createMany({ data: notificationData });
+      } catch (err) {
+        logger.warn('[NOTIF] Bulk create failed (possibly missing link column):', err.message);
+        // Fallback: create without link
+        const safeData = notificationData.map(({ link, ...rest }) => rest);
+        await prisma.notification.createMany({ data: safeData }).catch(e => logger.error('[NOTIF] Fallback failed:', e.message));
+      }
     }
 
     // Filter out fake placeholder emails (e.g. seeded @cssgroup.local)
