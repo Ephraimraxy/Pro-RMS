@@ -8,15 +8,15 @@ import { reqAPI } from '../lib/api';
 import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye, AlertTriangle, Plus, ShieldCheck } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
-  <div onClick={onClick} className="glass p-4 lg:p-6 rounded-2xl border border-border/50 relative overflow-hidden group hover:border-primary/30 transition-all cursor-pointer bg-white/60">
-    <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-500/10 blur-3xl rounded-full translate-x-12 -translate-y-12`}></div>
-    <div className="flex items-center justify-between relative z-10">
-      <div>
-        <p className="text-muted-foreground text-sm font-medium mb-1 uppercase tracking-tight">{label}</p>
-        <h3 className="text-3xl font-bold text-foreground leading-none">{value}</h3>
-      </div>
-      <div className={`p-3 rounded-xl bg-${color}-50 border border-${color}-100 text-${color}-600 group-hover:scale-110 transition-transform shadow-sm`}>
+  <div onClick={onClick} className="glass p-5 rounded-[2rem] border border-border/40 relative overflow-hidden group hover:border-primary/40 transition-all cursor-pointer bg-white/70 shadow-sm hover:shadow-xl hover:shadow-primary/5 active:scale-[0.98]">
+    <div className={`absolute top-0 right-0 w-32 h-32 bg-${color}-500/5 blur-[80px] rounded-full translate-x-12 -translate-y-12`}></div>
+    <div className="flex flex-col gap-4 relative z-10">
+      <div className={`w-12 h-12 rounded-2xl bg-${color}-500/10 border border-${color}-500/20 text-${color}-600 flex items-center justify-center group-hover:bg-${color}-500 group-hover:text-white transition-all duration-500 shadow-inner`}>
         <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.2em] mb-1">{label}</p>
+        <h3 className="text-4xl font-black text-foreground tracking-tighter leading-none">{value}</h3>
       </div>
     </div>
   </div>
@@ -111,138 +111,162 @@ const Dashboard = ({ onViewChange }) => {
           </div>
         )}
 
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 px-2">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
-                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
-                RMS Global Dashboard
-              </div>
-            </div>
-            <h1 className="text-4xl font-black text-foreground tracking-tighter">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h1 className="text-4xl font-black text-foreground tracking-tighter leading-tight">
               {user?.role === 'department' ? (
-                <span>{user.name} <span className="text-primary italic">Unit Portal</span></span>
+                <span>{user.name} <span className="text-primary italic font-serif">Unit Portal</span></span>
               ) : (
                 <span>Oversight <span className="text-primary italic font-serif">Command</span></span>
               )}
             </h1>
-            <p className="text-muted-foreground text-sm font-medium">
+            <p className="text-muted-foreground text-[13px] font-medium tracking-tight">
               {user?.role === 'department' 
-                ? `Operational control for the ${user.name} unit. Monitoring local activities.` 
-                : `Welcome back, ${user?.name}. Monitoring CSS Group strategic operations.`}
+                ? `Operational control for the ${user.name} unit.` 
+                : `Monitoring CSS Group strategic operations.`}
             </p>
           </div>
           <button 
             onClick={() => setIsFormOpen(true)}
             disabled={user?.role === 'department' && !isDeptReady}
-            className="group bg-primary hover:bg-primary/90 text-primary-foreground font-black py-4 px-8 rounded-2xl transition-all shadow-2xl shadow-primary/30 flex items-center gap-3 w-fit active:scale-95 disabled:opacity-50 disabled:grayscale"
+            className="group bg-foreground hover:bg-foreground/90 text-background font-black py-4 px-10 rounded-2xl transition-all shadow-2xl shadow-black/10 flex items-center gap-4 w-fit active:scale-95 disabled:opacity-50 disabled:grayscale"
           >
-            <span className="uppercase tracking-widest text-xs">Raise New Requisition</span>
             <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+            <span className="uppercase tracking-widest text-[10px]">Raise New Requisition</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard label="Pending Approval" value={String(stats.pending).padStart(2, '0')} icon={Clock} color="orange" onClick={() => onViewChange('requisitions')} />
-          <StatCard label="Approved" value={String(stats.approved).padStart(2, '0')} icon={CheckCircle2} color="emerald" onClick={() => onViewChange('requisitions')} />
+          <StatCard label="Total Approved" value={String(stats.approved).padStart(2, '0')} icon={CheckCircle2} color="emerald" onClick={() => onViewChange('requisitions')} />
           <StatCard label="Rejected" value={String(stats.rejected).padStart(2, '0')} icon={XCircle} color="red" onClick={() => onViewChange('requisitions')} />
-          <StatCard label="Total Approved Spend" value={formatCurrency(stats.totalSpent)} icon={ArrowUpRight} color="orange" />
+          <StatCard label="Total Spent" value={formatCurrency(stats.totalSpent)} icon={ArrowUpRight} color="blue" />
         </div>
 
-        {/* Pending Queue */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-border/50 pb-4">
-            <div className="flex items-center space-x-4">
-              <h3 className="text-lg font-bold text-foreground">Pending My Action</h3>
-              {recentPending.length > 0 && (
-                <span className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider animate-pulse">Action Required</span>
+        {/* Unified Content Card */}
+        <div className="glass bg-white/70 backdrop-blur-3xl rounded-[3rem] border border-border/40 p-1 lg:p-2 shadow-2xl shadow-primary/5 overflow-hidden">
+          <div className="bg-[#FAF9F6]/30 rounded-[2.8rem] p-6 lg:p-10 space-y-12">
+            {/* Pending Queue */}
+            <div className="space-y-8">
+              <div className="flex items-center justify-between border-b border-border/20 pb-6">
+                <div className="flex items-center space-x-4">
+                  <div className="w-1.5 h-6 bg-primary rounded-full" />
+                  <h3 className="text-xl font-bold text-foreground tracking-tight">System Action Items</h3>
+                  {recentPending.length > 0 && (
+                    <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-[0.15em] animate-pulse">Neural Alert</span>
+                  )}
+                </div>
+                <button onClick={() => onViewChange('requisitions')} className="px-5 py-2 rounded-xl bg-white border border-border/50 text-[10px] font-black text-muted-foreground uppercase tracking-widest hover:bg-primary hover:text-white hover:border-primary transition-all flex items-center gap-3 active:scale-95">
+                  <ListFilter size={14} />
+                  View All Directory
+                </button>
+              </div>
+
+              {recentPending.length === 0 ? (
+                <div className="py-20 text-center space-y-4">
+                  <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xl font-black text-foreground tracking-tight">Governance Clear</p>
+                    <p className="text-sm text-muted-foreground font-medium">All administrative items have been synchronized.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left border-separate border-spacing-y-2">
+                    <thead>
+                      <tr className="text-muted-foreground text-[10px] font-black uppercase tracking-[0.2em]">
+                        <th className="pb-4 px-6">Reference</th>
+                        <th className="pb-4 px-6">Module</th>
+                        <th className="pb-4 px-6">Brief Description</th>
+                        <th className="pb-4 px-6">Payload</th>
+                        <th className="pb-4 px-6">Source</th>
+                        <th className="pb-4 px-6">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentPending.map(r => (
+                        <tr key={r.id} className="group transition-all">
+                          <td className="py-4 px-6 bg-white/50 border-y border-l border-border/30 rounded-l-2xl group-hover:bg-white transition-colors">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-primary tracking-widest mb-0.5">#{r.id}</span>
+                              <span className="text-[10px] text-muted-foreground/60 font-mono italic">{new Date(r.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-2 h-2 rounded-full ${r.type === 'Cash' ? 'bg-emerald-500' : 'bg-primary'} shadow-sm shadow-black/10`} />
+                              <span className="text-xs font-black text-foreground uppercase tracking-widest">{r.type}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                            <p className="text-sm font-bold text-foreground max-w-xs truncate">{r.title}</p>
+                          </td>
+                          <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                             <span className="text-sm font-black text-foreground font-mono">₦{Number(r.amount || 0).toLocaleString()}</span>
+                          </td>
+                          <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                            <span className="text-[9px] font-black text-muted-foreground uppercase opacity-60">{r.department}</span>
+                          </td>
+                          <td className="py-4 px-6 bg-white/50 border-y border-r border-border/30 rounded-r-2xl group-hover:bg-white transition-colors text-right">
+                            <button onClick={() => onViewChange('requisitions')} className="p-2.5 bg-background hover:bg-primary hover:text-white rounded-xl text-primary transition-all border border-primary/10 shadow-sm active:scale-90">
+                              <Eye size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
-            <button onClick={() => onViewChange('requisitions')} className="text-xs font-bold text-muted-foreground hover:text-primary transition-all flex items-center space-x-2">
-              <ListFilter size={14} />
-              <span>View All</span>
-            </button>
-          </div>
 
-          {recentPending.length === 0 ? (
-            <div className="glass bg-white/60 rounded-2xl border border-border/50 p-8 text-center text-muted-foreground text-sm">
-              <CheckCircle2 size={32} className="mx-auto mb-3 text-emerald-400" />
-              <p className="font-semibold">All caught up! No items pending your action.</p>
-            </div>
-          ) : (
-            <div className="glass rounded-3xl border border-border/50 overflow-hidden shadow-sm bg-white/60">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-muted/30 text-muted-foreground text-[10px] font-bold uppercase tracking-widest border-b border-border/50">
-                      <th className="py-4 px-6">Ref ID</th>
-                      <th className="py-4 px-6">Type</th>
-                      <th className="py-4 px-6">Description</th>
-                      <th className="py-4 px-6">Amount</th>
-                      <th className="py-4 px-6">Dept</th>
-                      <th className="py-4 px-6">Status</th>
-                      <th className="py-4 px-6"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentPending.map(r => (
-                      <tr key={r.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                        <td className="py-4 px-6">
-                          <span className="text-xs font-bold text-primary">{r.id}</span>
-                          <div className="text-[10px] text-muted-foreground font-mono">{new Date(r.createdAt).toLocaleDateString()}</div>
-                        </td>
-                        <td className="py-4 px-6">
-                          <div className="flex items-center space-x-2">
-                            <span className={`w-2 h-2 rounded-full ${r.type === 'Cash' ? 'bg-emerald-500' : r.type === 'Material' ? 'bg-primary' : 'bg-amber-500'}`}></span>
-                            <span className="text-sm font-semibold text-foreground">{r.type}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 text-sm text-foreground max-w-xs line-clamp-1">{r.title}</td>
-                        <td className="py-4 px-6 text-sm font-bold text-foreground font-mono">{r.amount ? `₦${r.amount.toLocaleString()}` : '—'}</td>
-                        <td className="py-4 px-6 text-xs text-muted-foreground">{r.department}</td>
-                        <td className="py-4 px-6"><span className="px-2 py-1 rounded-md text-[10px] font-bold uppercase bg-primary/10 border border-primary/20 text-primary">Pending</span></td>
-                        <td className="py-4 px-6 text-right">
-                          <button onClick={() => onViewChange('requisitions')} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary transition-all"><Eye size={16} /></button>
-                        </td>
-                      </tr>
+            {/* Strategic Sections Grouped in the Main Card */}
+            {user?.role !== 'department' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-8 border-t border-border/20">
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner">
+                        <ShieldAlert size={22} />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h3 className="text-lg font-black text-foreground tracking-tight">Strategic Control</h3>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Core Governance Units</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {strategicDepts.map(dept => (
+                       <DepartmentCard key={dept.id} name={dept.name} type="Strategic" />
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-2xl bg-muted border border-border/50 flex items-center justify-center text-muted-foreground shadow-inner">
+                        <Boxes size={22} />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h3 className="text-lg font-black text-foreground tracking-tight">Operational Network</h3>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Satellite Action Units</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {operationalDepts.map(dept => (
+                       <DepartmentCard key={dept.id} name={dept.name} type="Unit" />
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Departments - Only visible to Super Admins */}
-        {user?.role !== 'department' && (
-          <div className="space-y-6">
-            <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4">
-              <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><ShieldAlert size={20} className="text-primary"/> Strategic Management</h3>
-              <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-md uppercase border border-primary/20">Core</span>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {loadingDepts ? (
-                 <div className="text-muted-foreground text-sm font-bold">Loading departments...</div>
-              ) : strategicDepts.map(dept => (
-                 <DepartmentCard key={dept.id} name={dept.name} type="Strategic" />
-              ))}
-            </div>
-
-            <div className="flex items-center space-x-4 border-b border-border/50 pb-4 pt-4 mt-4">
-              <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Boxes size={20} className="text-primary"/> Operational Units</h3>
-              <span className="bg-muted text-muted-foreground border border-border text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">{operationalDepts.length} Units</span>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-              {loadingDepts ? (
-                 <div className="text-muted-foreground text-sm font-bold">Loading...</div>
-              ) : operationalDepts.map(dept => (
-                 <DepartmentCard key={dept.id} name={dept.name} type="Operations" />
-              ))}
-            </div>
+            )}
           </div>
-        )}
+        </div>
+      </div>
       </div>
     </Layout>
   );

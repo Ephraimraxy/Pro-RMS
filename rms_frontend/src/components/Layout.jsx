@@ -87,35 +87,44 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
       <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-inner">
          <img src="/favicon.svg" alt="Logo" className="w-5 h-5 object-contain" />
       </div>
-      <div>
-        <h1 className="text-xs font-black text-foreground tracking-widest uppercase flex items-center">
+      <div className="flex flex-col">
+        <h1 className="text-[10px] font-black text-foreground tracking-[0.2em] uppercase flex items-center leading-none">
           CSS <span className="text-primary italic ml-1">RMS</span>
-          <span className="ml-3 px-2 py-0.5 rounded-full bg-primary/5 border border-primary/10 text-[8px] text-primary/60 font-mono hidden md:inline-block">V1.0.4</span>
+          <span className="ml-2 px-1.5 py-0.5 rounded-md bg-primary/5 border border-primary/10 text-[7px] text-primary/60 font-mono hidden md:inline-block">V1.0.4</span>
         </h1>
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-widest">RMS PORTAL</span>
+          <span className="text-[8px] text-muted-foreground/30">/</span>
+          <span className="text-[8px] font-black text-primary uppercase tracking-widest">
+            {currentView === 'dashboard' ? 'Overview' : 
+             currentView === 'requisitions' ? 'Requisition Directory' :
+             currentView === 'dept_profile' ? 'Authority Profile' :
+             currentView === 'memos' ? 'Document Management' :
+             currentView === 'activity' ? 'System Activity' :
+             currentView === 'document_studio' ? 'Document Studio' :
+             currentView === 'workflow_builder' ? 'Workflow Architecture' :
+             currentView === 'department_manager' ? 'Tenant Control' :
+             currentView === 'audit_logs' ? 'Security Audit' : 'Portal'}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {/* Centered Status Badge */}
+    <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center">
+      <div className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 transition-all duration-500 shadow-sm ${
+        isOnline 
+          ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600 shadow-emerald-500/5' 
+          : 'bg-rose-500/5 border-rose-500/20 text-rose-500 shadow-rose-500/5'
+      }`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+        <span className="text-[9px] font-black uppercase tracking-[0.25em]">
+          {isOnline ? 'Neural Core: Online' : 'Neural Core: Offline'}
+        </span>
       </div>
     </div>
 
     <div className="flex items-center space-x-3 lg:space-x-5">
-      <div className={`hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-full border transition-all duration-300 ${
-        isOnline 
-          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
-          : 'bg-destructive/10 border-destructive text-destructive'
-      }`}>
-        {isOnline ? (
-          <>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
-            <span className="text-[9px] font-black uppercase tracking-widest hidden md:inline-block">RMS Global: Online</span>
-            <span className="text-[9px] font-black uppercase tracking-widest md:hidden">Online</span>
-          </>
-        ) : (
-          <>
-            <WifiOff size={12} className="animate-pulse" />
-            <span className="text-[9px] font-black uppercase tracking-widest hidden md:inline-block">Offline Mode Active</span>
-            <span className="text-[9px] font-black uppercase tracking-widest md:hidden">Offline</span>
-          </>
-        )}
-      </div>
-      
       <div className="relative">
         <button
           onClick={() => setShowBell(!showBell)}

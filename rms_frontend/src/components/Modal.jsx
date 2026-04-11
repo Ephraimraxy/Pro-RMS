@@ -14,6 +14,8 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'lg' }) => {
     '4xl': 'max-w-4xl',
     '5xl': 'max-w-5xl',
     '6xl': 'max-w-6xl',
+    '7xl': 'max-w-[80rem]',
+    'fitted': 'max-w-[92rem]',
     'full': 'max-w-full mx-4'
   };
 
@@ -25,7 +27,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'lg' }) => {
         className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" 
         onClick={onClose} 
       />
-      <div className={`glass bg-white/95 w-full ${maxWidth} rounded-[2rem] border border-border/50 shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-500`}>
+      <div className={`glass bg-white/95 w-full ${maxWidth} rounded-[3rem] border border-border/40 shadow-[0_30px_100px_rgba(0,0,0,0.15)] relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-500`}>
         <div className="p-6 lg:p-8 border-b border-border/50 flex items-center justify-between shrink-0">
           <div className="space-y-1">
             <h2 className="text-xl font-bold text-foreground tracking-tight">{title}</h2>

@@ -204,10 +204,10 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
   const verCode     = detail?.approvals?.slice(-1)[0]?.signature?.verificationCode;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-4 sm:p-6 overflow-y-auto safe-p-top pt-[5vh] pb-10 bg-background/20 backdrop-blur-sm custom-scrollbar">
-      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" onClick={onClose} />
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-2 sm:p-4 overflow-y-auto safe-p-top pt-[3vh] pb-10 bg-background/40 backdrop-blur-md custom-scrollbar">
+      <div className="fixed inset-0 bg-background/40 backdrop-blur-sm -z-10" onClick={onClose} />
 
-      <div className="glass bg-white/95 w-full lg:max-w-5xl rounded-[2.5rem] border border-border/50 shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden">
+      <div className="glass bg-white/95 w-full lg:max-w-[92rem] rounded-[3rem] border border-border/40 shadow-[0_30px_100px_rgba(0,0,0,0.2)] relative flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden min-h-[85vh]">
 
 
         {/* Header */}
@@ -570,175 +570,184 @@ const RequisitionsPage = ({ onViewChange }) => {
 
       <div className="max-w-[90rem] mx-auto space-y-10 pb-20 animate-slide-up">
         {/* Header Section */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 px-2">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">
-              All <span className="text-primary italic">Requisitions</span>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 px-4">
+          <div className="space-y-1">
+             <div className="flex items-center gap-2 mb-1">
+              <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
+                <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+                Administrative Registry
+              </div>
+            </div>
+            <h1 className="text-4xl font-black text-foreground tracking-tighter">
+              Requisition <span className="text-primary italic font-serif">Directory</span>
             </h1>
-            <p className="text-muted-foreground text-sm mt-1">{filtered.length} records found</p>
+            <p className="text-muted-foreground text-[13px] font-medium tracking-tight">Managing {filtered.length} synchronized governance records.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
             {selectedIds.length > 0 && (
               <button
                 onClick={showBulkDeleteConfirm}
                 disabled={deleting}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg flex items-center gap-2"
+                className="bg-rose-500/10 hover:bg-rose-500 text-rose-600 hover:text-white border border-rose-500/20 font-black py-4 px-6 rounded-2xl transition-all shadow-lg flex items-center gap-3 active:scale-95"
               >
                 {deleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                Purge {selectedIds.length} Selected
+                <span className="uppercase tracking-widest text-[10px]">Purge {selectedIds.length} Units</span>
               </button>
             )}
             <button
               onClick={() => setIsFormOpen(true)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center gap-2 w-fit"
+              className="bg-foreground hover:bg-foreground/90 text-background font-black py-4 px-8 rounded-2xl transition-all shadow-2xl shadow-black/10 flex items-center gap-3 w-fit active:scale-95"
             >
-              <Plus size={18} /> New Requisition
+              <Plus size={20} />
+              <span className="uppercase tracking-widest text-[10px]">Raise New Requisition</span>
             </button>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search by ID or title…"
-              className="w-full bg-white/80 border border-border/50 rounded-xl py-2.5 pl-12 pr-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {['all', 'pending', 'approved', 'rejected', 'draft'].map(s => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  filterStatus === s
-                    ? 'bg-primary/10 border-primary/20 text-primary'
-                    : 'bg-white/50 border-border/50 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
+        {/* Unified Main Card */}
+        <div className="glass bg-white/70 backdrop-blur-3xl rounded-[3rem] border border-border/40 p-1 lg:p-2 shadow-2xl shadow-primary/5 overflow-hidden">
+          <div className="bg-[#FAF9F6]/30 rounded-[2.8rem] p-6 lg:p-10 space-y-8">
+            {/* Filters Row */}
+            <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-6 border-b border-border/20 pb-8">
+              <div className="relative flex-1">
+                <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Query by ID, title, or department payload…"
+                  className="w-full bg-white border border-border/50 rounded-2xl py-4 pl-14 pr-4 text-sm font-bold text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all shadow-sm"
+                />
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 custom-scrollbar whitespace-nowrap">
+                {['all', 'pending', 'approved', 'rejected', 'draft'].map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setFilterStatus(s)}
+                    className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95 ${
+                      filterStatus === s
+                        ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20'
+                        : 'bg-white border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Directory Table */}
+            {loading ? (
+              <div className="py-32 flex flex-col items-center justify-center space-y-4">
+                <Loader2 size={40} className="text-primary animate-spin opacity-20" />
+                <p className="text-xs font-black text-muted-foreground uppercase tracking-widest animate-pulse">Syncing Directory Access...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-separate border-spacing-y-2">
+                  <thead>
+                    <tr className="text-muted-foreground text-[10px] font-black uppercase tracking-[0.2em]">
+                      <th className="pb-4 px-6 w-10">
+                        <input type="checkbox" className="rounded-md border-border/50 text-primary focus:ring-primary" checked={filtered.length > 0 && selectedIds.length === filtered.length} onChange={toggleAll} />
+                      </th>
+                      <th className="pb-4 px-6">Reference</th>
+                      <th className="pb-4 px-6">Module Type</th>
+                      <th className="pb-4 px-6">Registry Item</th>
+                      <th className="pb-4 px-6">Payload</th>
+                      <th className="pb-4 px-6">Authorization Trail</th>
+                      <th className="pb-4 px-6">State</th>
+                      <th className="pb-4 px-6 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(r => (
+                      <tr
+                        key={r.id}
+                        onClick={() => setSelectedReq(r)}
+                        className="group cursor-pointer transition-all"
+                      >
+                        <td className="py-5 px-6 bg-white/50 border-y border-l border-border/30 rounded-l-2xl group-hover:bg-white transition-colors" onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" className="rounded-md border-border/50 text-primary focus:ring-primary" checked={selectedIds.includes(r.id)} onChange={() => toggleSelect(r.id)} />
+                        </td>
+                        <td className="py-5 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black text-primary tracking-widest">#{r.id}</span>
+                            <span className="text-[10px] text-muted-foreground/60 font-mono italic">{new Date(r.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        </td>
+                        <td className="py-5 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-2.5 h-2.5 rounded-full ${
+                              r.type === 'Cash' ? 'bg-emerald-500 shadow-emerald-500/20'
+                              : r.type === 'Material' ? 'bg-primary shadow-primary/20'
+                              : 'bg-amber-500 shadow-amber-500/20'
+                            } shadow-lg`} />
+                            <span className="text-xs font-black text-foreground uppercase tracking-widest">{r.type}</span>
+                          </div>
+                        </td>
+                        <td className="py-5 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                          <div className="space-y-1">
+                            <p className="text-sm font-bold text-foreground max-w-xs truncate">{r.title}</p>
+                            {r.urgency && r.urgency !== 'normal' && (
+                              <div className={`flex items-center gap-1.5 text-[9px] font-black uppercase ${urgencyColors[r.urgency]}`}>
+                                <div className={`w-1 h-1 rounded-full ${r.urgency === 'critical' ? 'bg-red-500' : 'bg-amber-500'} animate-pulse`} />
+                                {r.urgency} Priority
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-5 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                          <span className="text-sm font-black text-foreground font-mono">₦{Number(r.amount || 0).toLocaleString()}</span>
+                        </td>
+                        <td className="py-5 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="font-bold text-muted-foreground opacity-60 uppercase">{r.department}</span>
+                            {r.targetDepartment?.name && (
+                              <>
+                                <ArrowRight size={10} className="text-muted-foreground/30" />
+                                <span className="font-black text-primary uppercase tracking-tight">{r.targetDepartment.name}</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-5 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                          <div className="flex flex-col gap-1.5">
+                            <span className={`w-fit px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border tracking-widest ${statusColors[r.status]}`}>
+                              {r.status}
+                            </span>
+                            {r.status === 'pending' && r.currentStageName && (
+                              <span className="text-[8px] font-bold text-muted-foreground/60 uppercase tracking-tighter truncate max-w-[100px]">At: {r.currentStageName}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-5 px-6 bg-white/50 border-y border-r border-border/30 rounded-r-2xl group-hover:bg-white transition-colors text-right">
+                          <div className="flex justify-end gap-2">
+                             <button className="p-2.5 bg-background shadow-inner rounded-xl text-primary transition-all active:scale-90 border border-primary/10">
+                               <Eye size={18} />
+                             </button>
+                             {(isAdmin || r.status === 'draft') && (
+                              <button onClick={e => { e.stopPropagation(); showSingleDeleteConfirm(r.id, e); }} className="p-2.5 bg-red-50 shadow-inner rounded-xl text-red-500 transition-all active:scale-90 border border-red-200/50">
+                                <Trash2 size={18} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filtered.length === 0 && (
+                  <div className="py-32 text-center space-y-4 bg-white/20 rounded-[2rem] border border-dashed border-border/50">
+                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto text-muted-foreground/30">
+                      <Inbox size={32} />
+                    </div>
+                    <p className="text-sm font-bold text-muted-foreground">Empty Registry. Direct matches not found.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Table */}
-        {loading ? (
-          <div className="text-center py-12 text-muted-foreground animate-pulse font-mono text-xs">
-            Loading requisitions…
-          </div>
-        ) : (
-          <div className="glass rounded-3xl border border-border/50 overflow-hidden shadow-sm bg-white/60">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-muted/30 text-muted-foreground text-[10px] font-bold uppercase tracking-widest border-b border-border/50">
-                    <th className="py-4 px-3 w-10">
-                      <input type="checkbox" className="rounded" checked={filtered.length > 0 && selectedIds.length === filtered.length} onChange={toggleAll} />
-                    </th>
-                    <th className="py-4 px-5">Ref ID</th>
-                    <th className="py-4 px-5">Type</th>
-                    <th className="py-4 px-5">Title</th>
-                    <th className="py-4 px-5">Amount</th>
-                    <th className="py-4 px-5">From → To</th>
-                    <th className="py-4 px-5">Stage</th>
-                    <th className="py-4 px-5">Status</th>
-                    <th className="py-4 px-5"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(r => (
-                    <tr
-                      key={r.id}
-                      className={`border-b border-border/50 hover:bg-muted/50 transition-colors ${
-                        isIncoming(r) ? 'bg-blue-50/40' : ''
-                      }`}
-                    >
-                      <td className="py-4 px-3" onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" className="rounded" checked={selectedIds.includes(r.id)} onChange={() => toggleSelect(r.id)} />
-                      </td>
-                      <td className="py-4 px-5 cursor-pointer" onClick={() => setSelectedReq(r)}>
-                        <span className="text-xs font-bold text-primary">#{r.id}</span>
-                        <div className="text-[10px] text-muted-foreground font-mono">
-                          {new Date(r.createdAt).toLocaleDateString()}
-                        </div>
-                        {isIncoming(r) && (
-                          <span className="text-[9px] font-black text-blue-600 uppercase">Incoming</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-5">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full ${
-                            r.type === 'Cash' ? 'bg-emerald-500'
-                            : r.type === 'Material' ? 'bg-primary'
-                            : 'bg-amber-500'
-                          }`} />
-                          <span className="text-sm font-semibold text-foreground">{r.type}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-5 max-w-[180px]">
-                        <p className="text-sm text-foreground line-clamp-1">{r.title}</p>
-                        {r.urgency && r.urgency !== 'normal' && (
-                          <span className={`text-[9px] font-black uppercase ${urgencyColors[r.urgency]}`}>
-                            ⚡ {r.urgency}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 px-5 text-sm font-bold font-mono">
-                        {r.amount ? `₦${Number(r.amount).toLocaleString()}` : '—'}
-                      </td>
-                      <td className="py-4 px-5 text-xs text-muted-foreground">
-                        <span>{r.department}</span>
-                        {r.targetDepartment?.name && (
-                          <>
-                            <span className="mx-1 text-muted-foreground/40">→</span>
-                            <span className="text-primary font-bold">{r.targetDepartment.name}</span>
-                          </>
-                        )}
-                      </td>
-                      <td className="py-4 px-5">
-                        {r.status === 'pending' && r.currentStageName ? (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md whitespace-nowrap">
-                            {r.currentStageName}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-5">
-                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase border ${statusColors[r.status]}`}>
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-5 text-right w-24">
-                        <div className="flex justify-end gap-3 items-center">
-                          <button onClick={() => setSelectedReq(r)} className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all">
-                            <Eye size={18} />
-                          </button>
-                          {(isAdmin || r.status === 'draft') && (
-                            <button onClick={e => showSingleDeleteConfirm(r.id, e)} className="p-2 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all">
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan="9" className="py-12 text-center text-muted-foreground text-sm">
-                        No requisitions match your filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+      </div>
       </div>
     </Layout>
   );
