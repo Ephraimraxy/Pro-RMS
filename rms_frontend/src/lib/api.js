@@ -48,6 +48,11 @@ export const authAPI = {
   },
   
   async logout() {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Server unreachable — still clear local session
+    }
     localStorage.removeItem('rms_token');
     localStorage.removeItem('rms_user');
   }

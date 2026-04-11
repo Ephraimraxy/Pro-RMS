@@ -78,7 +78,22 @@ if (trustProxy !== undefined) {
   app.set('trust proxy', 1);
 }
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.b-cdn.net"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
@@ -139,14 +154,64 @@ const publicVerifyLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// ── Token Blacklist (for logout) ──────────────────────────────────────────────
+const tokenBlacklist = new Set();
+
+// Prune expired tokens from blacklist every 30 minutes
+setInterval(() => {
+  const now = Math.floor(Date.now() / 1000);
+  for (const entry of tokenBlacklist) {
+    try {
+      const decoded = jwt.decode(entry);
+      if (decoded && decoded.exp && decoded.exp < now) tokenBlacklist.delete(entry);
+    } catch { tokenBlacklist.delete(entry); }
+  }
+}, 30 * 60 * 1000);
+
+// ── Login Lockout Tracking ───────────────────────────────────────────────────
+const loginAttempts = new Map(); // key => { count, lockedUntil }
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkLockout(key) {
+  const record = loginAttempts.get(key);
+  if (!record) return false;
+  if (record.lockedUntil && Date.now() < record.lockedUntil) return true;
+  if (record.lockedUntil && Date.now() >= record.lockedUntil) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return false;
+}
+
+function recordFailedLogin(key) {
+  const record = loginAttempts.get(key) || { count: 0, lockedUntil: null };
+  record.count += 1;
+  if (record.count >= MAX_LOGIN_ATTEMPTS) {
+    record.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+    console.warn(`[AUTH] Account locked: ${key} (${MAX_LOGIN_ATTEMPTS} failed attempts)`);
+  }
+  loginAttempts.set(key, record);
+}
+
+function clearLoginAttempts(key) {
+  loginAttempts.delete(key);
+}
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Access Denied: No Token' });
-  
+
+  // Check blacklist
+  if (tokenBlacklist.has(token)) {
+    return res.status(401).json({ error: 'Token has been revoked. Please log in again.' });
+  }
+
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid Token' });
     req.user = user;
+    req.token = token; // Stash for logout
     next();
   });
 };
@@ -535,13 +600,30 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Invalid login payload' });
     }
     const { email, password } = parsed.data;
+
+    // Account lockout check
+    if (checkLockout(email)) {
+      return res.status(429).json({ error: 'Account temporarily locked due to too many failed attempts. Try again in 15 minutes.' });
+    }
+
     const user = await prisma.user.findUnique({ where: { email }, include: { department: true } });
-    if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      recordFailedLogin(email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    clearLoginAttempts(email);
     const userData = { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department?.name || 'General' };
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
     await prisma.activityLog.create({ data: { action: 'Logged In', details: `${user.name} (Admin) authenticated`, userId: user.id } });
     res.json({ token, user: userData });
   } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// Logout (revoke token)
+app.post('/api/auth/logout', authenticateToken, (req, res) => {
+  if (req.token) tokenBlacklist.add(req.token);
+  res.json({ ok: true, message: 'Token revoked successfully.' });
 });
 
 app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
@@ -556,7 +638,13 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
     }
     const { departmentName, accessCode, mfaCode } = parsed.data;
     
+    const deptKey = `dept:${(departmentName || '').trim().toLowerCase()}`;
     console.log(`[AUTH] Unified login attempt: "${departmentName?.trim()}"`);
+
+    // Account lockout check for department
+    if (checkLockout(deptKey)) {
+      return res.status(429).json({ error: 'Department temporarily locked due to too many failed attempts. Try again in 15 minutes.' });
+    }
     
     const dept = await prisma.department.findFirst({ 
       where: { 
@@ -565,6 +653,7 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
     });
     
     if (!dept) {
+      recordFailedLogin(deptKey);
       console.warn(`[AUTH] Failed: ${departmentName} / ${maskSecret(accessCode)}`);
       return res.status(401).json({ error: 'Invalid Department or Access Code' });
     }
@@ -582,6 +671,7 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
         : dept.accessCode === trimmedAccess;
     }
     if (!codeMatch) {
+      recordFailedLogin(deptKey);
       console.warn(`[AUTH] Failed: ${departmentName} / ${maskSecret(accessCode)}`);
       return res.status(401).json({ error: 'Invalid Department or Access Code' });
     }
@@ -607,6 +697,7 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
       email: `${dept.name.toLowerCase().replace(/\s/g, '')}@cssgroup.local` 
     };
     
+    clearLoginAttempts(deptKey);
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
     await prisma.activityLog.create({ data: { action: 'Login', details: `${dept.name} authenticated via unified portal` } });
     res.json({ token, user: userData });
@@ -765,7 +856,8 @@ async function notifyRole(roleName, message, requisitionId, departmentId = null)
       await prisma.notification.createMany({ data: notificationData });
     }
 
-    const emails = users.map(u => u.email).filter(Boolean);
+    // Filter out fake placeholder emails (e.g. seeded @cssgroup.local)
+    const emails = users.map(u => u.email).filter(e => e && !e.endsWith('@cssgroup.local'));
     if (emails.length > 0) {
       const actionUrl = APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '';
       const { text, html } = buildEmailContent({
@@ -778,6 +870,8 @@ async function notifyRole(roleName, message, requisitionId, departmentId = null)
       results.forEach((r, i) => {
         if (r.status === 'rejected') {
           console.error(`[MAIL] Failed to send to ${emails[i]}:`, r.reason?.message);
+        } else {
+          console.log(`[MAIL] Sent to ${emails[i]} OK`);
         }
       });
     }
