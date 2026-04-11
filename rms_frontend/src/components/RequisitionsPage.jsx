@@ -203,7 +203,6 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
   const verCode     = detail?.approvals?.slice(-1)[0]?.signature?.verificationCode;
 
   return (
-  return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-4 sm:p-6 overflow-y-auto safe-p-top pt-[5vh] pb-10 bg-background/20 backdrop-blur-sm custom-scrollbar">
       <div className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" onClick={onClose} />
 
