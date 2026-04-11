@@ -4,6 +4,7 @@ import RequisitionForm from './RequisitionForm';
 import ApprovalTimeline from './ApprovalTimeline';
 import ApprovalActionPanel from './ApprovalActionPanel';
 import ConfirmModal from './ConfirmModal';
+import VoiceDictation from './VoiceDictation';
 import { useAuth } from '../context/AuthContext';
 import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments } from '../lib/store';
 import { forwardAPI } from '../lib/api';
@@ -98,6 +99,9 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
         placeholder="Enter your official response, review, or note here (required for returning)..."
         className="w-full bg-white border border-border rounded-xl p-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[90px] resize-none shadow-inner"
       />
+      <div className="flex items-center justify-start pb-1 pt-1 border-b border-border/40">
+        <VoiceDictation onTranscript={(text) => setNote(prev => prev + (prev ? ' ' : '') + text)} />
+      </div>
 
       {mode === 'forward' && (
         <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
