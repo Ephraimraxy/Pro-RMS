@@ -263,17 +263,6 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
              </div>
           </div>
         </div>
-              title="Generate Stage Report (PDF)"
-              className="p-2.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all flex items-center gap-2 border border-primary/20 shadow-sm"
-            >
-              <Printer size={18} />
-               <span className="text-xs font-bold hidden sm:inline">Print Report</span>
-             </button>
-             <button onClick={onClose} className="p-2 hover:bg-muted rounded-full text-muted-foreground shrink-0 transition-all">
-               <X size={18} />
-             </button>
-          </div>
-        </div>
 
         {/* Body Grid */}
         <div className="flex-1 overflow-hidden">
