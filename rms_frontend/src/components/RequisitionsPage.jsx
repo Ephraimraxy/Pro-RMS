@@ -112,6 +112,10 @@ const FilePreviewModal = ({ attachment, onClose }) => {
   const downloadUrl = `/api/attachments/${attachment.id}/download?token=${token}`;
   const isImage = ['image/png','image/jpeg','image/jpg','image/gif','image/webp'].includes(attachment.mimeType);
   const isPdf = attachment.mimeType === 'application/pdf';
+  const isOfficeDoc = ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/rtf'].includes(attachment.mimeType) || attachment.filename.match(/\.(doc|docx|xls|xlsx|ppt|pptx|rtf)$/i);
+  
+  const absoluteUrl = `${window.location.origin}${previewUrl}`;
+  const officeProxyUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -126,8 +130,8 @@ const FilePreviewModal = ({ attachment, onClose }) => {
             <a href={downloadUrl} download className="p-2 hover:bg-muted rounded-lg text-primary transition-colors" title="Download">
               <ArrowDownToLine size={16} />
             </a>
-            {isPdf && (
-              <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-muted rounded-lg text-primary transition-colors" title="Open in new tab">
+            {(isPdf || isOfficeDoc) && (
+              <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-muted rounded-lg text-primary transition-colors" title="Open native file">
                 <ExternalLink size={16} />
               </a>
             )}
@@ -139,10 +143,12 @@ const FilePreviewModal = ({ attachment, onClose }) => {
             <img src={previewUrl} alt={attachment.filename} className="max-w-full max-h-[70vh] rounded-lg shadow-md object-contain" />
           ) : isPdf ? (
             <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-border/30" title={attachment.filename} />
+          ) : isOfficeDoc ? (
+            <iframe src={officeProxyUrl} className="w-full h-[70vh] rounded-lg border border-border/30" title={attachment.filename} />
           ) : (
             <div className="text-center space-y-4 py-10">
               <FileText size={48} className="text-muted-foreground/30 mx-auto" />
-              <p className="text-sm text-muted-foreground">Preview not available for this file type.</p>
+              <p className="text-sm text-muted-foreground">Preview not natively available for this file type.</p>
               <a href={downloadUrl} download className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all">
                 <Download size={16} /> Download File
               </a>
