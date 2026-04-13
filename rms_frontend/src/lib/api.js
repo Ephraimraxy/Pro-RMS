@@ -145,8 +145,12 @@ export const deptAPI = {
 };
 
 export const forwardAPI = {
-  async forward(id, payload) {
-    return api.post(`/requisitions/${id}/forward`, payload);
+  async forward(requisitionId, { targetDepartmentId, note, returnToSender }) {
+    return api.post(`/requisitions/${requisitionId}/forward`, {
+      targetDepartmentId: targetDepartmentId || null,
+      note: note || '',
+      returnToSender: !!returnToSender
+    });
   }
 };
 
@@ -173,7 +177,7 @@ export const reqAPI = {
     return api.delete(`/requisitions/${id}`);
   },
   async deleteMultipleRequisitions(ids) {
-    return api.post(`/requisitions/bulk-delete`, { ids });
+    return api.post('/requisitions/bulk-delete', { ids });
   },
   async approveRequisition(id, remarks) {
     return api.post(`/requisitions/${id}/approve`, { remarks });
@@ -184,8 +188,9 @@ export const reqAPI = {
   async getSignedPdf(id) {
     return api.get(`/requisitions/${id}/signed-pdf`, { responseType: 'blob' });
   },
-  async getDynamicPdf(id) {
-    return api.get(`/requisitions/${id}/dynamic-pdf`, { responseType: 'blob' });
+  async getDynamicPdf(id, upToEventId = null) {
+    const params = upToEventId ? `?upToEventId=${encodeURIComponent(upToEventId)}` : '';
+    return api.get(`/requisitions/${id}/dynamic-pdf${params}`, { responseType: 'blob' });
   },
   async getDeptProfile() {
     return api.get('/department/profile');
@@ -227,3 +232,4 @@ export const aiAPI = {
 };
 
 export default api;
+

@@ -195,9 +195,9 @@ export async function downloadSignedPdf(id) {
   window.URL.revokeObjectURL(url);
 }
 
-export async function downloadDynamicPdf(id) {
+export async function downloadDynamicPdf(id, upToEventId = null) {
   try {
-    const blob = await reqAPI.getDynamicPdf(id);
+    const blob = await reqAPI.getDynamicPdf(id, upToEventId);
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

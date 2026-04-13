@@ -87,7 +87,7 @@ const Dashboard = ({ onViewChange }) => {
         user={user}
       />
       
-      <div className="max-w-[90rem] mx-auto space-y-10 pb-20 animate-slide-up px-2">
+      <div className="max-w-full mx-auto space-y-5 pb-20 animate-slide-up px-1">
         {user?.role === 'department' && !isDeptReady && (
           <div className="glass bg-amber-500/10 border border-amber-500/30 rounded-[2rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-amber-500/10">
             <div className="flex items-center gap-6">
@@ -144,8 +144,8 @@ const Dashboard = ({ onViewChange }) => {
         </div>
 
         {/* Unified Content Card */}
-        <div className="glass bg-white/70 backdrop-blur-3xl rounded-[3rem] border border-border/40 p-1 lg:p-2 shadow-2xl shadow-primary/5 overflow-hidden">
-          <div className="bg-[#FAF9F6]/30 rounded-[2.8rem] p-6 lg:p-10 space-y-12">
+        <div className="glass bg-white/70 backdrop-blur-3xl rounded-[2rem] border border-border/40 p-1 shadow-2xl shadow-primary/5 overflow-hidden">
+          <div className="bg-[#FAF9F6]/30 rounded-[1.8rem] p-4 lg:p-6 space-y-8">
             {/* Pending Queue */}
             <div className="space-y-8">
               <div className="flex items-center justify-between border-b border-border/20 pb-6">
@@ -224,7 +224,7 @@ const Dashboard = ({ onViewChange }) => {
 
             {/* Strategic Sections Grouped in the Main Card */}
             {user?.role !== 'department' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-8 border-t border-border/20">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6 border-t border-border/20">
                 <div className="space-y-8">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">

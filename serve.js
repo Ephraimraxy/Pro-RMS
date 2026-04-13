@@ -938,14 +938,15 @@ async function notifyDepartmentHead({ departmentId, requisition, subject, lines 
       actionLabel: 'Open Requisition'
     });
     
+    logger.info(`[MAIL] Attempting to send email to: ${dept.headEmail} | Subject: ${subject}`);
     const result = await sendEmail({ to: dept.headEmail, subject, text, html });
     if (result && result.skipped) {
-      logger.warn(`[MAIL] Send skipped for ${dept.headEmail} (Transport not configured)`);
+      logger.warn(`[MAIL] Send SKIPPED for ${dept.headEmail} — GMAIL_USER=${process.env.GMAIL_USER ? 'SET' : 'MISSING'}, GMAIL_APP_PASSWORD=${process.env.GMAIL_APP_PASSWORD ? 'SET' : 'MISSING'}`);
     } else {
-      logger.info(`[MAIL] Department head notified: ${dept.headEmail}`);
+      logger.info(`[MAIL] ✅ Email sent successfully to: ${dept.headEmail}`);
     }
   } catch (err) {
-    logger.error('[MAIL] Department head notify failed:', err.message);
+    logger.error(`[MAIL] Department head notify FAILED for dept ${departmentId}:`, err.message, err.stack);
   }
 }
 
@@ -1293,6 +1294,11 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
         }
       }
 
+      // Inter-department requests (with targetDepartmentId) from non-admin senders
+      // skip the admin workflow entirely – only the target dept reviews them.
+      const isAdminOriginated = normalizeRole(req.user.role) === 'global_admin';
+      const useWorkflow = !targetDepartmentId || isAdminOriginated;
+
       const created = await prisma.requisition.create({
         data: {
           clientId,
@@ -1305,12 +1311,28 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
           departmentId: originDeptId,
           creatorId,
           content: data.content || null,
-          currentStageId: isDraft ? null : (firstStage?.id || null),
+          currentStageId: isDraft ? null : (useWorkflow ? (firstStage?.id || null) : null),
           lastActionById: creatorId,
           lastActionAt: new Date(),
           targetDepartmentId: isDraft ? null : targetDepartmentId,
         }
       });
+
+      // Track the initial creation event for inter-department chain
+      if (!isDraft && targetDepartmentId) {
+        try {
+          await prisma.forwardEvent.create({
+            data: {
+              requisitionId: created.id,
+              fromDeptId: originDeptId,
+              toDeptId: targetDepartmentId,
+              action: 'created',
+              note: data.description || null,
+              actorName: req.user?.name || 'System'
+            }
+          });
+        } catch (fwdErr) { logger.warn('[FWD] Forward event creation failed:', fwdErr.message); }
+      }
 
       if (!isDraft) {
         if (firstStage?.role) {
@@ -1534,14 +1556,33 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
     }
 
     const newTargetId = returnToSender ? null : (targetDepartmentId ?? null);
+
+    // When returning to sender, set targetDepartmentId back to the originating department
+    // so they see it in their inbox and can respond
+    const returnTargetId = returnToSender ? requisition.departmentId : newTargetId;
+
     const updated = await prisma.requisition.update({
       where: { id: parseInt(id) },
       data: {
-        targetDepartmentId: newTargetId,
+        targetDepartmentId: returnTargetId,
         forwardNote: note || null
       },
       include: { department: true, targetDepartment: true }
     });
+
+    // Record ForwardEvent for the chain
+    try {
+      await prisma.forwardEvent.create({
+        data: {
+          requisitionId: parseInt(id),
+          fromDeptId: userDeptId || requisition.targetDepartmentId || requisition.departmentId,
+          toDeptId: returnToSender ? requisition.departmentId : newTargetId,
+          action: returnToSender ? 'returned' : 'forwarded',
+          note: note || null,
+          actorName: req.user?.name || 'Department'
+        }
+      });
+    } catch (fwdErr) { logger.warn('[FWD] Forward event creation failed:', fwdErr.message); }
 
     await prisma.activityLog.create({
       data: {
@@ -1780,8 +1821,8 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
     const requisition = await prisma.requisition.findUnique({
       where: { id: parseInt(id) },
       include: {
-        department:       { select: { name: true, headName: true, headEmail: true } },
-        targetDepartment: { select: { name: true, headEmail: true, headName: true } },
+        department:       { select: { name: true, code: true, headName: true, headEmail: true } },
+        targetDepartment: { select: { name: true, code: true, headEmail: true, headName: true } },
         creator:          { select: { name: true } },
         currentStage:     true,
         attachments:      true,
@@ -1790,6 +1831,13 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
             stage:     true,
             user:      { select: { name: true, role: true } },
             signature: { select: { verificationCode: true, payloadHash: true } }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
+        forwardEvents: {
+          include: {
+            fromDepartment: { select: { name: true, code: true } },
+            toDepartment:   { select: { name: true, code: true } }
           },
           orderBy: { createdAt: 'asc' }
         }
@@ -1810,15 +1858,24 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
 app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const upToEventId = req.query.upToEventId || null; // Optional stage filter
+
     const requisition = await prisma.requisition.findUnique({
       where: { id: parseInt(id) },
       include: {
-        department: true,
-        targetDepartment: true,
+        department: { include: { stamp: true } },
+        targetDepartment: { include: { stamp: true } },
         approvals: {
           include: {
             stage: true,
             user: { include: { signature: true } }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
+        forwardEvents: {
+          include: {
+            fromDepartment: { include: { stamp: true } },
+            toDepartment:   { include: { stamp: true } }
           },
           orderBy: { createdAt: 'asc' }
         }
@@ -1827,158 +1884,405 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
 
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595.28, 841.89]); // A4
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-    
-    let y = 800;
-    const margin = 50;
-    const pageWidth = 595.28;
+    // ── Stage filtering ────────────────────────────────
+    let filteredApprovals = requisition.approvals || [];
+    let filteredEvents    = requisition.forwardEvents || [];
 
-    // 1. Embed Logo
+    if (upToEventId) {
+      if (upToEventId.startsWith('fwd-')) {
+        const eventId = parseInt(upToEventId.replace('fwd-', ''));
+        const cutIdx = filteredEvents.findIndex(e => e.id === eventId);
+        if (cutIdx >= 0) filteredEvents = filteredEvents.slice(0, cutIdx + 1);
+      } else if (upToEventId.startsWith('app-')) {
+        const appId = parseInt(upToEventId.replace('app-', ''));
+        const cutIdx = filteredApprovals.findIndex(a => a.id === appId);
+        if (cutIdx >= 0) filteredApprovals = filteredApprovals.slice(0, cutIdx + 1);
+      }
+    }
+
+    // ── PDF Setup ──────────────────────────────────────
+    const pdfDoc = await PDFDocument.create();
+    const font       = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont   = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+
+    const A4_W = 595.28, A4_H = 841.89;
+    const margin = 50;
+    const contentWidth = A4_W - margin * 2;
+    const isMemo = requisition.type === 'Memo';
+    const isFinancial = requisition.type === 'Cash' || (requisition.amount && requisition.amount > 0);
+    let pageNumber = 0;
+    let page, y;
+
+    // ── Helper: Add new page with header ────────────────
+    const addPage = () => {
+      pageNumber++;
+      page = pdfDoc.addPage([A4_W, A4_H]);
+      y = A4_H - margin;
+      // footer on every page
+      return page;
+    };
+
+    // ── Helper: Check remaining space, add page if needed ──
+    const ensureSpace = (needed = 40) => {
+      if (y < margin + needed) {
+        // page footer
+        const pgText = `Page ${pageNumber}`;
+        page.drawText(pgText, { x: A4_W / 2 - font.widthOfTextAtSize(pgText, 8) / 2, y: 20, size: 8, font: italicFont, color: rgb(0.5, 0.5, 0.5) });
+        addPage();
+        return true;
+      }
+      return false;
+    };
+
+    // ── Helper: Draw wrapped text block ─────────────────
+    const drawWrappedText = (text, opts = {}) => {
+      const { fontSize = 10, textFont = font, indent = 0, lineHeight = 14, maxWidth = contentWidth - indent } = opts;
+      const charsPerLine = Math.floor(maxWidth / (textFont.widthOfTextAtSize('M', fontSize) * 0.55));
+      const words = text.split(/\s+/);
+      let currentLine = '';
+      
+      for (const word of words) {
+        const testLine = currentLine ? currentLine + ' ' + word : word;
+        if (testLine.length > charsPerLine && currentLine) {
+          ensureSpace(lineHeight + 5);
+          page.drawText(currentLine, { x: margin + indent, y, size: fontSize, font: textFont });
+          y -= lineHeight;
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) {
+        ensureSpace(lineHeight + 5);
+        page.drawText(currentLine, { x: margin + indent, y, size: fontSize, font: textFont });
+        y -= lineHeight;
+      }
+    };
+
+    // ── Helper: Strip HTML tags to plain text ────────────
+    const stripHtml = (html) => {
+      if (!html) return '';
+      return html
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<li[^>]*>/gi, '• ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    };
+
+    // ── Helper: Draw a horizontal rule ──────────────────
+    const drawHR = (thickness = 0.5, color = rgb(0.7, 0.7, 0.7)) => {
+      page.drawLine({ start: { x: margin, y }, end: { x: A4_W - margin, y }, thickness, color });
+      y -= 15;
+    };
+
+    // ── Helper: Embed image safely ──────────────────────
+    const embedSafe = async (bytes) => {
+      if (!bytes) return null;
+      try { return await pdfDoc.embedPng(bytes); }
+      catch (_) {
+        try { return await pdfDoc.embedJpg(bytes); }
+        catch (__) { return null; }
+      }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // PAGE 1: DOCUMENT HEADER
+    // ══════════════════════════════════════════════════════
+    addPage();
+
+    // ── Logo ────────────────────────────────────────────
     try {
-      if (fs.existsSync(path.join(__dirname, 'samples', 'logo.jpg'))) {
-        const logoBytes = fs.readFileSync(path.join(__dirname, 'samples', 'logo.jpg'));
+      const logoPath = path.join(__dirname, 'samples', 'logo.jpg');
+      if (fs.existsSync(logoPath)) {
+        const logoBytes = fs.readFileSync(logoPath);
         const logoImage = await pdfDoc.embedJpg(logoBytes);
         const logoDims = logoImage.scale(0.2);
-        page.drawImage(logoImage, {
-          x: margin,
-          y: y - logoDims.height,
-          width: logoDims.width,
-          height: logoDims.height
-        });
+        page.drawImage(logoImage, { x: margin, y: y - logoDims.height + 10, width: logoDims.width, height: logoDims.height });
       }
-    } catch (e) { logger.warn('Logo embed failed:', e.message); }
+    } catch (e) { /* logo skip */ }
 
-    // 2. Company Header Info
-    const isMemo = requisition.type === 'Memo';
-    page.drawText('CSS GLOBAL INTEGRATED FARMS LTD', { x: 150, y: y - 15, size: 14, font: boldFont, color: rgb(0.1, 0.2, 0.4) });
-    page.drawText('Km 10, Abuja-Keffi Expressway, Nasarawa State.', { x: 150, y: y - 30, size: 9, font });
-    page.drawText('www.cssgroup.com.ng | info@cssgroup.com.ng', { x: 150, y: y - 42, size: 9, font });
-    
-    y -= 80;
-    page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1.5, color: rgb(0.1, 0.2, 0.4) });
-    y -= 30;
+    // ── Company Header ──────────────────────────────────
+    page.drawText('CSS GLOBAL INTEGRATED FARMS LTD', { x: 150, y: y - 5, size: 14, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+    page.drawText('Km 10, Abuja-Keffi Expressway, Salamu Road, Gora, Nasarawa State.', { x: 150, y: y - 20, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
+    page.drawText('www.cssgroup.com.ng  |  info@cssgroup.com.ng  |  +234 702 603 3333', { x: 150, y: y - 32, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
 
-    // 3. Document Title
-    const title = isMemo ? 'INTERNAL MEMORANDUM' : 'REQUISITION VOUCHER';
-    page.drawText(title, { 
-      x: pageWidth / 2 - (boldFont.widthOfTextAtSize(title, 16) / 2), 
-      y, 
-      size: 16, 
-      font: boldFont,
-      decoration: { type: 'underline' }
-    });
-    y -= 40;
-
-    // 4. Metadata Block
-    if (isMemo) {
-      page.drawText(`REF: CSSG/${(requisition.department?.code || 'CSS').toUpperCase()}/MO/${id}`, { x: margin, y, size: 10, font: boldFont });
-      page.drawText(`DATE: ${new Date(requisition.createdAt).toLocaleDateString().toUpperCase()}`, { x: pageWidth - 160, y, size: 10, font: boldFont });
-      y -= 20;
-      page.drawText(`TO: ${(requisition.targetDepartment?.name || 'TARGET DEPT').toUpperCase()}`, { x: margin, y, size: 10, font: boldFont });
-      y -= 15;
-      page.drawText(`FROM: ${(requisition.department?.name || 'ORIGIN DEPT').toUpperCase()}`, { x: margin, y, size: 10, font: boldFont });
-      y -= 15;
-      page.drawText(`SUBJECT: ${requisition.title.toUpperCase()}`, { x: margin, y, size: 11, font: boldFont });
-      y -= 10;
-      page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1 });
-    } else {
-      page.drawText(`Voucher No: #${id}`, { x: margin, y, size: 11, font: boldFont });
-      page.drawText(`Date: ${new Date(requisition.createdAt).toLocaleDateString()}`, { x: pageWidth - 160, y, size: 11, font: boldFont });
-      y -= 25;
-      page.drawText(`Originating Department: ${requisition.department?.name}`, { x: margin, y, size: 10, font });
-      y -= 15;
-      page.drawText(`Target Department: ${requisition.targetDepartment?.name || 'Processing Department'}`, { x: margin, y, size: 10, font });
-      y -= 15;
-      page.drawText(`Requisition Title: ${requisition.title}`, { x: margin, y, size: 10, font: boldFont });
-    }
-
-    y -= 40;
-
-    // 5. Description Body
-    page.drawText('DESCRIPTION / CONTENT:', { x: margin, y, size: 9, font: boldFont });
-    y -= 20;
-    
-    const content = requisition.description || 'No content provided.';
-    const lines = content.match(/.{1,85}/g) || [];
-    for (const line of lines) {
-      if (y < 120) { page.drawText('... (continued on next page)', { x: margin, y, size: 8, font: italicFont }); break; }
-      page.drawText(line, { x: margin + 10, y, size: 10, font });
-      y -= 15;
-    }
-
-    if (!isMemo && requisition.amount > 0) {
-      y -= 20;
-      page.drawText(`TOTAL AMOUNT:`, { x: margin, y, size: 12, font: boldFont });
-      const amtStr = `NGN ${Number(requisition.amount).toLocaleString()}`;
-      page.drawText(amtStr, { x: pageWidth - margin - boldFont.widthOfTextAtSize(amtStr, 12), y, size: 12, font: boldFont });
-      y -= 20;
-    }
-
-    // 6. Approval & Signatures Trail
-    y = 250; 
-    page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 0.5, color: rgb(0.7,0.7,0.7) });
-    y -= 20;
-    page.drawText('AUTHORIZATION & APPROVAL TRAIL', { x: margin, y, size: 9, font: boldFont, color: rgb(0.4, 0.4, 0.4) });
+    y -= 55;
+    page.drawLine({ start: { x: margin, y }, end: { x: A4_W - margin, y }, thickness: 2, color: rgb(0.1, 0.22, 0.43) });
     y -= 25;
 
-    for (const app of requisition.approvals) {
-      if (y < 60) break;
-      const stamp = new Date(app.createdAt).toLocaleString();
-      const statusText = `[${app.action.toUpperCase()}] ${app.stage?.name || 'Processed'} by ${app.user?.name} on ${stamp}`;
-      page.drawText(statusText, { x: margin, y, size: 9, font });
-      
-      // Try to embed user digital signature if available
-      const isSuperAdminSigner = app.user?.role === 'global_admin' || app.user?.email === SUPER_ADMIN_EMAIL;
-      
-      if (app.user?.signature?.imageKey) {
-        try {
-          const sigBuffer = await getObjectBuffer(app.user.signature.imageKey);
-          const sigImage = await embedImageIfAvailable(pdfDoc, sigBuffer);
-          if (sigImage) {
-            const dims = sigImage.scale(0.15);
-            page.drawImage(sigImage, { x: pageWidth - margin - dims.width - 20, y: y - 5, width: dims.width, height: dims.height });
-          }
-        } catch (e) { /* skip sig if fail */ }
-      } else if (isSuperAdminSigner) {
-        // Fallback Trade Mark Seal for Super Admin
-        const tmText = "GLOBAL AUTHORITY — TRADE MARK";
-        const tmWidth = font.widthOfTextAtSize(tmText, 7);
-        page.drawRectangle({
-          x: pageWidth - margin - tmWidth - 25,
-          y: y - 8,
-          width: tmWidth + 10,
-          height: 18,
-          borderColor: rgb(0.1, 0.3, 0.7),
-          borderWidth: 1,
-          opacity: 0.8
-        });
-        page.drawText(tmText, { 
-          x: pageWidth - margin - tmWidth - 20, 
-          y: y - 2, 
-          size: 7, 
-          font: boldFont, 
-          color: rgb(0.1, 0.3, 0.7) 
-        });
+    // ── Document Title ──────────────────────────────────
+    const docTitle = isMemo ? 'INTERNAL MEMORANDUM' : 'REQUISITION VOUCHER';
+    const titleWidth = boldFont.widthOfTextAtSize(docTitle, 16);
+    page.drawText(docTitle, { x: A4_W / 2 - titleWidth / 2, y, size: 16, font: boldFont });
+    y -= 8;
+    // Underline
+    page.drawLine({ start: { x: A4_W / 2 - titleWidth / 2 - 5, y }, end: { x: A4_W / 2 + titleWidth / 2 + 5, y }, thickness: 1, color: rgb(0.1, 0.1, 0.1) });
+    y -= 30;
+
+    // ══════════════════════════════════════════════════════
+    // META BLOCK
+    // ══════════════════════════════════════════════════════
+    const deptCode = (requisition.department?.code || 'CSS').toUpperCase();
+    const createdDate = new Date(requisition.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
+
+    if (isMemo) {
+      // Memo-style header
+      const memoFields = [
+        { label: 'REF:', value: `CSSG/${deptCode}/MO/${String(id).padStart(3, '0')}` },
+        { label: 'DATE:', value: createdDate },
+        { label: 'TO:', value: (requisition.targetDepartment?.name || 'TARGET DEPARTMENT').toUpperCase() },
+        { label: 'FROM:', value: (requisition.department?.name || 'ORIGIN DEPARTMENT').toUpperCase() },
+        { label: 'SUBJECT:', value: requisition.title.toUpperCase() },
+      ];
+      for (const f of memoFields) {
+        page.drawText(f.label, { x: margin, y, size: 10, font: boldFont });
+        page.drawText(f.value, { x: margin + 70, y, size: 10, font: f.label === 'SUBJECT:' ? boldFont : font });
+        y -= 18;
       }
-      
-      // If Super Admin HAS a signature, still add the small TM label next to it
-      if (isSuperAdminSigner && app.user?.signature?.imageKey) {
-          page.drawText("TRADE MARK", { x: pageWidth - margin - 50, y: y - 12, size: 6, font: italicFont, color: rgb(0.5, 0.5, 0.5) });
+      y -= 5;
+      page.drawLine({ start: { x: margin, y }, end: { x: A4_W - margin, y }, thickness: 1.5 });
+      y -= 20;
+    } else {
+      // Requisition Voucher header
+      const leftFields = [
+        { label: 'Voucher No:', value: `#${id}` },
+        { label: 'From:', value: requisition.department?.name || 'Origin Department' },
+        { label: 'To:', value: requisition.targetDepartment?.name || 'Processing Department' },
+        { label: 'Title:', value: requisition.title },
+        { label: 'Type:', value: requisition.type },
+        { label: 'Urgency:', value: (requisition.urgency || 'normal').toUpperCase() },
+      ];
+      // Right side: Date + Amount
+      page.drawText(`Date: ${createdDate}`, { x: A4_W - margin - 200, y, size: 10, font: boldFont });
+      if (isFinancial) {
+        page.drawText(`Amount: NGN ${Number(requisition.amount || 0).toLocaleString()}`, { x: A4_W - margin - 200, y: y - 18, size: 11, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
       }
-      y -= 15;
+
+      for (const f of leftFields) {
+        page.drawText(`${f.label}`, { x: margin, y, size: 10, font: boldFont });
+        page.drawText(f.value, { x: margin + 85, y, size: 10, font });
+        y -= 17;
+      }
+      y -= 10;
+      drawHR(1);
     }
 
-    // 7. Footer
-    const footerText = `Generated dynamically by CSS-RMS on ${new Date().toLocaleString()}`;
-    page.drawText(footerText, { x: pageWidth / 2 - (font.widthOfTextAtSize(footerText, 8) / 2), y: 30, size: 8, font: italicFont, color: rgb(0.5, 0.5, 0.5) });
+    // ══════════════════════════════════════════════════════
+    // CONTENT BODY
+    // ══════════════════════════════════════════════════════
+    ensureSpace(60);
+    page.drawText(isMemo ? 'BODY:' : 'DESCRIPTION / CONTENT:', { x: margin, y, size: 10, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+    y -= 18;
 
+    // Prefer rich HTML content (from Document Studio), fallback to plain description
+    const rawContent = requisition.content || requisition.description || 'No content provided.';
+    const plainContent = stripHtml(rawContent);
+    const paragraphs = plainContent.split(/\n+/).filter(Boolean);
+
+    for (const para of paragraphs) {
+      ensureSpace(20);
+      drawWrappedText(para, { indent: isMemo ? 20 : 5 });
+      y -= 5;
+    }
+
+    // ── Amount block (for Requisition Voucher only) ─────
+    if (!isMemo && isFinancial) {
+      y -= 10;
+      ensureSpace(40);
+      page.drawLine({ start: { x: margin, y: y + 8 }, end: { x: A4_W - margin, y: y + 8 }, thickness: 0.5 });
+      const amtLabel = 'TOTAL AMOUNT:';
+      const amtValue = `NGN ${Number(requisition.amount).toLocaleString()}`;
+      page.drawText(amtLabel, { x: margin, y, size: 12, font: boldFont });
+      page.drawText(amtValue, { x: A4_W - margin - boldFont.widthOfTextAtSize(amtValue, 12), y, size: 12, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+      y -= 25;
+    }
+
+    // ══════════════════════════════════════════════════════
+    // PROCESSING CHAIN (ForwardEvents)
+    // ══════════════════════════════════════════════════════
+    if (filteredEvents.length > 0) {
+      ensureSpace(60);
+      y -= 10;
+      drawHR(1, rgb(0.1, 0.22, 0.43));
+      page.drawText('PROCESSING CHAIN — FILE MOVEMENT HISTORY', { x: margin, y, size: 10, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+      y -= 20;
+
+      for (let i = 0; i < filteredEvents.length; i++) {
+        const evt = filteredEvents[i];
+        ensureSpace(50);
+        
+        const actionLabel = evt.action === 'created' ? 'CREATED' : evt.action === 'forwarded' ? 'FORWARDED' : 'RETURNED';
+        const fromName = evt.fromDepartment?.name || 'Department';
+        const toName = evt.toDepartment?.name || 'Sender';
+        const dateStr = new Date(evt.createdAt).toLocaleString();
+        
+        // Step number + action
+        page.drawText(`${i + 1}.`, { x: margin, y, size: 9, font: boldFont });
+        page.drawText(`[${actionLabel}]`, { x: margin + 15, y, size: 9, font: boldFont, color: evt.action === 'returned' ? rgb(0.8, 0.4, 0) : rgb(0.1, 0.5, 0.2) });
+        page.drawText(`${fromName}  →  ${toName}`, { x: margin + 85, y, size: 9, font });
+        y -= 13;
+        
+        page.drawText(`Date: ${dateStr}`, { x: margin + 30, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+        if (evt.actorName) {
+          page.drawText(`By: ${evt.actorName}`, { x: margin + 250, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+        }
+        y -= 13;
+
+        // Comment/note
+        if (evt.note) {
+          ensureSpace(20);
+          page.drawText(`Comment: "${evt.note}"`, { x: margin + 30, y, size: 8, font: italicFont, color: rgb(0.2, 0.2, 0.2) });
+          y -= 13;
+        }
+
+        // Embed department stamp for this stage
+        const deptForStamp = evt.action === 'returned' ? evt.fromDepartment : evt.toDepartment;
+        if (deptForStamp?.stamp?.imageKey) {
+          try {
+            const stampBuffer = await getObjectBuffer(deptForStamp.stamp.imageKey);
+            const stampImg = await embedSafe(stampBuffer);
+            if (stampImg) {
+              ensureSpace(40);
+              const dims = stampImg.scale(0.12);
+              page.drawImage(stampImg, { x: A4_W - margin - dims.width - 5, y: y - 5, width: dims.width, height: dims.height, opacity: 0.6 });
+              page.drawText(deptForStamp.name || '', { x: A4_W - margin - dims.width - 5, y: y - dims.height - 10, size: 6, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+            }
+          } catch (_) { /* stamp embed skip */ }
+        }
+        y -= 8;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // APPROVAL TRAIL (Admin Workflow)
+    // ══════════════════════════════════════════════════════
+    if (filteredApprovals.length > 0) {
+      ensureSpace(60);
+      y -= 10;
+      drawHR(1, rgb(0.1, 0.22, 0.43));
+      page.drawText('AUTHORIZATION & APPROVAL TRAIL', { x: margin, y, size: 10, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+      y -= 20;
+
+      for (const app of filteredApprovals) {
+        ensureSpace(60);
+        const stamp = new Date(app.createdAt).toLocaleString();
+        const stageName = app.stage?.name || 'Processed';
+        const actionLabel = app.action.toUpperCase();
+        const userName = app.user?.name || 'Approver';
+
+        page.drawText(`[${actionLabel}]`, { x: margin, y, size: 9, font: boldFont, color: app.action === 'approved' ? rgb(0.1, 0.5, 0.2) : rgb(0.8, 0.1, 0.1) });
+        page.drawText(`${stageName} by ${userName}`, { x: margin + 80, y, size: 9, font });
+        y -= 13;
+        page.drawText(`Date: ${stamp}`, { x: margin + 20, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+        y -= 13;
+
+        if (app.remarks) {
+          page.drawText(`Remarks: "${app.remarks}"`, { x: margin + 20, y, size: 8, font: italicFont });
+          y -= 13;
+        }
+
+        // Embed approver's digital signature
+        const isSuperAdmin = app.user?.role === 'global_admin' || app.user?.email === SUPER_ADMIN_EMAIL;
+        if (app.user?.signature?.imageKey) {
+          try {
+            const sigBuf = await getObjectBuffer(app.user.signature.imageKey);
+            const sigImg = await embedSafe(sigBuf);
+            if (sigImg) {
+              ensureSpace(35);
+              const dims = sigImg.scale(0.13);
+              page.drawImage(sigImg, { x: A4_W - margin - dims.width - 10, y: y, width: dims.width, height: dims.height, opacity: 0.85 });
+              page.drawText(`${userName}`, { x: A4_W - margin - dims.width - 10, y: y - 8, size: 6, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+              if (isSuperAdmin) {
+                page.drawText('TRADE MARK', { x: A4_W - margin - 50, y: y - 16, size: 5, font: boldFont, color: rgb(0.1, 0.3, 0.7) });
+              }
+            }
+          } catch (_) { /* sig skip */ }
+        } else if (isSuperAdmin) {
+          // Fallback: Trade Mark seal for admin without uploaded signature
+          ensureSpace(25);
+          const tmText = 'GLOBAL AUTHORITY — TRADE MARK';
+          const tmWidth = font.widthOfTextAtSize(tmText, 7);
+          page.drawRectangle({ x: A4_W - margin - tmWidth - 20, y: y - 3, width: tmWidth + 14, height: 16, borderColor: rgb(0.1, 0.3, 0.7), borderWidth: 1, opacity: 0.8 });
+          page.drawText(tmText, { x: A4_W - margin - tmWidth - 13, y: y + 2, size: 7, font: boldFont, color: rgb(0.1, 0.3, 0.7) });
+        }
+        y -= 15;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // ORIGINATOR & RECIPIENT SIGNATURES
+    // ══════════════════════════════════════════════════════
+    ensureSpace(100);
+    y -= 15;
+    drawHR(0.5);
+    page.drawText('SIGNATURES', { x: margin, y, size: 9, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
+    y -= 25;
+
+    // Originating department stamp + head name
+    const originDept = requisition.department;
+    const targetDept = requisition.targetDepartment;
+
+    // Left side: Origin department
+    page.drawText(isMemo ? 'Sender:' : 'Registered by:', { x: margin, y, size: 9, font: boldFont });
+    y -= 3;
+
+    if (originDept?.stamp?.imageKey) {
+      try {
+        const stampBuf = await getObjectBuffer(originDept.stamp.imageKey);
+        const stampImg = await embedSafe(stampBuf);
+        if (stampImg) {
+          const dims = stampImg.scale(0.18);
+          page.drawImage(stampImg, { x: margin, y: y - dims.height, width: dims.width, height: dims.height, opacity: 0.7 });
+          y -= dims.height + 5;
+        }
+      } catch (_) {}
+    }
+    page.drawText(originDept?.headName || '___________________', { x: margin, y, size: 10, font: boldFont });
+    y -= 12;
+    page.drawText(originDept?.name || 'Department', { x: margin, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+
+    // Right side: Target department (if exists)
+    if (targetDept) {
+      let rightY = y + 50; // Align with origin section
+      page.drawText(isMemo ? 'Received by:' : 'Approved by:', { x: A4_W / 2 + 20, y: rightY, size: 9, font: boldFont });
+      rightY -= 3;
+
+      if (targetDept.stamp?.imageKey) {
+        try {
+          const tStampBuf = await getObjectBuffer(targetDept.stamp.imageKey);
+          const tStampImg = await embedSafe(tStampBuf);
+          if (tStampImg) {
+            const dims = tStampImg.scale(0.18);
+            page.drawImage(tStampImg, { x: A4_W / 2 + 20, y: rightY - dims.height, width: dims.width, height: dims.height, opacity: 0.7 });
+            rightY -= dims.height + 5;
+          }
+        } catch (_) {}
+      }
+      page.drawText(targetDept.headName || '___________________', { x: A4_W / 2 + 20, y: rightY, size: 10, font: boldFont });
+      rightY -= 12;
+      page.drawText(targetDept.name || 'Department', { x: A4_W / 2 + 20, y: rightY, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+    }
+
+    // ── Final Footer ────────────────────────────────────
+    const footerText = `Generated by CSS-RMS on ${new Date().toLocaleString()} | Page ${pageNumber}`;
+    page.drawText(footerText, { x: A4_W / 2 - font.widthOfTextAtSize(footerText, 7) / 2, y: 20, size: 7, font: italicFont, color: rgb(0.5, 0.5, 0.5) });
+
+    // ── Serve PDF ───────────────────────────────────────
     const pdfBytes = await pdfDoc.save();
+    const fileName = isMemo ? `CSS-MEMO-${id}.pdf` : `CSS-REQUISITION-${id}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="CSS-REPORT-${id}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(Buffer.from(pdfBytes));
   } catch (error) { 
     logger.error('Dynamic PDF Error:', error);
@@ -2089,7 +2393,10 @@ app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => 
       include: { requisition: true }
     });
     if (!attachment) return res.status(404).json({ error: 'File not found' });
-    if (req.user.role === 'department' && req.user.deptId && attachment.requisition?.departmentId !== req.user.deptId) {
+    // Allow access for both originating AND target department
+    if (req.user.role === 'department' && req.user.deptId
+        && attachment.requisition?.departmentId !== req.user.deptId
+        && attachment.requisition?.targetDepartmentId !== req.user.deptId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -2111,6 +2418,59 @@ app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => 
     res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
     stream.pipe(res);
   } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// File Preview (inline rendering instead of forced download)
+app.get('/api/attachments/:id/preview', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const attachment = await prisma.attachment.findUnique({ 
+      where: { id: parseInt(id) },
+      include: { requisition: true }
+    });
+    if (!attachment) return res.status(404).json({ error: 'File not found' });
+    if (req.user.role === 'department' && req.user.deptId
+        && attachment.requisition?.departmentId !== req.user.deptId
+        && attachment.requisition?.targetDepartmentId !== req.user.deptId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (!attachment.storageKey) return res.status(404).json({ error: 'File missing from storage' });
+    const stream = await getObjectStream(attachment.storageKey);
+    res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${attachment.filename}"`);
+    stream.pipe(res);
+  } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// ── EMAIL TEST ENDPOINT (Admin only) ──
+app.post('/api/test-email', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ error: 'Please provide a "to" email address.' });
+    logger.info(`[MAIL-TEST] Attempting test email to: ${to}`);
+    logger.info(`[MAIL-TEST] GMAIL_USER=${process.env.GMAIL_USER || 'NOT SET'}`);
+    logger.info(`[MAIL-TEST] GMAIL_APP_PASSWORD=${process.env.GMAIL_APP_PASSWORD ? 'SET (' + process.env.GMAIL_APP_PASSWORD.length + ' chars)' : 'NOT SET'}`);
+    const { text, html } = buildEmailContent({
+      title: 'CSS RMS — Email Test',
+      lines: [
+        'This is a test email from the CSS RMS platform.',
+        `Sent at: ${new Date().toLocaleString()}`,
+        'If you receive this, email notifications are working correctly.'
+      ],
+      actionUrl: APP_BASE_URL || '',
+      actionLabel: 'Open RMS Dashboard'
+    });
+    const result = await sendEmail({ to, subject: 'CSS RMS — Email Delivery Test', text, html });
+    if (result && result.skipped) {
+      logger.warn('[MAIL-TEST] SKIPPED — transport not configured');
+      return res.json({ success: false, message: 'Email transport not configured. Check GMAIL_USER and GMAIL_APP_PASSWORD env vars.' });
+    }
+    logger.info(`[MAIL-TEST] ✅ Test email sent to ${to}`);
+    res.json({ success: true, message: `Test email sent to ${to}` });
+  } catch (error) {
+    logger.error('[MAIL-TEST] FAILED:', error.message, error.stack);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Requisition Attachments List

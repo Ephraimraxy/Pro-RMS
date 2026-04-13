@@ -21,6 +21,7 @@ const VoiceDictation = ({ onTranscript, disabled = false }) => {
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const accumulatedRef = useRef('');
+  const lastFinalIndexRef = useRef(0); // Track processed final results to prevent duplicates
 
   // Detect which mode we can use
   useEffect(() => {
@@ -55,20 +56,22 @@ const VoiceDictation = ({ onTranscript, disabled = false }) => {
     recognition.lang = 'en-US';
 
     accumulatedRef.current = '';
+    lastFinalIndexRef.current = 0;
 
     recognition.onresult = (event) => {
       let interim = '';
-      let final = '';
-      for (let i = 0; i < event.results.length; i++) {
+      let newFinal = '';
+      for (let i = lastFinalIndexRef.current; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          final += transcript + ' ';
+          newFinal += transcript + ' ';
+          lastFinalIndexRef.current = i + 1; // Skip this on next event
         } else {
           interim += transcript;
         }
       }
-      if (final) {
-        accumulatedRef.current += final;
+      if (newFinal) {
+        accumulatedRef.current += newFinal;
       }
       setLiveText(accumulatedRef.current + interim);
     };
