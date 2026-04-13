@@ -409,15 +409,34 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
   const verCode     = detail?.approvals?.slice(-1)[0]?.signature?.verificationCode;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-2 sm:p-3 overflow-y-auto safe-p-top pt-[2vh] pb-10 bg-background/40 backdrop-blur-md custom-scrollbar">
-      <div className="fixed inset-0 bg-background/40 backdrop-blur-sm -z-10" onClick={onClose} />
+    <div className="w-full flex flex-col gap-5 animate-in fade-in duration-500 pb-10">
+      
+      {/* Top Header / Back Button Navigation */}
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={onClose} 
+          className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
+        >
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+          Back to Directory
+        </button>
 
-      <div className="glass bg-white/95 w-full lg:max-w-[96rem] rounded-[2rem] border border-border/40 shadow-[0_30px_100px_rgba(0,0,0,0.2)] relative flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden min-h-[85vh]">
+        <button
+          onClick={() => setPrintModal(true)}
+          title="Print Stage Report"
+          className="px-4 py-2 bg-primary text-white hover:bg-primary/90 rounded-xl transition-all shadow-md shadow-primary/20 flex items-center gap-2 font-bold text-xs uppercase tracking-wider"
+        >
+          <Printer size={16} />
+          Print Record
+        </button>
+      </div>
+
+      <div className="glass bg-white/95 w-full rounded-[2rem] border border-border/40 shadow-[0_4px_40px_rgba(0,0,0,0.03)] relative flex flex-col overflow-hidden min-h-[85vh]">
 
         {/* Header */}
-        <div className="p-4 lg:p-5 border-b border-border/50 flex items-start justify-between shrink-0 bg-white/50">
-          <div className="space-y-1.5 flex-1 pr-4">
-            <div className="flex items-center gap-2 flex-wrap mb-1">
+        <div className="p-5 lg:p-7 border-b border-border/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 bg-white/50">
+          <div className="space-y-2 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
                 <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
                 Neural Sync Active
@@ -431,36 +450,22 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                 </span>
               )}
             </div>
-            <h2 className="text-xl font-bold text-foreground tracking-tight leading-tight">{req.title}</h2>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
-               <span className="flex items-center gap-1"><Building2 size={11}/> {req.department}</span>
+            <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tighter leading-tight">{req.title}</h2>
+            <div className="flex items-center gap-4 text-xs tracking-wide text-muted-foreground font-semibold">
+               <span className="flex items-center gap-1.5"><Building2 size={13}/> {req.department}</span>
                {detail?.targetDepartment?.name && (
-                 <span className="flex items-center gap-1"><ArrowRight size={11}/> {detail.targetDepartment.name}</span>
+                 <span className="flex items-center gap-1.5"><ArrowRight size={13}/> {detail.targetDepartment.name}</span>
                )}
-               <span className="px-1.5 py-0.5 rounded-md bg-muted font-mono text-[10px]">{req.id}</span>
+               <span className="px-2 py-0.5 rounded-md bg-muted font-mono text-[10px] tracking-widest">#{req.id}</span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
-             {isFinancial && (
-               <div className="text-right">
-                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest leading-none">Total Amount</p>
-                  <p className="text-xl font-mono font-bold text-foreground">₦{Number(req.amount || 0).toLocaleString()}</p>
-               </div>
-             )}
-             <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setPrintModal(true)}
-                  title="Generate Stage Report (PDF)"
-                  className="p-2 bg-background hover:bg-muted text-foreground rounded-xl transition-all border border-border shadow-sm flex items-center gap-1.5"
-                >
-                  <Printer size={16} />
-                   <span className="text-[10px] font-bold hidden sm:inline">Print</span>
-                </button>
-                <button onClick={onClose} className="p-2 bg-muted hover:bg-muted/80 rounded-xl text-muted-foreground transition-all">
-                  <X size={18} />
-                </button>
+          
+          {isFinancial && (
+             <div className="sm:text-right bg-white border border-border/40 p-4 rounded-xl shadow-sm min-w-[200px]">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Total Amount</p>
+                <p className="text-2xl font-mono font-black text-foreground">₦{Number(req.amount || 0).toLocaleString()}</p>
              </div>
-          </div>
+          )}
         </div>
 
         {/* Return Warning Banner */}
@@ -806,16 +811,6 @@ const RequisitionsPage = ({ onViewChange }) => {
     <Layout user={user} currentView="requisitions" onViewChange={onViewChange}>
       <RequisitionForm isOpen={isFormOpen} onClose={() => { setIsFormOpen(false); loadData(); }} />
 
-      {selectedReq && (
-        <RequisitionDetailModal
-          req={selectedReq}
-          user={user}
-          departments={departments}
-          onClose={() => setSelectedReq(null)}
-          onAction={() => { setSelectedReq(null); loadData(); }}
-        />
-      )}
-
       <ConfirmModal 
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -828,6 +823,15 @@ const RequisitionsPage = ({ onViewChange }) => {
         }
       />
 
+      {selectedReq ? (
+        <RequisitionDetailModal
+          req={selectedReq}
+          user={user}
+          departments={departments}
+          onClose={() => setSelectedReq(null)}
+          onAction={() => { setSelectedReq(null); loadData(); }}
+        />
+      ) : (
       <div className="max-w-full mx-auto space-y-5 pb-20 animate-slide-up">
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-2">
@@ -1014,6 +1018,7 @@ const RequisitionsPage = ({ onViewChange }) => {
           </div>
         </div>
       </div>
+      )}
     </Layout>
   );
 };
