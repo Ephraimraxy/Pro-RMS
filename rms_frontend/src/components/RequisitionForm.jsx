@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowLeft } from 'lucide-react';
+import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowLeft, MessageSquare } from 'lucide-react';
 import { addRequisition, getDepartments, getRequisitionTypes, uploadAttachments } from '../lib/store';
 import { deptAPI, aiAPI } from '../lib/api';
 import { useNetwork } from '../App';
@@ -253,6 +253,21 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                 className="w-full bg-white border border-border rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[120px] transition-all disabled:opacity-60 resize-none shadow-inner"
                 required
               />
+
+              {/* AI Refine inline button — appears after 5 chars, fully optional */}
+              {formData.description.trim().length >= 5 && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleRefine}
+                    disabled={refining || !selectedType}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                  >
+                    {refining ? <Loader2 size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+                    {refining ? 'AI Analyzing…' : '✨ Refine with AI'}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4 border border-primary/20 bg-primary/5 rounded-2xl p-5 relative">
@@ -456,33 +471,20 @@ const RequisitionForm = ({ isOpen, onClose }) => {
             Save Draft
           </button>
           
-          {!aiPreview ? (
-            <button
-              type="button"
-              onClick={handleRefine}
-              disabled={refining || !selectedType || !formData.description}
-              className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {refining ? (
-                <><Loader2 size={16} className="animate-spin" /> AI Analyzing…</>
-              ) : (
-                <>✨ Refine with AI</>
-              )}
-            </button>
-          ) : (
-            <button
+          <button
               type="button"
               onClick={e => handleSubmit(e, false)}
-              disabled={submitting || (formData.targetDepartmentId && activation && !activation.activated)}
+              disabled={submitting || refining || !selectedType || !(aiPreview ? aiPreview.description : formData.description?.trim()) || (formData.targetDepartmentId && activation && !activation.activated)}
               className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+              ) : refining ? (
+                <><Loader2 size={16} className="animate-spin" /> AI Analyzing…</>
               ) : (
                 <><Send size={16} /> Confirm & Submit Request</>
               )}
             </button>
-          )}
         </div>
       </div>
     </div>
