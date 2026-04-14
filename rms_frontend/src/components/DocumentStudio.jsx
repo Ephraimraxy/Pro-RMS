@@ -25,7 +25,7 @@ import {
   CloudOff, Cloud, Clock, X, HardDrive, AlertCircle, 
   FolderOpen, Edit3, Presentation, MonitorPlay, ChevronLeft, ChevronRight, Maximize, Send,
   Paperclip, AlertTriangle, Zap, CheckCircle2, 
-  Image as ImageIcon, Loader2
+  Image as ImageIcon, Loader2, ArrowLeft
 } from 'lucide-react';
 
 localforage.config({ name: 'CSS_RMS_Offline', storeName: 'drafts' });
@@ -632,22 +632,36 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[150] flex flex-col items-center justify-start overflow-y-auto p-4 sm:p-6 bg-background/20 backdrop-blur-sm custom-scrollbar animate-in fade-in duration-300 pt-[5vh] pb-10">
-      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" onClick={onClose} />
-      <div className="glass bg-white/95 w-full max-w-3xl rounded-[2.5rem] border border-border/50 shadow-2xl relative flex flex-col animate-in zoom-in-95 duration-500 overflow-hidden">
-
-        <div className="p-6 border-b border-border/50 flex items-center justify-between bg-muted/10 shrink-0">
-          <div>
-            <h2 className="text-xl font-bold text-foreground flex items-center space-x-2">
-              <Send size={20} className="text-primary" />
-              <span>Send to Workflow</span>
-            </h2>
-            <p className="text-xs text-muted-foreground mt-1">Configure routing and attachments for "{initialTitle}"</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-muted text-muted-foreground rounded-full transition-colors">
-            <X size={20} />
+    <div className="fixed inset-0 z-[150] bg-background flex flex-col overflow-y-auto safe-p-top p-4 sm:p-6 lg:p-8 custom-scrollbar animate-in fade-in duration-300">
+      
+      <div className="max-w-[1920px] mx-auto w-full flex flex-col gap-6 flex-1 h-full min-h-screen pb-10">
+        
+        {/* Top Header / Back Button */}
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
+          >
+            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+            Back to Studio
           </button>
         </div>
+
+        <div className="glass bg-white/95 w-full flex-1 rounded-[2rem] border border-border/40 shadow-xl relative flex flex-col overflow-hidden">
+
+          <div className="p-6 lg:p-8 border-b border-border/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 bg-white/50">
+            <div className="space-y-1">
+              <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tighter leading-tight flex items-center space-x-3">
+                <Send size={24} className="text-primary" />
+                <span>Send to Workflow</span>
+              </h2>
+              <div className="flex items-center space-x-2 pt-2">
+                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-primary/60">Routing Template Configurator</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground font-medium hidden sm:block">Configuring: "{initialTitle}"</p>
+          </div>
         
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
           {/* AI Refinement Nudge */}
@@ -798,6 +812,7 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
           </button>
         </div>
       </div>
+     </div>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowLeft } from 'lucide-react';
 import { addRequisition, getDepartments, getRequisitionTypes, uploadAttachments } from '../lib/store';
 import { deptAPI, aiAPI } from '../lib/api';
 import { useNetwork } from '../App';
@@ -168,16 +168,27 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-start p-4 sm:p-6 overflow-y-auto safe-p-top pt-[5vh] pb-10 bg-background/20 backdrop-blur-sm">
-      <div className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10" onClick={!submitting ? onClose : undefined} />
+    <div className="w-full flex flex-col gap-5 animate-in fade-in duration-500 pb-10">
+      
+      {/* Top Header / Back Button Navigation */}
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={!submitting ? onClose : undefined} 
+          disabled={submitting}
+          className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group disabled:opacity-40"
+        >
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+          Cancel Creation
+        </button>
+      </div>
 
-      <div className="glass bg-white/95 w-full lg:max-w-5xl rounded-[2.5rem] border border-border/50 shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-500">
+      <div className="glass bg-white/95 w-full flex-1 rounded-[2rem] border border-border/40 shadow-[0_4px_40px_rgba(0,0,0,0.03)] relative flex flex-col overflow-hidden min-h-[85vh]">
 
         {/* Header */}
-        <div className="p-5 border-b border-border/50 flex items-center justify-between shrink-0">
+        <div className="p-6 lg:p-8 border-b border-border/50 flex flex-col sm:flex-row items-start justify-between gap-4 shrink-0 bg-white/50">
           <div className="space-y-1">
-            <h2 className="text-xl font-bold text-foreground tracking-tight">Create New Requisition</h2>
-            <div className="flex items-center gap-2">
+            <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tighter leading-tight">Create New Requisition</h2>
+            <div className="flex items-center gap-2 pt-2">
               <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest flex items-center gap-1">
                 <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
                 Neural Processor Active
@@ -187,13 +198,6 @@ const RequisitionForm = ({ isOpen, onClose }) => {
               </p>
             </div>
           </div>
-          <button
-            onClick={!submitting ? onClose : undefined}
-            disabled={submitting}
-            className="p-2 hover:bg-muted rounded-full text-muted-foreground transition-all disabled:opacity-40"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {/* Scrollable body */}

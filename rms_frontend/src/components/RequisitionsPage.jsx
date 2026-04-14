@@ -809,8 +809,6 @@ const RequisitionsPage = ({ onViewChange }) => {
 
   return (
     <Layout user={user} currentView="requisitions" onViewChange={onViewChange}>
-      <RequisitionForm isOpen={isFormOpen} onClose={() => { setIsFormOpen(false); loadData(); }} />
-
       <ConfirmModal 
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -822,8 +820,9 @@ const RequisitionsPage = ({ onViewChange }) => {
           : `Are you sure you want to permanently delete Requisition #${deletePendingAction?.id}? This action is immutable.`
         }
       />
-
-      {selectedReq ? (
+      {isFormOpen ? (
+        <RequisitionForm isOpen={isFormOpen} onClose={() => { setIsFormOpen(false); loadData(); }} />
+      ) : selectedReq ? (
         <RequisitionDetailModal
           req={selectedReq}
           user={user}
