@@ -648,10 +648,10 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               {req.description && (
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2">
-                     <FileText size={13} className="text-primary" />
-                     <p className="text-[10px] font-black text-foreground uppercase tracking-[0.1em]">Requisition Brief</p>
+                     <FileText size={15} className="text-primary" />
+                     <p className="text-xs font-black text-foreground uppercase tracking-[0.1em]">Requisition Brief</p>
                   </div>
-                  <p className="text-sm text-foreground leading-relaxed bg-[#FAF9F6]/50 p-4 rounded-xl border border-border/40 shadow-inner italic">
+                  <p className="text-base font-semibold text-foreground leading-relaxed bg-[#FAF9F6]/50 p-4 rounded-xl border border-border/40 shadow-inner">
                     {req.description}
                   </p>
                 </div>
