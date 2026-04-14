@@ -2601,6 +2601,38 @@ app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const isProMode = mode === 'pro';
+    const isReviewMode = mode === 'review';
+
+    // Review/comment mode: no validity gating — just polish grammar and professional tone
+    if (isReviewMode) {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a professional corporate communications editor.
+Your only job is to fix spelling, grammar, and tone in a review comment or response note written by a department officer in a Requisition Management System.
+Keep the original meaning exactly — do not add, remove, or change any facts or requests.
+Make it polite, concise, and professional.
+Return ONLY a JSON object: { "refinedDescription": string, "actionReason": string }
+The actionReason should be a short one-sentence note on what you improved (e.g. "Fixed spelling and improved formal tone.").`
+          },
+          { role: 'user', content: rawDescription }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.15,
+      });
+      const data = JSON.parse(response.choices[0].message.content);
+      return res.json({
+        isValid: true,
+        refinedDescription: xss(data.refinedDescription || rawDescription),
+        actionReason: xss(data.actionReason || 'Note professionally refined by AI.'),
+        recommendedAction: 'submit',
+        totalAmount: 0,
+        documentType: 'Memo',
+        validationMessage: ''
+      });
+    }
 
     const SYSTEM_PROMPT = isProMode
       ? `You are a senior document editor for a corporate Requisition Management System (RMS).

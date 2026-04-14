@@ -384,7 +384,7 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
     if (note.trim().length < 5) return;
     setRefining(true);
     try {
-      const res = await aiAPI.refineDraft(note);
+      const res = await aiAPI.refineDraft(note, 'review');
       if (res.blocked) {
         toast.error(res.validationMessage || 'Your note was not recognised as a valid response. Please write a clear, professional review.', { duration: 6000 });
         return;
