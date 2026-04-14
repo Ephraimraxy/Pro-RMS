@@ -13,7 +13,7 @@ import {
   Search, Plus, Eye, FileText, X,
   ChevronRight, Paperclip, ShieldCheck, Clock,
   ArrowRightCircle, CornerDownLeft, Loader2, Send, Trash2, Printer,
-  Building2, ArrowRight, History, Download, AlertTriangle,
+  Building2, ArrowRight, ArrowLeft, History, Download, AlertTriangle,
   ExternalLink, ArrowDownToLine, MessageSquare, RotateCcw, Forward as ForwardIcon
 } from 'lucide-react';
 import { reqAPI } from '../lib/api';
