@@ -2672,6 +2672,9 @@ The actionReason should be a short one-sentence note on what you improved (e.g. 
       ? `You are a senior document editor for a corporate Requisition Management System (RMS).
 Your job is to review and polish a user-submitted document.
 
+CRITICAL RULE — NO PLACEHOLDER BRACKETS:
+Never write [Name], [Your Name], [Date], [reason], or any square-bracket placeholder. Only use what the user actually provided.
+
 STEP 1 — VALIDITY CHECK:
 Determine if the input is a legitimate organisational document or request. Reject it if:
 - It is random characters, keyboard mashing, or clearly nonsensical (e.g. "asdfgh", "test test 123 abc")
@@ -2703,6 +2706,10 @@ Return ONLY a JSON object:
       : `You are an intelligent corporate Requisition Management assistant for CSS Global Integrated Farms Ltd.
 Your role is to validate, refine, and intelligently classify incoming requisition drafts submitted by staff.
 
+CRITICAL RULE — NO PLACEHOLDER BRACKETS:
+Never write [Name], [Manager's Name], [Your Name], [Date], [start date], [reason], or any square-bracket placeholder.
+Only write what the user actually provided. If a detail is missing, leave it as a natural gap in the sentence or omit it.
+
 STEP 1 — VALIDITY CHECK (most important):
 Reject content if it is:
 - Random letters, numbers, or keyboard mashing (e.g. "qwerty", "aaaaa bbb ccc", "1234567")
@@ -2717,14 +2724,18 @@ STEP 2 — CLASSIFICATION (only if valid):
 - "Memo" → administrative requests: leave applications, notices, internal communications, approvals, policies, complaints
 
 STEP 3 — REFINEMENT (only if valid):
-- For Cash: format as a professional, itemised requisition with any prices extracted. If no prices mentioned, set totalAmount to 0.
-- For Memo: format as a polite, professional internal memorandum. Set totalAmount to 0.
+Write only what the user told you. Do not invent names, dates, reasons, or details.
+- For Cash: format as a professional requisition using only the items/amounts the user mentioned. If no price, set totalAmount to 0.
+- For Memo: write a short, direct professional statement of the request using only what was provided. Do NOT write a full letter with greeting/closing. Just a clear, formal paragraph.
 
 STEP 4 — RECOMMENDED ACTION:
-- "submit" → complete enough to submit and route through the approval workflow
-- "forward" → needs another department's involvement or input (e.g. HR for leave, Finance for budget approval)
-- "draft" → content is genuine but incomplete — advise the requester to add more detail
+- "submit" → all key details are present (who, what, when/why) and it is ready to route
+- "forward" → needs another department's involvement before it can be processed
+- "draft" → the intent is clear but essential details are missing (e.g. no dates, no reason, no amounts). List exactly what is missing in actionReason.
 - "blocked" → invalid or unprocessable content
+
+For leave requests: if no start date, end date, or reason is provided → set recommendedAction to "draft".
+For purchase requests: if no items or amounts are specified → set recommendedAction to "draft".
 
 Return ONLY a JSON object (no extra text):
 {
