@@ -2125,13 +2125,37 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     const deptCode = (requisition.department?.code || 'CSS').toUpperCase();
     const createdDate = new Date(requisition.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
 
+    // ── Compute FROM / TO based on the filtered chain ──────
+    // FROM: always the original creator
+    const fromDeptName = sanitizeText((requisition.department?.name || 'ORIGIN DEPARTMENT').toUpperCase());
+
+    // TO: all unique external departments that appear in filteredEvents (ordered by first appearance),
+    // joined with "/" so a chain ISAC→FPP→HR shows "FPP/HR" regardless of returns/tossing.
+    const originDeptId = requisition.departmentId;
+    const externalDeptMap = new Map(); // deptId → dept object, insertion-ordered
+    for (const evt of filteredEvents) {
+      if (evt.toDeptId && evt.toDeptId !== originDeptId && evt.toDepartment && !externalDeptMap.has(evt.toDeptId)) {
+        externalDeptMap.set(evt.toDeptId, evt.toDepartment);
+      }
+      if (evt.fromDeptId && evt.fromDeptId !== originDeptId && evt.fromDepartment && !externalDeptMap.has(evt.fromDeptId)) {
+        externalDeptMap.set(evt.fromDeptId, evt.fromDepartment);
+      }
+    }
+    const externalDepts = [...externalDeptMap.values()];
+    const toDeptName = externalDepts.length > 0
+      ? sanitizeText(externalDepts.map(d => d.name).join('/').toUpperCase())
+      : sanitizeText((requisition.targetDepartment?.name || 'PROCESSING DEPARTMENT').toUpperCase());
+
+    // All signatories: originating dept + every external dept in the chain (deduped, ordered)
+    const signatoryDepts = [requisition.department, ...externalDepts].filter(Boolean);
+
     if (isMemo) {
       // Memo-style header
       const memoFields = [
         { label: 'REF:', value: `CSSG/${deptCode}/MO/${String(id).padStart(3, '0')}` },
         { label: 'DATE:', value: createdDate },
-        { label: 'TO:', value: sanitizeText((requisition.targetDepartment?.name || 'TARGET DEPARTMENT').toUpperCase()) },
-        { label: 'FROM:', value: sanitizeText((requisition.department?.name || 'ORIGIN DEPARTMENT').toUpperCase()) },
+        { label: 'TO:', value: toDeptName },
+        { label: 'FROM:', value: fromDeptName },
         { label: 'SUBJECT:', value: sanitizeText((requisition.title || 'Untitled').toUpperCase()) },
       ];
       for (const f of memoFields) {
@@ -2147,7 +2171,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       const leftFields = [
         { label: 'Voucher No:', value: `#${id}` },
         { label: 'From:', value: sanitizeText(requisition.department?.name || 'Origin Department') },
-        { label: 'To:', value: sanitizeText(requisition.targetDepartment?.name || 'Processing Department') },
+        { label: 'To:', value: sanitizeText(externalDepts.length > 0 ? externalDepts.map(d => d.name).join('/') : (requisition.targetDepartment?.name || 'Processing Department')) },
         { label: 'Title:', value: sanitizeText(requisition.title || 'Untitled') },
         { label: 'Type:', value: sanitizeText(requisition.type || 'General') },
         { label: 'Urgency:', value: (requisition.urgency || 'normal').toUpperCase() },
@@ -2310,68 +2334,60 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     }
 
     // ══════════════════════════════════════════════════════
-    // ORIGINATOR & RECIPIENT SIGNATURES
+    // SIGNATURES — one entry per department in the chain
+    // Format: Head Name (DEPT)  — no "Sender:" / "Received by:" labels
     // ══════════════════════════════════════════════════════
-    ensureSpace(120);
+    const sigRowHeight = 50; // stamp + name space per signatory
+    ensureSpace(30 + signatoryDepts.length * sigRowHeight);
     y -= 15;
     drawHR(0.5);
-    page.drawText('SIGNATURES', { x: margin, y, size: 9, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
-    y -= 25;
+    page.drawText('SIGNATURES', { x: margin, y, size: 10, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+    y -= 22;
 
-    const signatureStartY = y;
-    let maxStampSpace = 40; // Default physical signature buffer
+    // Lay out signatories in columns of 2 across the page
+    const colWidth = contentWidth / 2;
+    let colIndex = 0;
 
-    const originDept = requisition.department;
-    const targetDept = requisition.targetDepartment;
+    for (const dept of signatoryDepts) {
+      const colX = margin + colIndex * colWidth;
+      ensureSpace(sigRowHeight + 10);
 
-    // Origin Department Stamp
-    page.drawText(isMemo ? 'Sender:' : 'Registered by:', { x: margin, y: signatureStartY, size: 9, font: boldFont });
-    
-    let leftStampDims = null;
-    let leftStampImg = null;
-    if (originDept?.stamp?.imageKey) {
-      try {
-        const stampBuf = await getObjectBuffer(originDept.stamp.imageKey);
-        leftStampImg = await embedSafe(stampBuf);
-        if (leftStampImg) leftStampDims = leftStampImg.scale(0.18);
-      } catch (_) {}
-    }
-
-    if (leftStampImg && leftStampDims) {
-      page.drawImage(leftStampImg, { x: margin, y: signatureStartY - 3 - leftStampDims.height, width: leftStampDims.width, height: leftStampDims.height, opacity: 0.7 });
-      maxStampSpace = Math.max(maxStampSpace, leftStampDims.height);
-    }
-
-    // Target Department Stamp
-    let rightStampDims = null;
-    let rightStampImg = null;
-    if (targetDept) {
-      page.drawText(isMemo ? 'Received by:' : 'Approved by:', { x: A4_W / 2 + 20, y: signatureStartY, size: 9, font: boldFont });
-      if (targetDept.stamp?.imageKey) {
+      // Department stamp (if available)
+      let stampImg = null;
+      let stampDims = null;
+      if (dept?.stamp?.imageKey) {
         try {
-          const tStampBuf = await getObjectBuffer(targetDept.stamp.imageKey);
-          rightStampImg = await embedSafe(tStampBuf);
-          if (rightStampImg) rightStampDims = rightStampImg.scale(0.18);
+          const buf = await getObjectBuffer(dept.stamp.imageKey);
+          stampImg = await embedSafe(buf);
+          if (stampImg) stampDims = stampImg.scale(0.15);
         } catch (_) {}
       }
-      if (rightStampImg && rightStampDims) {
-        page.drawImage(rightStampImg, { x: A4_W / 2 + 20, y: signatureStartY - 3 - rightStampDims.height, width: rightStampDims.width, height: rightStampDims.height, opacity: 0.7 });
-        maxStampSpace = Math.max(maxStampSpace, rightStampDims.height);
+
+      const rowStartY = y;
+      if (stampImg && stampDims) {
+        page.drawImage(stampImg, { x: colX, y: rowStartY - stampDims.height, width: stampDims.width, height: stampDims.height, opacity: 0.65 });
+      }
+
+      // Signature line
+      const sigLineY = rowStartY - (stampDims ? stampDims.height : 0) - 6;
+      page.drawLine({ start: { x: colX, y: sigLineY }, end: { x: colX + colWidth - 20, y: sigLineY }, thickness: 0.4, color: rgb(0.6, 0.6, 0.6) });
+
+      // Name (DEPT)
+      const headName = sanitizeText(dept?.headName || '________________________');
+      const deptLabel = sanitizeText(dept?.name || '');
+      page.drawText(headName, { x: colX, y: sigLineY - 12, size: 9, font: boldFont });
+      page.drawText(`(${deptLabel})`, { x: colX, y: sigLineY - 23, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+
+      colIndex++;
+      if (colIndex >= 2) {
+        colIndex = 0;
+        y -= sigRowHeight + 10;
       }
     }
 
-    // Standardize baseline alignment based on highest asset printed
-    const baselineY = signatureStartY - 3 - maxStampSpace - 10;
-    
-    page.drawText(sanitizeText(originDept?.headName || '___________________'), { x: margin, y: baselineY, size: 10, font: boldFont });
-    page.drawText(sanitizeText(originDept?.name || 'Department'), { x: margin, y: baselineY - 12, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
-
-    if (targetDept) {
-      page.drawText(sanitizeText(targetDept.headName || '___________________'), { x: A4_W / 2 + 20, y: baselineY, size: 10, font: boldFont });
-      page.drawText(sanitizeText(targetDept.name || 'Department'), { x: A4_W / 2 + 20, y: baselineY - 12, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
-    }
-
-    y = baselineY - 20;
+    // If last row had only one entry, still advance y
+    if (colIndex !== 0) y -= sigRowHeight + 10;
+    y -= 10;
 
     // ── Final Footer ────────────────────────────────────
     const footerText = `Generated by CSS-RMS on ${new Date().toLocaleString()} | Page ${pageNumber}`;
