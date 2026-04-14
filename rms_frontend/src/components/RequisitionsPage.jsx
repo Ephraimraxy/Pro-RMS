@@ -7,7 +7,7 @@ import ConfirmModal from './ConfirmModal';
 import VoiceDictation from './VoiceDictation';
 import { useAuth } from '../context/AuthContext';
 import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments } from '../lib/store';
-import { forwardAPI } from '../lib/api';
+import { forwardAPI, aiAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import {
   Search, Plus, Eye, FileText, X,
@@ -106,51 +106,172 @@ const ProcessingChain = ({ events = [] }) => {
 
 // ── File Preview Modal ────────────────────────────────────────────────────
 const FilePreviewModal = ({ attachment, onClose }) => {
+  const [textContent, setTextContent] = useState(null);
+  const [textLoading, setTextLoading] = useState(false);
+
   if (!attachment) return null;
+
   const token = localStorage.getItem('rms_token');
   const previewUrl = `/api/attachments/${attachment.id}/preview?token=${token}`;
   const downloadUrl = `/api/attachments/${attachment.id}/download?token=${token}`;
-  const isImage = ['image/png','image/jpeg','image/jpg','image/gif','image/webp'].includes(attachment.mimeType);
-  const isPdf = attachment.mimeType === 'application/pdf';
-  const isOfficeDoc = ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/rtf'].includes(attachment.mimeType) || attachment.filename.match(/\.(doc|docx|xls|xlsx|ppt|pptx|rtf)$/i);
-  
-  const absoluteUrl = `${window.location.origin}${previewUrl}`;
-  const officeProxyUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absoluteUrl)}`;
+
+  const mime = attachment.mimeType || '';
+  const name = attachment.filename || '';
+
+  const isImage     = /^image\/(png|jpe?g|gif|webp|svg)/.test(mime) || /\.(png|jpe?g|gif|webp|svg)$/i.test(name);
+  const isPdf       = mime === 'application/pdf' || /\.pdf$/i.test(name);
+  const isText      = /^text\//.test(mime) || /\.(txt|csv|log|md|json|xml|html?)$/i.test(name);
+  const isOfficeDoc = /\.(docx?|xlsx?|pptx?)$/i.test(name) ||
+    ['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+     'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(mime);
+
+  // Fetch plain text for text files
+  React.useEffect(() => {
+    if (!isText) return;
+    setTextLoading(true);
+    fetch(previewUrl)
+      .then(r => r.text())
+      .then(t => setTextContent(t))
+      .catch(() => setTextContent('Unable to load file content.'))
+      .finally(() => setTextLoading(false));
+  }, [attachment.id]);
+
+  // Detect mobile
+  const isMobile = window.innerWidth < 768;
+
+  const openInNewTab = () => window.open(previewUrl, '_blank', 'noopener,noreferrer');
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="p-4 border-b border-border/50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <FileText size={16} className="text-primary" />
-            <span className="text-sm font-bold text-foreground truncate max-w-md">{attachment.filename}</span>
-            <span className="text-[9px] text-muted-foreground uppercase">{attachment.size ? `${(attachment.size / 1024).toFixed(0)} KB` : ''}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <a href={downloadUrl} download className="p-2 hover:bg-muted rounded-lg text-primary transition-colors" title="Download">
-              <ArrowDownToLine size={16} />
-            </a>
-            {(isPdf || isOfficeDoc) && (
-              <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-muted rounded-lg text-primary transition-colors" title="Open native file">
-                <ExternalLink size={16} />
-              </a>
+    <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      {/* Full screen on mobile, modal on desktop */}
+      <div
+        className="bg-white w-full sm:rounded-2xl sm:max-w-4xl sm:mx-4 shadow-2xl flex flex-col overflow-hidden"
+        style={{ height: isMobile ? '95dvh' : '90vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-3 sm:p-4 border-b border-border/50 flex items-center justify-between shrink-0 bg-white">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <FileText size={15} className="text-primary shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-foreground truncate">{name}</span>
+            {attachment.size && (
+              <span className="text-[9px] text-muted-foreground shrink-0">
+                {(attachment.size / 1024).toFixed(0)} KB
+              </span>
             )}
-            <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg text-muted-foreground"><X size={16} /></button>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 ml-2">
+            {/* Open in new tab — works for all types, especially useful on mobile */}
+            <button
+              onClick={openInNewTab}
+              title="Open in new tab"
+              className="p-2 hover:bg-muted rounded-lg text-primary transition-colors"
+            >
+              <ExternalLink size={15} />
+            </button>
+            <a href={downloadUrl} download title="Download" className="p-2 hover:bg-muted rounded-lg text-primary transition-colors">
+              <ArrowDownToLine size={15} />
+            </a>
+            <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg text-muted-foreground">
+              <X size={15} />
+            </button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-muted/20 min-h-[300px]">
-          {isImage ? (
-            <img src={previewUrl} alt={attachment.filename} className="max-w-full max-h-[70vh] rounded-lg shadow-md object-contain" />
-          ) : isPdf ? (
-            <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-border/30" title={attachment.filename} />
-          ) : isOfficeDoc ? (
-            <iframe src={officeProxyUrl} className="w-full h-[70vh] rounded-lg border border-border/30" title={attachment.filename} />
-          ) : (
-            <div className="text-center space-y-4 py-10">
-              <FileText size={48} className="text-muted-foreground/30 mx-auto" />
-              <p className="text-sm text-muted-foreground">Preview not natively available for this file type.</p>
-              <a href={downloadUrl} download className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all">
-                <Download size={16} /> Download File
+
+        {/* Preview area */}
+        <div className="flex-1 overflow-auto bg-muted/10 flex flex-col">
+          {isImage && (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <img
+                src={previewUrl}
+                alt={name}
+                className="max-w-full max-h-full rounded-lg shadow-md object-contain"
+                style={{ maxHeight: 'calc(90vh - 80px)' }}
+              />
+            </div>
+          )}
+
+          {isPdf && (
+            isMobile ? (
+              /* On mobile: iframe PDFs often fail — show a prominent open button instead */
+              <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
+                <div className="w-20 h-20 rounded-3xl bg-red-50 border border-red-200 flex items-center justify-center">
+                  <FileText size={36} className="text-red-500" />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-foreground">PDF Document</p>
+                  <p className="text-xs text-muted-foreground">Tap below to view the PDF in your browser or download it.</p>
+                </div>
+                <div className="flex flex-col gap-3 w-full max-w-xs">
+                  <button
+                    onClick={openInNewTab}
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md"
+                  >
+                    <ExternalLink size={16} /> Open PDF
+                  </button>
+                  <a href={downloadUrl} download className="flex items-center justify-center gap-2 px-5 py-3 bg-white border border-border text-foreground rounded-xl font-bold text-sm hover:bg-muted transition-all">
+                    <ArrowDownToLine size={16} /> Download
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <iframe
+                src={previewUrl}
+                className="w-full flex-1 border-0"
+                title={name}
+                style={{ minHeight: '500px' }}
+              />
+            )
+          )}
+
+          {isOfficeDoc && (
+            /* Office docs can't be embedded in iframe behind auth — show clear message */
+            <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
+              <div className="w-20 h-20 rounded-3xl bg-blue-50 border border-blue-200 flex items-center justify-center">
+                <FileText size={36} className="text-blue-500" />
+              </div>
+              <div className="space-y-2 max-w-sm">
+                <p className="text-sm font-bold text-foreground">Office Document</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Word/Excel files must be downloaded to view. Tap Download to open in your Office app.
+                </p>
+              </div>
+              <a
+                href={downloadUrl}
+                download
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md"
+              >
+                <ArrowDownToLine size={16} /> Download &amp; Open
+              </a>
+            </div>
+          )}
+
+          {isText && (
+            <div className="flex-1 overflow-auto p-4">
+              {textLoading ? (
+                <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
+                  <Loader2 size={20} className="animate-spin" />
+                  <span className="text-sm">Loading…</span>
+                </div>
+              ) : (
+                <pre className="text-xs font-mono text-foreground leading-relaxed whitespace-pre-wrap break-words bg-white border border-border/30 rounded-xl p-4 shadow-inner">
+                  {textContent}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {!isImage && !isPdf && !isOfficeDoc && !isText && (
+            <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
+              <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center">
+                <FileText size={36} className="text-muted-foreground/40" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-foreground">No preview available</p>
+                <p className="text-xs text-muted-foreground">This file type cannot be previewed. Download it to open.</p>
+              </div>
+              <a href={downloadUrl} download className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md">
+                <ArrowDownToLine size={16} /> Download File
               </a>
             </div>
           )}
@@ -253,10 +374,28 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
   const [targetId, setTargetId] = useState('');
   const [note, setNote]         = useState('');
   const [acting, setActing]     = useState(false);
+  const [refining, setRefining] = useState(false);
 
   const forwardDepts = departments.filter(d =>
     d.id !== req.departmentId && d.id !== detail?.targetDepartmentId
   );
+
+  const handleRefineNote = async () => {
+    if (note.trim().length < 5) return;
+    setRefining(true);
+    try {
+      const res = await aiAPI.refineDraft(note);
+      if (res.blocked) {
+        toast.error(res.validationMessage || 'Your note was not recognised as a valid response. Please write a clear, professional review.', { duration: 6000 });
+        return;
+      }
+      setNote(res.refinedDescription || note);
+      toast.success(res.actionReason ? `AI refined — ${res.actionReason}` : 'Note professionally refined by AI.', { duration: 5000 });
+    } catch (err) {
+      const msg = err?.response?.data?.validationMessage || err?.response?.data?.error || 'AI refinement failed. Please try again.';
+      toast.error(msg, { duration: 5000 });
+    } finally { setRefining(false); }
+  };
 
   const submit = async (actionMode) => {
     if (actionMode === 'forward' && !targetId) {
@@ -278,7 +417,7 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
       toast.success(actionMode === 'return' ? 'Requisition returned to sender.' : 'Requisition forwarded successfully.');
       onDone();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Action failed');
+      toast.error(err?.response?.data?.error || 'This action could not be completed. Please try again.');
     } finally { setActing(false); }
   };
 
@@ -293,10 +432,25 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
         value={note}
         onChange={e => setNote(e.target.value)}
         placeholder="Enter your official response, review, or note here (required for returning)..."
-        className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[80px] resize-none shadow-inner"
+        disabled={refining}
+        className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[80px] resize-none shadow-inner disabled:opacity-60"
       />
-      <div className="flex items-center justify-start pb-1 pt-1 border-b border-border/40">
-        <VoiceDictation onTranscript={(text) => setNote(prev => prev + (prev ? ' ' : '') + text)} />
+      <div className="flex items-center justify-between pb-1 pt-1 border-b border-border/40">
+        <VoiceDictation
+          disabled={refining}
+          onTranscript={(text) => setNote(prev => prev + (prev ? ' ' : '') + text)}
+        />
+        {note.trim().length >= 5 && (
+          <button
+            type="button"
+            onClick={handleRefineNote}
+            disabled={refining}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+          >
+            {refining ? <Loader2 size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+            {refining ? 'Refining…' : 'AI Refine'}
+          </button>
+        )}
       </div>
 
       {mode === 'forward' && (
@@ -385,7 +539,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
       await updateRequisitionStatus(req.id, 'approved', remarks);
       onAction();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Approval failed');
+      toast.error(err?.response?.data?.error || 'Approval could not be processed. Please try again.');
     } finally { setActing(false); }
   };
 
@@ -396,7 +550,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
       await updateRequisitionStatus(req.id, 'rejected', remarks);
       onAction();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Rejection failed');
+      toast.error(err?.response?.data?.error || 'Rejection could not be processed. Please try again.');
     } finally { setActing(false); }
   };
 
@@ -772,7 +926,7 @@ const RequisitionsPage = ({ onViewChange }) => {
       setSelectedIds([]);
       await loadData();
     } catch (err) {
-      toast.error('Failed to purge selected records. You might lack permissions.');
+      toast.error(err?.response?.data?.error || 'Could not delete the selected records. Please try again.');
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);
@@ -788,7 +942,7 @@ const RequisitionsPage = ({ onViewChange }) => {
       toast.success(`Record #${deletePendingAction.id} purged globally!`);
       await loadData();
     } catch (err) {
-      toast.error('Deletion restricted or failed.');
+      toast.error(err?.response?.data?.error || 'Could not delete this record. Please try again.');
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);

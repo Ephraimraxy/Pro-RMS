@@ -1478,29 +1478,54 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Delete draft requisition
+// Delete requisition (admins can delete any; departments can only delete their own drafts)
 app.delete('/api/requisitions/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
+    const reqId = parseInt(id);
+    const existing = await prisma.requisition.findUnique({ where: { id: reqId } });
     if (!existing) return res.status(404).json({ error: 'Requisition not found' });
-    
+
     const systemUser = await prisma.user.findFirst({ where: { role: 'global_admin' } });
     const isAdmin = getNumericUserId(req.user) === systemUser?.id;
 
     if (!isAdmin) {
       if (existing.status !== 'draft') {
-        return res.status(400).json({ error: 'Only drafts can be deleted' });
+        return res.status(400).json({ error: 'Only draft requisitions can be deleted. Submitted or approved records require administrator access.' });
       }
       const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
       if (existing.departmentId !== userDeptId) {
-        return res.status(403).json({ error: 'Forbidden' });
+        return res.status(403).json({ error: 'You do not have permission to delete this requisition.' });
       }
     }
 
-    await prisma.requisition.delete({ where: { id: parseInt(id) } });
-    res.json({ ok: true, message: 'Deleted successfully' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+    // Cascade-delete all related records in dependency order so FK constraints are satisfied
+    // 1. File access logs (reference Attachments)
+    const attachments = await prisma.attachment.findMany({ where: { requisitionId: reqId }, select: { id: true } });
+    if (attachments.length > 0) {
+      await prisma.fileAccessLog.deleteMany({ where: { attachmentId: { in: attachments.map(a => a.id) } } });
+    }
+    // 2. Attachments
+    await prisma.attachment.deleteMany({ where: { requisitionId: reqId } });
+    // 3. Signature records (reference Approvals)
+    const approvals = await prisma.approval.findMany({ where: { requisitionId: reqId }, select: { id: true } });
+    if (approvals.length > 0) {
+      await prisma.signatureRecord.deleteMany({ where: { approvalId: { in: approvals.map(a => a.id) } } });
+    }
+    // 4. Approvals
+    await prisma.approval.deleteMany({ where: { requisitionId: reqId } });
+    // 5. Forward events (already cascade, but be explicit)
+    await prisma.forwardEvent.deleteMany({ where: { requisitionId: reqId } });
+    // 6. Notifications linked to this requisition
+    await prisma.notification.deleteMany({ where: { link: `/requisitions/${reqId}` } });
+    // 7. Finally delete the requisition
+    await prisma.requisition.delete({ where: { id: reqId } });
+
+    res.json({ ok: true, message: 'Requisition permanently deleted.' });
+  } catch (error) {
+    logger.error('[DELETE REQUISITION] Error:', error.message);
+    res.status(500).json({ error: 'Failed to delete requisition. Please try again.' });
+  }
 });
 
 app.post('/api/requisitions/bulk-delete', authenticateToken, async (req, res) => {
@@ -1512,20 +1537,36 @@ app.post('/api/requisitions/bulk-delete', authenticateToken, async (req, res) =>
     const isAdmin = getNumericUserId(req.user) === systemUser?.id;
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
 
-    if (isAdmin) {
-      await prisma.requisition.deleteMany({ where: { id: { in: ids } } });
-      return res.json({ ok: true, message: 'Deleted successfully' });
-    } else {
-      await prisma.requisition.deleteMany({
-        where: {
-          id: { in: ids },
-          status: 'draft',
-          departmentId: userDeptId
-        }
+    const targetIds = isAdmin ? ids : [];
+    if (!isAdmin) {
+      // Departments can only bulk-delete their own drafts
+      const allowed = await prisma.requisition.findMany({
+        where: { id: { in: ids }, status: 'draft', departmentId: userDeptId },
+        select: { id: true }
       });
-      return res.json({ ok: true, message: 'Deleted allowed drafts' });
+      allowed.forEach(r => targetIds.push(r.id));
     }
-  } catch (error) { res.status(500).json({ error: error.message }); }
+    if (targetIds.length === 0) return res.json({ ok: true, message: 'No eligible records to delete.' });
+
+    // Cascade manually to avoid FK constraint failures
+    const attachments = await prisma.attachment.findMany({ where: { requisitionId: { in: targetIds } }, select: { id: true } });
+    if (attachments.length > 0) {
+      await prisma.fileAccessLog.deleteMany({ where: { attachmentId: { in: attachments.map(a => a.id) } } });
+    }
+    await prisma.attachment.deleteMany({ where: { requisitionId: { in: targetIds } } });
+    const approvals = await prisma.approval.findMany({ where: { requisitionId: { in: targetIds } }, select: { id: true } });
+    if (approvals.length > 0) {
+      await prisma.signatureRecord.deleteMany({ where: { approvalId: { in: approvals.map(a => a.id) } } });
+    }
+    await prisma.approval.deleteMany({ where: { requisitionId: { in: targetIds } } });
+    await prisma.forwardEvent.deleteMany({ where: { requisitionId: { in: targetIds } } });
+    await prisma.notification.deleteMany({ where: { link: { in: targetIds.map(id => `/requisitions/${id}`) } } });
+    await prisma.requisition.deleteMany({ where: { id: { in: targetIds } } });
+    return res.json({ ok: true, message: `${targetIds.length} record(s) deleted.` });
+  } catch (error) {
+    logger.error('[BULK DELETE] Error:', error.message);
+    res.status(500).json({ error: 'Bulk delete failed. Please try again.' });
+  }
 });
 
 
@@ -1683,16 +1724,19 @@ app.get('/api/requisitions/:id/signed-pdf', authenticateToken, async (req, res) 
   try {
     const { id } = req.params;
     const requisition = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
-    if (!requisition?.signedPdfKey) return res.status(404).json({ error: 'Signed PDF not available' });
-    if (req.user.role === 'department' && req.user.deptId && requisition.departmentId !== req.user.deptId) {
-      return res.status(403).json({ error: 'Forbidden' });
+    if (!requisition) return res.status(404).json({ error: 'Requisition not found.' });
+    if (!requisition.signedPdfKey) {
+      return res.status(404).json({ error: 'This requisition does not have a signed copy yet. It must be fully approved before a signed document is generated.' });
     }
-
+    // All authenticated users (including target departments) may download the signed copy
     const stream = await getObjectStream(requisition.signedPdfKey);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="requisition-${id}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="signed-requisition-${id}.pdf"`);
     stream.pipe(res);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    logger.error('[SIGNED PDF] Error:', error.message);
+    res.status(500).json({ error: 'Unable to retrieve the signed document. Please try again.' });
+  }
 });
 
 // Shared helper for verifying a signature record
@@ -2500,8 +2544,9 @@ app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res)
     const { id } = req.params;
     if (req.user.role === 'department' && req.user.deptId) {
       const reqCheck = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
-      if (!reqCheck || reqCheck.departmentId !== req.user.deptId) {
-        return res.status(403).json({ error: 'Forbidden' });
+      // Allow both the creator department AND any target department to view attachments
+      if (!reqCheck || (reqCheck.departmentId !== req.user.deptId && reqCheck.targetDepartmentId !== req.user.deptId)) {
+        return res.status(403).json({ error: 'Access denied' });
       }
     }
     const attachments = await prisma.attachment.findMany({
@@ -2542,12 +2587,12 @@ app.post('/api/ai/transcribe', authenticateToken, upload.single('audio'), async 
   }
 });
 
-// ── AI MAGICAL REFINEMENT ──
+// ── AI INTELLIGENT REFINEMENT & VALIDATION ──
 app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
   try {
     const { rawDescription, mode } = req.body;
     if (!rawDescription || rawDescription.trim().length < 5) {
-      return res.status(400).json({ error: 'Description is too short to refine.' });
+      return res.status(400).json({ error: 'Input is too short. Please describe your request more clearly before refining.' });
     }
 
     if (!process.env.OPENAI_API_KEY) {
@@ -2555,32 +2600,82 @@ app.post('/api/ai/refine-requisition', authenticateToken, async (req, res) => {
     }
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    
     const isProMode = mode === 'pro';
-    
+
+    const SYSTEM_PROMPT = isProMode
+      ? `You are a senior document editor for a corporate Requisition Management System (RMS).
+Your job is to review and polish a user-submitted document.
+
+STEP 1 — VALIDITY CHECK:
+Determine if the input is a legitimate organisational document or request. Reject it if:
+- It is random characters, keyboard mashing, or clearly nonsensical (e.g. "asdfgh", "test test 123 abc")
+- It is entirely personal/social content with zero work relevance
+- It is too vague or short to form any coherent request (e.g. "please help me")
+- It appears to be someone testing the system with fake/dummy content
+
+STEP 2 — CLASSIFICATION:
+- "Cash" → itemised procurement, budget requests, or requests for money/funds
+- "Memo" → administrative notice, internal communication, leave request, policy, penalty, or any non-monetary organisational request
+
+STEP 3 — RECOMMENDED ACTION:
+Based on the content, suggest:
+- "submit" → ready to be submitted and processed normally
+- "forward" → requires review or input from another department before submission
+- "draft" → needs more detail or clarification from the requester before submitting
+- "blocked" → content is invalid, gibberish, or cannot be processed
+
+Return ONLY a JSON object:
+{
+  "isValid": boolean,
+  "validationMessage": string,
+  "refinedDescription": string,
+  "totalAmount": number,
+  "documentType": "Cash" | "Memo",
+  "recommendedAction": "submit" | "forward" | "draft" | "blocked",
+  "actionReason": string
+}`
+      : `You are an intelligent corporate Requisition Management assistant for CSS Global Integrated Farms Ltd.
+Your role is to validate, refine, and intelligently classify incoming requisition drafts submitted by staff.
+
+STEP 1 — VALIDITY CHECK (most important):
+Reject content if it is:
+- Random letters, numbers, or keyboard mashing (e.g. "qwerty", "aaaaa bbb ccc", "1234567")
+- Voice recordings that produced pure noise/gibberish with no recognisable words
+- Completely off-topic personal content (e.g. social conversation, jokes, insults)
+- A single vague word or phrase with no context (e.g. "help", "please", "urgent thing")
+- Clearly a system test without real intent (e.g. "test test test", "abc xyz 123")
+Set isValid to false and recommendedAction to "blocked" in these cases.
+
+STEP 2 — CLASSIFICATION (only if valid):
+- "Cash" → requests involving purchasing, procurement, budgeting, or funding (even if no price is given)
+- "Memo" → administrative requests: leave applications, notices, internal communications, approvals, policies, complaints
+
+STEP 3 — REFINEMENT (only if valid):
+- For Cash: format as a professional, itemised requisition with any prices extracted. If no prices mentioned, set totalAmount to 0.
+- For Memo: format as a polite, professional internal memorandum. Set totalAmount to 0.
+
+STEP 4 — RECOMMENDED ACTION:
+- "submit" → complete enough to submit and route through the approval workflow
+- "forward" → needs another department's involvement or input (e.g. HR for leave, Finance for budget approval)
+- "draft" → content is genuine but incomplete — advise the requester to add more detail
+- "blocked" → invalid or unprocessable content
+
+Return ONLY a JSON object (no extra text):
+{
+  "isValid": boolean,
+  "validationMessage": string,
+  "refinedDescription": string,
+  "totalAmount": number,
+  "documentType": "Cash" | "Memo",
+  "recommendedAction": "submit" | "forward" | "draft" | "blocked",
+  "actionReason": string
+}`;
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content: isProMode 
-            ? `You are an expert editor. The user provides a document. 
-Focus on fixing grammar, punctuation, and clarity errors without changing the core meaning or structure. 
-Verify the Category: 
-- "Cash" if it contains itemized requests for funds/pricing.
-- "Memo" if it is administrative or a notice.
-Return JSON: { "refinedDescription": string, "totalAmount": number, "documentType": "Cash" | "Memo" }`
-            : `You are an expert executive procurement and correspondence assistant. The user will provide a rough draft. 
-If the draft is a list of items to buy, budget, or requests for money/pricing, format it as a professional itemized requisition breakdown and set documentType to "Cash".
-If the draft is just a general communication, notice, internal penalty/fine statement (e.g. money captured just as text but no actual funding request), or administrative text with no funding authorization needed, format it as a polite professional memorandum and set documentType to "Memo".
-Extract any math/prices mentioned. If NO prices are requested for funding, set totalAmount to 0. 
-Always return a JSON object with: 
-{ "refinedDescription": string, "totalAmount": number, "documentType": "Cash" | "Memo" }`
-        },
-        {
-          role: "user",
-          content: rawDescription
-        }
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: rawDescription }
       ],
       response_format: { type: "json_object" },
       temperature: 0.1,
@@ -2591,22 +2686,32 @@ Always return a JSON object with:
     }
 
     const aiData = JSON.parse(response.choices[0].message.content);
-    
-    // Sanitize ai output just to be safe
+
+    // If the AI flagged the content as invalid, return early with a user-friendly block
+    if (aiData.isValid === false || aiData.recommendedAction === 'blocked') {
+      return res.status(422).json({
+        blocked: true,
+        validationMessage: aiData.validationMessage || 'Your input could not be processed. Please describe your request clearly and professionally.',
+        actionReason: aiData.actionReason || 'The content does not appear to be a valid organisational request.'
+      });
+    }
+
     return res.json({
+      isValid: true,
       refinedDescription: xss(aiData.refinedDescription || aiData.description || ''),
       totalAmount: Number(aiData.totalAmount) || 0,
-      documentType: aiData.documentType === 'Memo' ? 'Memo' : 'Cash'
+      documentType: aiData.documentType === 'Memo' ? 'Memo' : 'Cash',
+      recommendedAction: aiData.recommendedAction || 'submit',
+      actionReason: xss(aiData.actionReason || ''),
+      validationMessage: xss(aiData.validationMessage || '')
     });
   } catch (error) {
-    // Both loggers for maximum visibility in Railway
     logger.error('OpenAI Refinement Error:', error);
     console.error('[AI_REFINEMENT_ERROR]', error.message, error.stack);
-    
     const status = error.status || 500;
-    res.status(status).json({ 
-      error: 'AI failed to process the request.',
-      details: error.message // Pass through error message to help user diagnose (e.g. "Quota exceeded")
+    res.status(status).json({
+      error: 'AI processing failed. Please try again or submit your request manually.',
+      details: error.message
     });
   }
 });

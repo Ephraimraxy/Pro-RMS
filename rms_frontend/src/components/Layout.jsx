@@ -237,6 +237,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
   const [showBell, setShowBell] = useState(false);
   const [syncPending, setSyncPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [showOversightMenu, setShowOversightMenu] = useState(false);
 
   useEffect(() => {
     const fetchNotifs = async () => {
@@ -386,6 +387,29 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
 
       {/* Modern Floating Mobile App-Bar Navigation (Glassmorphism) */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md lg:hidden z-[100] animate-in slide-in-from-bottom-5 duration-500">
+        {/* Admin Oversight slide-up tray */}
+        {showOversightMenu && user?.role !== 'department' && (
+          <div className="mb-3 glass bg-white/80 backdrop-blur-2xl border border-white/40 rounded-[1.5rem] shadow-2xl shadow-primary/10 overflow-hidden animate-in slide-in-from-bottom-3 duration-200">
+            <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em] px-4 pt-3 pb-1">Oversight Center</p>
+            <div className="grid grid-cols-3 divide-x divide-border/20">
+              <button onClick={() => { onViewChange('workflow_builder'); setShowOversightMenu(false); }}
+                className={`flex flex-col items-center gap-1 py-3 px-2 text-[10px] font-bold transition-colors ${currentView === 'workflow_builder' ? 'text-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Settings size={18} />
+                System Studio
+              </button>
+              <button onClick={() => { onViewChange('department_manager'); setShowOversightMenu(false); }}
+                className={`flex flex-col items-center gap-1 py-3 px-2 text-[10px] font-bold transition-colors ${currentView === 'department_manager' ? 'text-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Briefcase size={18} />
+                Departments
+              </button>
+              <button onClick={() => { onViewChange('audit_logs'); setShowOversightMenu(false); }}
+                className={`flex flex-col items-center gap-1 py-3 px-2 text-[10px] font-bold transition-colors ${currentView === 'audit_logs' ? 'text-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Activity size={18} />
+                System Audit
+              </button>
+            </div>
+          </div>
+        )}
         <nav className="glass bg-white/60 backdrop-blur-2xl border border-white/40 rounded-[2.5rem] flex items-center justify-around px-4 py-2 shadow-2xl shadow-primary/10">
           {user?.role === 'department' ? (
             <>
@@ -404,8 +428,14 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
                  <PenTool size={20} />
               </div>
-              <SidebarItem icon={Settings} label="Control" active={['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView)} onClick={() => onViewChange('workflow_builder')} mobile />
-              <SidebarItem icon={History} label="Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} mobile />
+              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
+              <button
+                onClick={() => setShowOversightMenu(v => !v)}
+                className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${['workflow_builder','department_manager','audit_logs'].includes(currentView) || showOversightMenu ? 'text-primary' : 'text-muted-foreground'}`}
+              >
+                <Settings size={18} />
+                <span className="text-[9px] font-bold">Oversight</span>
+              </button>
             </>
           )}
         </nav>

@@ -87,28 +87,44 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   const handleRefine = async (e) => {
     e.preventDefault();
     if (!formData.description.trim() || formData.description.length < 5) {
-      toast.error('Please enter a longer description to refine.');
+      toast.error('Please describe your request in more detail before refining.');
       return;
     }
     setRefining(true);
     try {
       const res = await aiAPI.refineDraft(formData.description);
-      
+
+      // AI blocked the content as invalid/gibberish
+      if (res.blocked) {
+        toast.error(res.validationMessage || 'Your input was not recognised as a valid request. Please describe your request clearly.', { duration: 6000 });
+        if (res.actionReason) toast(res.actionReason, { icon: 'ℹ️', duration: 5000 });
+        return;
+      }
+
       const newTypeStr = res.documentType?.toLowerCase() || 'cash';
-      const matchedType = types.find(t => 
+      const matchedType = types.find(t =>
         newTypeStr === 'memo' ? t.name.toLowerCase().includes('memo') : t.name.toLowerCase().includes('cash')
       ) || types[0];
 
       setSelectedType(matchedType);
-
       setAiPreview({
         description: res.refinedDescription,
         amount: res.totalAmount,
-        typeLabel: matchedType?.name || 'Requisition'
+        typeLabel: matchedType?.name || 'Requisition',
+        recommendedAction: res.recommendedAction,
+        actionReason: res.actionReason,
+        validationMessage: res.validationMessage
       });
-      toast.success('AI refinement complete. Please review the details.');
+
+      const actionMsgs = {
+        submit:  'Ready to submit — AI has refined your request.',
+        forward: 'AI suggests forwarding this to another department for processing.',
+        draft:   'Saved as draft — AI recommends adding more detail before submitting.',
+      };
+      toast.success(actionMsgs[res.recommendedAction] || 'AI refinement complete. Please review.', { duration: 5000 });
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'AI refinement failed.');
+      const msg = err?.response?.data?.validationMessage || err?.response?.data?.error || 'AI refinement failed. Please try again.';
+      toast.error(msg, { duration: 5000 });
     } finally {
       setRefining(false);
     }
@@ -240,17 +256,41 @@ const RequisitionForm = ({ isOpen, onClose }) => {
             </div>
           ) : (
             <div className="space-y-4 border border-primary/20 bg-primary/5 rounded-2xl p-5 relative">
-              <div className="absolute top-4 right-4 text-[10px] uppercase font-black text-primary tracking-widest px-2 py-1 bg-primary/10 rounded-full flex items-center gap-1">
-                <CheckCircle2 size={12} /> AI Classified as: {aiPreview.typeLabel}
+              {/* Type badge */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] uppercase font-black text-primary tracking-widest px-2 py-1 bg-primary/10 rounded-full flex items-center gap-1">
+                  <CheckCircle2 size={12} /> {aiPreview.typeLabel}
+                </span>
+                {aiPreview.recommendedAction && (
+                  <span className={`text-[10px] uppercase font-black tracking-widest px-2 py-1 rounded-full flex items-center gap-1 ${
+                    aiPreview.recommendedAction === 'submit'  ? 'bg-emerald-100 text-emerald-700' :
+                    aiPreview.recommendedAction === 'forward' ? 'bg-blue-100 text-blue-700' :
+                    aiPreview.recommendedAction === 'draft'   ? 'bg-amber-100 text-amber-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    AI: {aiPreview.recommendedAction === 'submit' ? '✓ Ready to Submit' :
+                         aiPreview.recommendedAction === 'forward' ? '→ Forward Recommended' :
+                         aiPreview.recommendedAction === 'draft' ? '✎ Needs More Detail' : '✗ Blocked'}
+                  </span>
+                )}
               </div>
+
+              {/* AI reason */}
+              {aiPreview.actionReason && (
+                <p className="text-[11px] text-muted-foreground italic leading-relaxed border-l-2 border-primary/30 pl-3">
+                  {aiPreview.actionReason}
+                </p>
+              )}
+
               <div>
                 <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   Professional Request
                 </label>
-                <div className="mt-1 text-sm text-foreground whitespace-pre-wrap">
+                <div className="mt-1 text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                   {aiPreview.description}
                 </div>
               </div>
+
               <div className="pt-3 border-t border-primary/10 flex justify-between items-center">
                 {aiPreview.typeLabel?.toLowerCase().includes('memo') ? (
                   <p className="text-[10px] text-muted-foreground font-semibold italic">
