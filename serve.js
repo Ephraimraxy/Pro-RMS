@@ -1609,9 +1609,24 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
 
     const newTargetId = returnToSender ? null : (targetDepartmentId ?? null);
 
-    // When returning to sender, set targetDepartmentId back to the originating department
-    // so they see it in their inbox and can respond
-    const returnTargetId = returnToSender ? requisition.departmentId : newTargetId;
+    // When returning, find who LAST sent the document to the current holder by checking
+    // the forwardEvents chain. This prevents ISAC → ISAC loops when the original creator
+    // is holding a document that was returned to them.
+    let returnTargetId = requisition.departmentId; // fallback: original creator
+    if (returnToSender) {
+      const lastInbound = await prisma.forwardEvent.findFirst({
+        where: {
+          requisitionId: parseInt(id),
+          toDeptId: userDeptId ?? requisition.targetDepartmentId
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (lastInbound?.fromDeptId && lastInbound.fromDeptId !== (userDeptId ?? requisition.targetDepartmentId)) {
+        returnTargetId = lastInbound.fromDeptId;
+      }
+    } else {
+      returnTargetId = newTargetId;
+    }
 
     const updated = await prisma.requisition.update({
       where: { id: parseInt(id) },
@@ -1628,7 +1643,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
         data: {
           requisitionId: parseInt(id),
           fromDeptId: userDeptId || requisition.targetDepartmentId || requisition.departmentId,
-          toDeptId: returnToSender ? requisition.departmentId : newTargetId,
+          toDeptId: returnTargetId,
           action: returnToSender ? 'returned' : 'forwarded',
           note: note || null,
           actorName: req.user?.name || 'Department'

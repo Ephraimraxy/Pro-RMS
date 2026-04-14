@@ -380,6 +380,19 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
     d.id !== req.departmentId && d.id !== detail?.targetDepartmentId
   );
 
+  // Work out who "Return to Sender" will actually send to by reading the
+  // forwardEvents chain — it's whoever LAST sent the document to the current holder,
+  // NOT necessarily the original creator. This prevents ISAC → ISAC loops.
+  const forwardEvents = detail?.forwardEvents || [];
+  const currentDeptId = detail?.targetDepartmentId;
+  const lastInbound = [...forwardEvents]
+    .reverse()
+    .find(e => e.toDeptId === currentDeptId && e.fromDeptId !== currentDeptId);
+  const returnTarget = lastInbound
+    ? departments.find(d => d.id === lastInbound.fromDeptId)
+    : departments.find(d => d.id === req.departmentId);
+  const returnLabel = returnTarget ? `Return to ${returnTarget.name}` : 'Return to Sender';
+
   const handleRefineNote = async () => {
     if (note.trim().length < 5) return;
     setRefining(true);
@@ -414,7 +427,7 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
         note,
         returnToSender: actionMode === 'return'
       });
-      toast.success(actionMode === 'return' ? 'Requisition returned to sender.' : 'Requisition forwarded successfully.');
+      toast.success(actionMode === 'return' ? `Requisition returned to ${returnTarget?.name || 'sender'}.` : 'Requisition forwarded successfully.');
       onDone();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'This action could not be completed. Please try again.');
@@ -496,7 +509,7 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
             className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-sm transition-all disabled:opacity-50 shadow-sm"
           >
             {acting ? <Loader2 size={18} className="animate-spin" /> : <CornerDownLeft size={18} />}
-            <span>Return to Sender</span>
+            <span>{returnLabel}</span>
           </button>
         </div>
       )}
