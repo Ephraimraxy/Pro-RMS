@@ -219,7 +219,15 @@ export const userAPI = {
 
 export const aiAPI = {
   async refineDraft(rawDescription, mode = 'auto') {
-    return api.post('/ai/refine-requisition', { rawDescription, mode });
+    try {
+      return await api.post('/ai/refine-requisition', { rawDescription, mode });
+    } catch (err) {
+      // 422 = AI blocked the content — return the body as a normal value so callers can read res.blocked
+      if (err?.response?.status === 422 && err?.response?.data?.blocked) {
+        return err.response.data;
+      }
+      throw err;
+    }
   },
   async transcribeAudio(audioBlob) {
     const formData = new FormData();
