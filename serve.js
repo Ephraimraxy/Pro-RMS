@@ -2030,6 +2030,23 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       }
     };
 
+    // ── Helper: Sanitize text for pdf-lib standard fonts (WinAnsi only) ────
+    // Standard fonts (Helvetica etc.) only support Latin-1 / WinAnsi.
+    // Any character outside that range causes a hard crash. Replace common
+    // offenders and strip anything else outside the printable Latin-1 range.
+    const sanitizeText = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/₦/g, 'NGN')
+        .replace(/[""]/g, '"')
+        .replace(/['']/g, "'")
+        .replace(/–/g, '-')
+        .replace(/—/g, '-')
+        .replace(/…/g, '...')
+        .replace(/•/g, '-')
+        .replace(/[^\x20-\xFF]/g, '?'); // replace any remaining non-WinAnsi
+    };
+
     // ── Helper: Strip HTML tags to plain text ────────────
     const stripHtml = (html) => {
       if (!html) return '';
@@ -2111,9 +2128,9 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       const memoFields = [
         { label: 'REF:', value: `CSSG/${deptCode}/MO/${String(id).padStart(3, '0')}` },
         { label: 'DATE:', value: createdDate },
-        { label: 'TO:', value: (requisition.targetDepartment?.name || 'TARGET DEPARTMENT').toUpperCase() },
-        { label: 'FROM:', value: (requisition.department?.name || 'ORIGIN DEPARTMENT').toUpperCase() },
-        { label: 'SUBJECT:', value: requisition.title.toUpperCase() },
+        { label: 'TO:', value: sanitizeText((requisition.targetDepartment?.name || 'TARGET DEPARTMENT').toUpperCase()) },
+        { label: 'FROM:', value: sanitizeText((requisition.department?.name || 'ORIGIN DEPARTMENT').toUpperCase()) },
+        { label: 'SUBJECT:', value: sanitizeText((requisition.title || 'Untitled').toUpperCase()) },
       ];
       for (const f of memoFields) {
         page.drawText(f.label, { x: margin, y, size: 10, font: boldFont });
@@ -2127,10 +2144,10 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       // Requisition Voucher header
       const leftFields = [
         { label: 'Voucher No:', value: `#${id}` },
-        { label: 'From:', value: requisition.department?.name || 'Origin Department' },
-        { label: 'To:', value: requisition.targetDepartment?.name || 'Processing Department' },
-        { label: 'Title:', value: requisition.title },
-        { label: 'Type:', value: requisition.type },
+        { label: 'From:', value: sanitizeText(requisition.department?.name || 'Origin Department') },
+        { label: 'To:', value: sanitizeText(requisition.targetDepartment?.name || 'Processing Department') },
+        { label: 'Title:', value: sanitizeText(requisition.title || 'Untitled') },
+        { label: 'Type:', value: sanitizeText(requisition.type || 'General') },
         { label: 'Urgency:', value: (requisition.urgency || 'normal').toUpperCase() },
       ];
       // Right side: Date + Amount
@@ -2157,7 +2174,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // Prefer rich HTML content (from Document Studio), fallback to plain description
     const rawContent = requisition.content || requisition.description || 'No content provided.';
-    const plainContent = stripHtml(rawContent);
+    const plainContent = sanitizeText(stripHtml(rawContent));
     const paragraphs = plainContent.split(/\n+/).filter(Boolean);
 
     for (const para of paragraphs) {
@@ -2193,26 +2210,26 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
         ensureSpace(50);
         
         const actionLabel = evt.action === 'created' ? 'CREATED' : evt.action === 'forwarded' ? 'FORWARDED' : 'RETURNED';
-        const fromName = evt.fromDepartment?.name || 'Department';
-        const toName = evt.toDepartment?.name || 'Sender';
-        const dateStr = new Date(evt.createdAt).toLocaleString();
-        
+        const fromName = sanitizeText(evt.fromDepartment?.name || 'Department');
+        const toName   = sanitizeText(evt.toDepartment?.name   || 'Sender');
+        const dateStr  = new Date(evt.createdAt).toLocaleString();
+
         // Step number + action
         page.drawText(`${i + 1}.`, { x: margin, y, size: 9, font: boldFont });
         page.drawText(`[${actionLabel}]`, { x: margin + 15, y, size: 9, font: boldFont, color: evt.action === 'returned' ? rgb(0.8, 0.4, 0) : rgb(0.1, 0.5, 0.2) });
-        page.drawText(`${fromName}  →  ${toName}`, { x: margin + 85, y, size: 9, font });
+        page.drawText(`${fromName}  ->  ${toName}`, { x: margin + 85, y, size: 9, font });
         y -= 13;
-        
+
         page.drawText(`Date: ${dateStr}`, { x: margin + 30, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
         if (evt.actorName) {
-          page.drawText(`By: ${evt.actorName}`, { x: margin + 250, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+          page.drawText(sanitizeText(`By: ${evt.actorName}`), { x: margin + 250, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
         }
         y -= 13;
 
         // Comment/note
         if (evt.note) {
           ensureSpace(20);
-          page.drawText(`Comment: "${evt.note}"`, { x: margin + 30, y, size: 8, font: italicFont, color: rgb(0.2, 0.2, 0.2) });
+          page.drawText(sanitizeText(`Comment: "${evt.note}"`), { x: margin + 30, y, size: 8, font: italicFont, color: rgb(0.2, 0.2, 0.2) });
           y -= 13;
         }
 
@@ -2252,13 +2269,13 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
         const userName = app.user?.name || 'Approver';
 
         page.drawText(`[${actionLabel}]`, { x: margin, y, size: 9, font: boldFont, color: app.action === 'approved' ? rgb(0.1, 0.5, 0.2) : rgb(0.8, 0.1, 0.1) });
-        page.drawText(`${stageName} by ${userName}`, { x: margin + 80, y, size: 9, font });
+        page.drawText(sanitizeText(`${stageName} by ${userName}`), { x: margin + 80, y, size: 9, font });
         y -= 13;
         page.drawText(`Date: ${stamp}`, { x: margin + 20, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
         y -= 13;
 
         if (app.remarks) {
-          page.drawText(`Remarks: "${app.remarks}"`, { x: margin + 20, y, size: 8, font: italicFont });
+          page.drawText(sanitizeText(`Remarks: "${app.remarks}"`), { x: margin + 20, y, size: 8, font: italicFont });
           y -= 13;
         }
 
@@ -2344,12 +2361,12 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     // Standardize baseline alignment based on highest asset printed
     const baselineY = signatureStartY - 3 - maxStampSpace - 10;
     
-    page.drawText(originDept?.headName || '___________________', { x: margin, y: baselineY, size: 10, font: boldFont });
-    page.drawText(originDept?.name || 'Department', { x: margin, y: baselineY - 12, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+    page.drawText(sanitizeText(originDept?.headName || '___________________'), { x: margin, y: baselineY, size: 10, font: boldFont });
+    page.drawText(sanitizeText(originDept?.name || 'Department'), { x: margin, y: baselineY - 12, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
 
     if (targetDept) {
-      page.drawText(targetDept.headName || '___________________', { x: A4_W / 2 + 20, y: baselineY, size: 10, font: boldFont });
-      page.drawText(targetDept.name || 'Department', { x: A4_W / 2 + 20, y: baselineY - 12, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+      page.drawText(sanitizeText(targetDept.headName || '___________________'), { x: A4_W / 2 + 20, y: baselineY, size: 10, font: boldFont });
+      page.drawText(sanitizeText(targetDept.name || 'Department'), { x: A4_W / 2 + 20, y: baselineY - 12, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
     }
 
     y = baselineY - 20;
