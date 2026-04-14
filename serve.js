@@ -569,6 +569,7 @@ const processApprovalAction = async ({ requisitionId, action, remarks, user }) =
           `Stage Approved: ${currentStage.name} (${currentStage.role})`,
           `Approved By: ${user.name || 'Approver'}`,
           `Next Stage: ${nextStage.name} (${nextStage.role})`,
+          amountLine(requisition.type, requisition.amount),
           `Verification Code: ${verificationCode}`
         ]
       });
@@ -621,7 +622,7 @@ const processApprovalAction = async ({ requisitionId, action, remarks, user }) =
         lines: [
           `Status: Approved`,
           `Approved By: ${user.name || 'Approver'}`,
-          `Amount: ${formatCurrency(requisition.amount)}`,
+          amountLine(requisition.type, requisition.amount),
           `Verification Code: ${verificationCode}`
         ]
       });
@@ -889,6 +890,19 @@ const formatCurrency = (amount) => {
   return `₦${num.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+// Returns true for financial/procurement requests (Cash, Purchase, etc.)
+// Memo type is purely administrative and should never show monetary amounts
+const isMonetaryType = (type) => {
+  if (!type) return false;
+  return type.toLowerCase() !== 'memo';
+};
+
+// Returns an Amount line string for emails, or null if the request is non-monetary
+const amountLine = (type, amount) => {
+  if (!isMonetaryType(type)) return null;
+  return `Amount: ${formatCurrency(amount)}`;
+};
+
 const buildEmailContent = ({ title, lines = [], actionUrl, actionLabel }) => {
   const safeLines = lines.filter(Boolean).map((line) => String(line));
   const text = [title, '', ...safeLines, actionUrl ? '' : null, actionUrl ? `Open: ${actionUrl}` : null]
@@ -1033,7 +1047,7 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
   }
 });
 
-// Clear all READ notifications
+// Clear ALL notifications for the user/department
 app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) => {
   try {
     const deptId = req.user.deptId ? parseInt(req.user.deptId) : null;
@@ -1044,10 +1058,7 @@ app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) =
     if (orClauses.length === 0) return res.json({ count: 0 });
 
     const result = await prisma.notification.deleteMany({
-      where: { 
-        OR: orClauses,
-        isRead: true 
-      }
+      where: { OR: orClauses }
     });
     res.json({ count: result.count });
   } catch (error) { res.status(500).json({ error: error.message }); }
@@ -1346,7 +1357,7 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
           lines: [
             `Department: ${originDept?.name || 'Department'}`,
             `Type: ${created.type}`,
-            `Amount: ${formatCurrency(created.amount)}`,
+            amountLine(created.type, created.amount),
             `Urgency: ${created.urgency || 'normal'}`,
             `Created By: ${req.user?.name || 'System'}`
           ]
@@ -1362,7 +1373,7 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
             lines: [
               `From Department: ${originDept?.name || 'Department'}`,
               `Type: ${created.type}`,
-              `Amount: ${formatCurrency(created.amount)}`,
+              amountLine(created.type, created.amount),
               `Urgency: ${created.urgency || 'normal'}`,
               `Description: ${created.description || '—'}`,
               ``,
@@ -1444,7 +1455,7 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
           lines: [
             `From Department: ${originDept?.name || 'Department'}`,
             `Type: ${updated.type}`,
-            `Amount: ${formatCurrency(updated.amount)}`,
+            amountLine(updated.type, updated.amount),
             `Urgency: ${updated.urgency || 'normal'}`,
             `Created By: ${req.user?.name || 'System'}`
           ]
@@ -1459,7 +1470,7 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
         lines: [
           `Status: Moved from draft to pending`,
           `Type: ${updated.type}`,
-          `Amount: ${formatCurrency(updated.amount)}`
+          amountLine(updated.type, updated.amount)
         ]
       });
     }
@@ -1602,7 +1613,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
           `Originally From: ${updated.department?.name || 'Department'}`,
           `Forwarded By: ${requisition.targetDepartment?.name || 'Department'}`,
           `Type: ${updated.type}`,
-          `Amount: ${formatCurrency(updated.amount)}`,
+          amountLine(updated.type, updated.amount),
           note ? `Note: ${note}` : null,
           ``,
           `Please log in to your dashboard to review and respond.`

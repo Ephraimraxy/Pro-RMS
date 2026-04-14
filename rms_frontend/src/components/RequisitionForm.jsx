@@ -133,11 +133,12 @@ const RequisitionForm = ({ isOpen, onClose }) => {
     setSubmitting(true);
     try {
       const finalDesc = aiPreview ? aiPreview.description : formData.description;
-      const finalAmount = aiPreview ? aiPreview.amount : 0;
+      const isMemoType = selectedType?.name?.toLowerCase().includes('memo');
+      const finalAmount = isMemoType ? null : (aiPreview ? aiPreview.amount : null);
 
       const payload = {
         description:        finalDesc,
-        title:              finalDesc, // Or a subset, for simplicity we trust backend/ui limits
+        title:              finalDesc,
         type:               selectedType.name,
         amount:             finalAmount,
         departmentId:       user?.deptId || undefined,
@@ -251,14 +252,20 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                 </div>
               </div>
               <div className="pt-3 border-t border-primary/10 flex justify-between items-center">
-                <div className="space-y-0.5">
-                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                    Automatically Calculated Total
-                  </label>
-                  <p className="text-xl font-mono font-bold text-foreground">
-                    ₦ {aiPreview.amount.toLocaleString()}
+                {aiPreview.typeLabel?.toLowerCase().includes('memo') ? (
+                  <p className="text-[10px] text-muted-foreground font-semibold italic">
+                    Administrative request — no monetary amount applicable.
                   </p>
-                </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                      Automatically Calculated Total
+                    </label>
+                    <p className="text-xl font-mono font-bold text-foreground">
+                      ₦ {(aiPreview.amount || 0).toLocaleString()}
+                    </p>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => setAiPreview(null)}

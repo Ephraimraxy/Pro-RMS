@@ -41,11 +41,14 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const handleNotifClick = async (n) => {
+    // Mark as read (fire and forget — don't await so UI stays responsive)
     if (!n.isRead) {
-      await markNotificationRead(n.id);
+      markNotificationRead(n.id).catch(() => {});
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isRead: true } : x));
     }
-    
+
+    setShowBell(false);
+
     let matchedId = null;
     if (n.link) {
       const match = n.link.match(/\/requisitions\/(\d+)/);
@@ -53,19 +56,21 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
     }
 
     if (matchedId) {
+      // Persist the target so freshly-mounted RequisitionsPage can pick it up after load
       localStorage.setItem('rms_pending_requisition_id', matchedId);
-      // Change view first
       onViewChange('requisitions');
-      // Dispatch immediately AND after a small delay to ensure mounting
-      window.dispatchEvent(new CustomEvent('openRequisition', { detail: matchedId }));
+      // Fire at 100ms (component may already be mounted) and again at 700ms
+      // (fallback for slow mount + data load). The localStorage approach also
+      // catches it independently after loadData() resolves.
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('openRequisition', { detail: matchedId }));
-      }, 300);
+      }, 100);
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('openRequisition', { detail: matchedId }));
+      }, 700);
     } else {
       onViewChange('requisitions');
     }
-    
-    setShowBell(false);
   };
 
   const handleMarkAllRead = async () => {
@@ -73,9 +78,9 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 
-  const handleClearRead = async () => {
+  const handleClearAll = async () => {
     await clearNotifications();
-    setNotifications(prev => prev.filter(n => !n.isRead));
+    setNotifications([]);
   };
 
   return (
@@ -184,8 +189,8 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
                     Mark All Read
                   </button>
                   <span className="w-1 h-1 rounded-full bg-border" />
-                  <button onClick={handleClearRead} className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest transition-colors">
-                    Clear Read
+                  <button onClick={handleClearAll} className="text-[9px] font-black text-red-500 hover:text-red-400 uppercase tracking-widest transition-colors">
+                    Clear All
                   </button>
                 </div>
               </div>
