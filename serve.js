@@ -2362,48 +2362,100 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // ══════════════════════════════════════════════════════
     // SIGNATURES — one entry per department in the chain
-    // Format: Head Name (DEPT)  — no "Sender:" / "Received by:" labels
+    // Auto-fills the uploaded digital signature of each dept's head user.
+    // Falls back to a blank line if no signature has been uploaded.
     // ══════════════════════════════════════════════════════
-    const sigRowHeight = 50; // stamp + name space per signatory
+
+    // Pre-fetch head user signatures for every signatory department
+    const deptSignatureMap = new Map(); // deptId → { sigImg, sigDims, stampImg, stampDims }
+    for (const dept of signatoryDepts) {
+      if (!dept) continue;
+      const entry = { sigImg: null, sigDims: null, stampImg: null, stampDims: null };
+
+      // Head user's digital signature (uploaded via Dept Profile → Signature)
+      if (dept.headEmail) {
+        try {
+          const headUser = await prisma.user.findFirst({
+            where: { email: dept.headEmail },
+            include: { signature: true }
+          });
+          if (headUser?.signature?.imageKey) {
+            const sigBuf = await getObjectBuffer(headUser.signature.imageKey);
+            const img = await embedSafe(sigBuf);
+            if (img) { entry.sigImg = img; entry.sigDims = img.scale(0.18); }
+          }
+        } catch (_) {}
+      }
+
+      // Department seal / stamp (shown as a watermark behind/beside the signature)
+      if (dept.stamp?.imageKey) {
+        try {
+          const stampBuf = await getObjectBuffer(dept.stamp.imageKey);
+          const img = await embedSafe(stampBuf);
+          if (img) { entry.stampImg = img; entry.stampDims = img.scale(0.13); }
+        } catch (_) {}
+      }
+
+      deptSignatureMap.set(dept.id, entry);
+    }
+
+    const sigRowHeight = 70;
     ensureSpace(30 + signatoryDepts.length * sigRowHeight);
     y -= 15;
     drawHR(0.5);
     page.drawText('SIGNATURES', { x: margin, y, size: 10, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
     y -= 22;
 
-    // Lay out signatories in columns of 2 across the page
     const colWidth = contentWidth / 2;
     let colIndex = 0;
 
     for (const dept of signatoryDepts) {
+      if (!dept) continue;
       const colX = margin + colIndex * colWidth;
       ensureSpace(sigRowHeight + 10);
 
-      // Department stamp (if available)
-      let stampImg = null;
-      let stampDims = null;
-      if (dept?.stamp?.imageKey) {
-        try {
-          const buf = await getObjectBuffer(dept.stamp.imageKey);
-          stampImg = await embedSafe(buf);
-          if (stampImg) stampDims = stampImg.scale(0.15);
-        } catch (_) {}
-      }
+      const assets = deptSignatureMap.get(dept.id) || {};
+      const { sigImg, sigDims, stampImg, stampDims } = assets;
 
       const rowStartY = y;
-      if (stampImg && stampDims) {
-        page.drawImage(stampImg, { x: colX, y: rowStartY - stampDims.height, width: stampDims.width, height: stampDims.height, opacity: 0.65 });
+
+      // 1. Draw the uploaded digital signature image above the line
+      if (sigImg && sigDims) {
+        page.drawImage(sigImg, {
+          x: colX,
+          y: rowStartY - sigDims.height,
+          width: sigDims.width,
+          height: sigDims.height,
+          opacity: 0.9
+        });
       }
 
-      // Signature line
-      const sigLineY = rowStartY - (stampDims ? stampDims.height : 0) - 6;
-      page.drawLine({ start: { x: colX, y: sigLineY }, end: { x: colX + colWidth - 20, y: sigLineY }, thickness: 0.4, color: rgb(0.6, 0.6, 0.6) });
+      // 2. Draw department stamp as a small watermark to the right of the signature
+      if (stampImg && stampDims) {
+        page.drawImage(stampImg, {
+          x: colX + (sigDims ? sigDims.width + 6 : 0),
+          y: rowStartY - stampDims.height,
+          width: stampDims.width,
+          height: stampDims.height,
+          opacity: 0.5
+        });
+      }
 
-      // Name (DEPT)
-      const headName = sanitizeText(dept?.headName || '________________________');
+      // 3. Signature line (drawn below the image area)
+      const imageHeight = Math.max(sigDims?.height || 0, stampDims?.height || 0, 30);
+      const sigLineY = rowStartY - imageHeight - 6;
+      page.drawLine({
+        start: { x: colX, y: sigLineY },
+        end:   { x: colX + colWidth - 20, y: sigLineY },
+        thickness: 0.5,
+        color: rgb(0.5, 0.5, 0.5)
+      });
+
+      // 4. Head name and department label below the line
+      const headName  = sanitizeText(dept?.headName || '________________________');
       const deptLabel = sanitizeText(dept?.name || '');
-      page.drawText(headName, { x: colX, y: sigLineY - 12, size: 9, font: boldFont });
-      page.drawText(`(${deptLabel})`, { x: colX, y: sigLineY - 23, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+      page.drawText(headName,        { x: colX, y: sigLineY - 13, size: 9, font: boldFont });
+      page.drawText(`(${deptLabel})`, { x: colX, y: sigLineY - 24, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
 
       colIndex++;
       if (colIndex >= 2) {
@@ -2412,7 +2464,6 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       }
     }
 
-    // If last row had only one entry, still advance y
     if (colIndex !== 0) y -= sigRowHeight + 10;
     y -= 10;
 
