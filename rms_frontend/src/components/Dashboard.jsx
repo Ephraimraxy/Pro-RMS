@@ -222,48 +222,6 @@ const Dashboard = ({ onViewChange }) => {
               )}
             </div>
 
-            {/* Strategic Sections Grouped in the Main Card */}
-            {user?.role !== 'department' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6 border-t border-border/20">
-                <div className="space-y-8">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner">
-                        <ShieldAlert size={22} />
-                      </div>
-                      <div className="space-y-0.5">
-                        <h3 className="text-lg font-black text-foreground tracking-tight">Strategic Control</h3>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Core Governance Units</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {strategicDepts.map(dept => (
-                       <DepartmentCard key={dept.id} name={dept.name} type="Strategic" />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-8">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-2xl bg-muted border border-border/50 flex items-center justify-center text-muted-foreground shadow-inner">
-                        <Boxes size={22} />
-                      </div>
-                      <div className="space-y-0.5">
-                        <h3 className="text-lg font-black text-foreground tracking-tight">Operational Network</h3>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Satellite Action Units</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {operationalDepts.map(dept => (
-                       <DepartmentCard key={dept.id} name={dept.name} type="Unit" />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
