@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
-import { Plus, Trash2, Shield, ArrowDown, Settings2, Info } from 'lucide-react';
+import { Plus, Trash2, Shield, ArrowDown, Settings2, Info, FileText } from 'lucide-react';
 
 const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
   return (
