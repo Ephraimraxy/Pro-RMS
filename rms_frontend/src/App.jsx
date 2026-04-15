@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext, Suspense } from 'react'
+import React, { useState, useEffect, useCallback, createContext, useContext, Suspense } from 'react'
 import Login from './components/Login'
 import PublicVerify from './components/PublicVerify'
 import DepartmentHeadModal from './components/DepartmentHeadModal'
@@ -87,15 +87,44 @@ const NetworkProvider = ({ children }) => {
   );
 };
 
+// Valid view names — used to validate hash on load and popstate
+const VALID_VIEWS = [
+  'dashboard','requisitions','memos','activity',
+  'workflow_builder','department_manager','audit_logs',
+  'document_studio','dept_profile'
+];
+
+const getViewFromHash = () => {
+  const hash = window.location.hash.replace('#', '');
+  return VALID_VIEWS.includes(hash) ? hash : 'dashboard';
+};
+
 const AppContent = () => {
   const { user, loading } = useAuth();
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(getViewFromHash);
   const [deptProfile, setDeptProfile] = useState(null);
   const [showDeptModal, setShowDeptModal] = useState(false);
 
+  // navigate() replaces bare setCurrentView so every change is recorded in browser history
+  const navigate = useCallback((view) => {
+    const target = VALID_VIEWS.includes(view) ? view : 'dashboard';
+    setCurrentView(target);
+    window.history.pushState({ view: target }, '', `#${target}`);
+  }, []);
+
+  // Handle browser back / forward buttons
+  useEffect(() => {
+    const onPopState = (e) => {
+      const view = e.state?.view || getViewFromHash();
+      setCurrentView(VALID_VIEWS.includes(view) ? view : 'dashboard');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   useEffect(() => {
     // Reset to dashboard whenever user session changes (login or logout)
-    setCurrentView('dashboard');
+    navigate('dashboard');
     setDeptProfile(null);
     setShowDeptModal(false);
   }, [user?.id]);
@@ -134,18 +163,18 @@ const AppContent = () => {
 
   // Security Guard: Prevent department users from accessing admin views
   const isAdminView = ['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView);
-  const activeView = (user.role === 'department' && isAdminView) ? 'dashboard' : currentView;
+  const activeView  = (user.role === 'department' && isAdminView) ? 'dashboard' : currentView;
 
   const views = {
-    dashboard: <Dashboard onViewChange={setCurrentView} />,
-    requisitions: <RequisitionsPage onViewChange={setCurrentView} />,
-    memos: <MemoManagement onViewChange={setCurrentView} />,
-    activity: <MyActivity onViewChange={setCurrentView} />,
-    workflow_builder: <WorkflowBuilder onViewChange={setCurrentView} />,
-    department_manager: <DepartmentManager onViewChange={setCurrentView} />,
-    audit_logs: <AuditLogs onViewChange={setCurrentView} />,
-    document_studio: <DocumentStudio user={user} onViewChange={setCurrentView} />,
-    dept_profile: <DepartmentProfile user={user} onViewChange={setCurrentView} />
+    dashboard: <Dashboard onViewChange={navigate} />,
+    requisitions: <RequisitionsPage onViewChange={navigate} />,
+    memos: <MemoManagement onViewChange={navigate} />,
+    activity: <MyActivity onViewChange={navigate} />,
+    workflow_builder: <WorkflowBuilder onViewChange={navigate} />,
+    department_manager: <DepartmentManager onViewChange={navigate} />,
+    audit_logs: <AuditLogs onViewChange={navigate} />,
+    document_studio: <DocumentStudio user={user} onViewChange={navigate} />,
+    dept_profile: <DepartmentProfile user={user} onViewChange={navigate} />
   };
 
   return (
