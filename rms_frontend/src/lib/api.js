@@ -21,7 +21,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
-    console.error("API Error Response:", error);
+    // 422 from AI refine is an expected "blocked" response — don't log as error
+    if (error.response?.status !== 422) {
+      console.error("API Error Response:", error);
+    }
     const originalRequest = error.config;
     
     // Prevent infinite loops on authenticating/refresh requests
