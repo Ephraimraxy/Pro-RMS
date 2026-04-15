@@ -253,7 +253,7 @@ function clearLoginAttempts(key) {
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
-  if (!token) return res.status(401).json({ error: 'Access Denied: No Token' });
+  if (!token) return res.status(401).json({ error: 'You must be logged in to access this. Please sign in and try again.' });
 
   // Check blacklist
   if (tokenBlacklist.has(token)) {
@@ -261,7 +261,7 @@ const authenticateToken = (req, res, next) => {
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid Token' });
+    if (err) return res.status(403).json({ error: 'Your session is invalid or has expired. Please log in again.' });
     req.user = user;
     req.token = token; // Stash for logout
     next();
@@ -275,6 +275,17 @@ const getNumericUserId = (user) => {
 };
 
 const normalizeRole = (role) => (role || '').toLowerCase();
+
+// ── Central friendly error responder ─────────────────────────────────────────
+// 4xx errors: pass the message through (already human-readable).
+// 5xx errors: never expose raw DB / system internals — use a safe fallback.
+const sendError = (res, status, message) => {
+  if (status >= 500) {
+    logger.error(`[API ${status}] ${message}`);
+    return res.status(status).json({ error: 'Something went wrong on our end. Please try again, or contact support if the problem persists.' });
+  }
+  return res.status(status).json({ error: message });
+};
 const maskSecret = (value) => {
   const raw = String(value || '');
   if (!raw) return '';
@@ -286,7 +297,7 @@ const requireRoles = (roles) => (req, res, next) => {
   const userRole = normalizeRole(req.user?.role);
   const allowed = roles.map(r => r.toLowerCase());
   if (allowed.includes(userRole) || userRole === 'global_admin') return next();
-  return res.status(403).json({ error: 'Forbidden' });
+  return res.status(403).json({ error: 'You do not have permission to perform this action.' });
 };
 
 const ensureActivePublicKey = async () => {
@@ -317,14 +328,39 @@ const computeContentHash = (requisition) => {
 
 const checkDeptReadiness = async (deptId) => {
   if (!deptId) return { ready: false, reason: 'Department ID missing' };
-  const dept = await prisma.department.findUnique({ where: { id: deptId } });
+  const dept = await prisma.department.findUnique({
+    where: { id: deptId },
+    include: { users: true }
+  });
   if (!dept) return { ready: false, reason: 'Department not found' };
   if (dept.name === 'Super Admin') return { ready: true };
-  // Only require head name + email — needed for notifications to work.
-  // Digital signature is optional; missing it only affects PDF appearance, not workflow.
+
   if (!dept.headName || !dept.headEmail) {
-    return { ready: false, reason: `Department "${dept.name}" has not configured a head official name and email. Please update the department profile first.` };
+    return {
+      ready: false,
+      reason: `Your department profile is incomplete. Please go to Dept Profile and fill in the Head Official name and email before submitting a request.`
+    };
   }
+
+  const headUser = await prisma.user.findFirst({
+    where: { email: dept.headEmail },
+    include: { signature: true }
+  });
+
+  if (!headUser) {
+    return {
+      ready: false,
+      reason: `The head official for "${dept.name}" (${dept.headEmail}) has not created a system account yet. Please ask them to log in and set up their profile first.`
+    };
+  }
+
+  if (!headUser.signature) {
+    return {
+      ready: false,
+      reason: `The head official for "${dept.name}" has not uploaded a digital signature yet. Please go to Dept Profile → Signature and upload one before submitting.`
+    };
+  }
+
   return { ready: true };
 };
 
@@ -664,7 +700,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       password: z.string().min(1)
     }).safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid login payload' });
+      return res.status(400).json({ error: 'Login details are missing or invalid. Please check your credentials and try again.' });
     }
     const { email, password } = parsed.data;
 
@@ -684,7 +720,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
     await prisma.activityLog.create({ data: { action: 'Logged In', details: `${user.name} (Admin) authenticated`, userId: user.id } });
     res.json({ token, user: userData });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Logout (revoke token)
@@ -706,7 +742,7 @@ app.post('/api/auth/refresh', authenticateToken, (req, res) => {
     const userData = { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department, deptId: user.deptId };
     const newToken = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
     res.json({ token: newToken, user: userData });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
@@ -717,7 +753,7 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
       mfaCode: z.string().optional().nullable()
     }).safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid login payload' });
+      return res.status(400).json({ error: 'Login details are missing or invalid. Please check your credentials and try again.' });
     }
     const { departmentName, accessCode, mfaCode } = parsed.data;
     
@@ -784,7 +820,7 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
     await prisma.activityLog.create({ data: { action: 'Login', details: `${dept.name} authenticated via unified portal` } });
     res.json({ token, user: userData });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.get('/api/auth/me', authenticateToken, (req, res) => res.json({ user: req.user }));
@@ -807,7 +843,7 @@ app.get('/api/departments', async (req, res) => {
         : { id: true, name: true, type: true, code: true }
     });
     res.json(departments);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.get('/api/departments/:id', authenticateToken, async (req, res) => {
@@ -816,10 +852,10 @@ app.get('/api/departments/:id', authenticateToken, async (req, res) => {
     const department = await prisma.department.findUnique({ where: { id: parseInt(id) } });
     if (!department) return res.status(404).json({ error: 'Department not found' });
     if (req.user.role === 'department' && req.user.deptId && department.id !== req.user.deptId) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
     }
     res.json(department);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Dynamic Requisition Types
@@ -827,7 +863,7 @@ app.get('/api/requisition-types', async (req, res) => {
   try {
     const types = await prisma.requisitionType.findMany({ orderBy: { name: 'asc' } });
     res.json(types);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Dynamic Workflow Stages
@@ -835,7 +871,7 @@ app.get('/api/workflow-stages', async (req, res) => {
   try {
     const stages = await prisma.workflowStage.findMany({ orderBy: { sequence: 'asc' } });
     res.json(stages);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.post('/api/workflow-stages', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
@@ -861,7 +897,7 @@ app.post('/api/workflow-stages', authenticateToken, requireRoles(['global_admin'
     ]);
     
     res.json({ success: true });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Notifications
@@ -1052,7 +1088,7 @@ app.delete('/api/notifications/clear-all', authenticateToken, async (req, res) =
       where: { OR: orClauses }
     });
     res.json({ count: result.count });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Mark single notification as read
@@ -1069,7 +1105,7 @@ app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
       data: { isRead: true }
     });
     res.json({ count: result.count });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
@@ -1079,7 +1115,7 @@ app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
       data: { isRead: true }
     });
     res.json({ success: true });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.post('/api/requisition-types', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
@@ -1092,7 +1128,7 @@ app.post('/api/requisition-types', authenticateToken, requireRoles(['global_admi
     const { name, description } = parsed.data;
     const type = await prisma.requisitionType.create({ data: { name, description: description || '' } });
     res.json(type);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.delete('/api/requisition-types/:id', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
@@ -1100,7 +1136,7 @@ app.delete('/api/requisition-types/:id', authenticateToken, requireRoles(['globa
     const { id } = req.params;
     await prisma.requisitionType.delete({ where: { id: parseInt(id) } });
     res.json({ success: true });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.post('/api/departments', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
@@ -1117,7 +1153,7 @@ app.post('/api/departments', authenticateToken, requireRoles(['global_admin']), 
     const accessCodeHash = await bcrypt.hash(accessCode, 10);
     const dept = await prisma.department.create({ data: { name, type, accessCode: null, accessCodeHash, accessCodeLabel: accessCode } });
     res.json(dept);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.delete('/api/departments/:id', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
@@ -1125,7 +1161,7 @@ app.delete('/api/departments/:id', authenticateToken, requireRoles(['global_admi
     const { id } = req.params;
     await prisma.department.delete({ where: { id: parseInt(id) } });
     res.json({ success: true });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.put('/api/departments/:id/head', authenticateToken, async (req, res) => {
@@ -1133,7 +1169,7 @@ app.put('/api/departments/:id/head', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const deptId = parseInt(id);
     if (req.user.role === 'department' && req.user.deptId && req.user.deptId !== deptId) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
     }
     const parsed = z.object({
       headName: z.string().min(2),
@@ -1157,7 +1193,7 @@ app.put('/api/departments/:id/head', authenticateToken, async (req, res) => {
       }
     });
     res.json(updated);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Access Code Reset (Admin only)
@@ -1179,7 +1215,7 @@ app.put('/api/departments/:id/access-code', authenticateToken, requireRoles(['gl
       }
     });
     res.json({ success: true, department: updated.name });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Department Stamp Upload (Admin only)
@@ -1195,7 +1231,7 @@ app.post('/api/departments/:id/stamp', authenticateToken, requireRoles(['global_
       create: { departmentId: parseInt(id), imageKey: storageKey }
     });
     res.json(stamp);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // User Signature Upload (User or Admin)
@@ -1206,7 +1242,7 @@ app.post('/api/users/:id/signature', authenticateToken, upload.single('file'), a
     const targetId = parseInt(id);
     if (!req.file) return res.status(400).json({ error: 'No signature uploaded' });
     if (userId !== targetId && normalizeRole(req.user.role) !== 'global_admin') {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
     }
     const storageKey = generateStorageKey(`signatures/user-${id}`, req.file.originalname);
     await putObject({ key: storageKey, body: req.file.buffer, contentType: req.file.mimetype });
@@ -1216,7 +1252,7 @@ app.post('/api/users/:id/signature', authenticateToken, upload.single('file'), a
       create: { userId: targetId, imageKey: storageKey }
     });
     res.json(signatureRecord);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res) => {
@@ -1243,7 +1279,7 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
         targetDepartmentId: z.number().optional(),
       }).safeParse(item);
       if (!parsed.success) {
-        return res.status(400).json({ error: 'Invalid requisition payload' });
+        return res.status(400).json({ error: 'Some required fields are missing or invalid. Please check your request and try again.' });
       }
       const data = parsed.data;
       const clientId = data.clientId || crypto.randomUUID();
@@ -1377,7 +1413,7 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
     }
 
     res.json([...createdRecords, ...existingRecords]);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Edit draft requisition
@@ -1406,7 +1442,7 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
     const isAdmin = getNumericUserId(req.user) === systemUser?.id;
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
     if (!isAdmin && existing.departmentId !== userDeptId) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
     }
 
     const amount = parseFloat(data.amount || existing.amount);
@@ -1466,7 +1502,7 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
       });
     }
     res.json(updated);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Delete requisition (admins can delete any; departments can only delete their own drafts)
@@ -1569,7 +1605,7 @@ app.get('/api/departments/:id/activation', authenticateToken, async (req, res) =
     });
     if (!dept) return res.status(404).json({ error: 'Department not found' });
     res.json({ activated: Boolean(dept.headEmail), headName: dept.headName, headEmail: dept.headEmail });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // Forward / Return-to-Sender a requisition (target department response)
@@ -1687,7 +1723,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
     }
 
     res.json(updated);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.post('/api/requisitions/:id/approve', authenticateToken, approvalLimiter, async (req, res) => {
@@ -1781,7 +1817,7 @@ app.get('/api/verify/:code', authenticateToken, requireRoles(['global_admin']), 
       requisitionId: record.approval?.requisitionId,
       approvedAt: record.approval?.createdAt
     });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // ── DEPARTMENT PROFILE & GOVERNANCE ROUTES ───────────────────────────────────
@@ -1804,7 +1840,7 @@ app.get('/api/department/profile', authenticateToken, async (req, res) => {
       ...dept,
       hasSignature: !!headUser?.signature
     });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.put('/api/department/profile', authenticateToken, async (req, res) => {
@@ -1816,7 +1852,7 @@ app.put('/api/department/profile', authenticateToken, async (req, res) => {
       data: { headName, headEmail, headTitle, phone, address }
     });
     res.json(updated);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.post('/api/department/signature', authenticateToken, upload.single('file'), async (req, res) => {
@@ -1852,7 +1888,7 @@ app.post('/api/department/signature', authenticateToken, upload.single('file'), 
     });
 
     res.json({ success: true, message: 'Department head signature updated successfully' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // ── END GOVERNANCE ROUTES ───────────────────────────────────────────────────
@@ -1875,7 +1911,7 @@ app.get('/api/public-verify/:code', publicVerifyLimiter, async (req, res) => {
       requisitionId: record.approval?.requisitionId,
       approvedAt: record.approval?.createdAt
     });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
@@ -1912,10 +1948,10 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
       requisition.departmentId !== req.user.deptId &&
       requisition.targetDepartmentId !== req.user.deptId
     ) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
     }
     res.json(requisition);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res) => {
@@ -2431,7 +2467,7 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
     ]);
 
     res.json({ data: records, total, page, limit, pages: Math.ceil(total / limit) });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.get('/api/audit-logs', authenticateToken, async (req, res) => {
@@ -2449,7 +2485,7 @@ app.get('/api/audit-logs', authenticateToken, async (req, res) => {
       prisma.activityLog.count()
     ]);
     res.json({ data: logs, total, page, limit, pages: Math.ceil(total / limit) });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // File Attachments & Auditing
@@ -2488,7 +2524,7 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
     });
 
     res.json(attachments);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => {
@@ -2503,7 +2539,7 @@ app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => 
     if (req.user.role === 'department' && req.user.deptId
         && attachment.requisition?.departmentId !== req.user.deptId
         && attachment.requisition?.targetDepartmentId !== req.user.deptId) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
     }
 
     // Audit Log
@@ -2523,7 +2559,7 @@ app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => 
     res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
     stream.pipe(res);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // File Preview (inline rendering instead of forced download)
@@ -2538,14 +2574,14 @@ app.get('/api/attachments/:id/preview', authenticateToken, async (req, res) => {
     if (req.user.role === 'department' && req.user.deptId
         && attachment.requisition?.departmentId !== req.user.deptId
         && attachment.requisition?.targetDepartmentId !== req.user.deptId) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
     }
     if (!attachment.storageKey) return res.status(404).json({ error: 'File missing from storage' });
     const stream = await getObjectStream(attachment.storageKey);
     res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${attachment.filename}"`);
     stream.pipe(res);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // ── EMAIL TEST ENDPOINT (Admin only) ──
@@ -2595,7 +2631,7 @@ app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res)
       include: { uploadedBy: { select: { name: true } } }
     });
     res.json(attachments);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { sendError(res, 500, error.message); }
 });
 
 // ── AI VOICE TRANSCRIPTION (Whisper Fallback) ──
