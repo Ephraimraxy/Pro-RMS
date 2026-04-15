@@ -317,22 +317,13 @@ const computeContentHash = (requisition) => {
 
 const checkDeptReadiness = async (deptId) => {
   if (!deptId) return { ready: false, reason: 'Department ID missing' };
-  const dept = await prisma.department.findUnique({
-    where: { id: deptId },
-    include: { users: { include: { signature: true } } }
-  });
+  const dept = await prisma.department.findUnique({ where: { id: deptId } });
   if (!dept) return { ready: false, reason: 'Department not found' };
   if (dept.name === 'Super Admin') return { ready: true };
+  // Only require head name + email — needed for notifications to work.
+  // Digital signature is optional; missing it only affects PDF appearance, not workflow.
   if (!dept.headName || !dept.headEmail) {
-    return { ready: false, reason: `Department "${dept.name}" has not configured their head official's name or email.` };
-  }
-  // Check if a user with that email has a signature
-  const headUser = await prisma.user.findFirst({
-    where: { email: dept.headEmail },
-    include: { signature: true }
-  });
-  if (!headUser || !headUser.signature) {
-    return { ready: false, reason: `Department "${dept.name}" head official (${dept.headEmail}) has not uploaded a digital signature.` };
+    return { ready: false, reason: `Department "${dept.name}" has not configured a head official name and email. Please update the department profile first.` };
   }
   return { ready: true };
 };
