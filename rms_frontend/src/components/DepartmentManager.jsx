@@ -1,20 +1,164 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import {
   Plus, Trash2, Building2, Briefcase, Search, ChevronDown, ChevronRight,
-  Eye, EyeOff, Upload, Pencil, X, Save, Loader2, Stamp, KeyRound,
-  CheckCircle2, AlertTriangle, RotateCcw, Info, User, Mail, Phone, MapPin, BadgeCheck
+  Eye, EyeOff, Pencil, X, Save, Loader2, KeyRound,
+  CheckCircle2, RotateCcw, Info, User, Mail, Phone, MapPin, BadgeCheck, Download
 } from 'lucide-react';
-import { getDepartments, addDepartment, deleteDepartment, uploadDepartmentStamp } from '../lib/store';
+import { getDepartments, addDepartment, deleteDepartment } from '../lib/store';
 import { deptAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import Modal from './Modal';
 import ConfirmModal from './ConfirmModal';
 
+// ── Auto-generated Department Seal SVG ────────────────────────────────────────
+const DepartmentSeal = ({ name }) => {
+  const cx = 125, cy = 125;
+  const date = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  }).toUpperCase();
+
+  const safeName = name.replace(/[^a-zA-Z0-9]/g, '_');
+  const len = name.length;
+  const fontSize = len <= 14 ? 12 : len <= 22 ? 10.5 : 9;
+  const letterSpacing = len <= 14 ? 2.5 : len <= 22 ? 1.5 : 1;
+  const arcR = 96;
+
+  const nameArcId = `nameArc_${safeName}`;
+
+  return (
+    <svg viewBox="0 0 250 250" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+      <defs>
+        <path id={nameArcId}
+          d={`M ${cx - arcR},${cy} a ${arcR},${arcR} 0 0,1 ${arcR * 2},0`} />
+      </defs>
+
+      {/* White background fill */}
+      <circle cx={cx} cy={cy} r={120} fill="white" />
+
+      {/* Outer double rings */}
+      <circle cx={cx} cy={cy} r={115} fill="none" stroke="#1e3a5f" strokeWidth="3.5" />
+      <circle cx={cx} cy={cy} r={108} fill="none" stroke="#1e3a5f" strokeWidth="1" />
+
+      {/* Inner dashed ring */}
+      <circle cx={cx} cy={cy} r={70} fill="none" stroke="#1e3a5f" strokeWidth="1.5" strokeDasharray="3 3" />
+
+      {/* Department name curved along top arc */}
+      <text fontSize={fontSize} fontWeight="bold" fontFamily="Georgia, serif"
+        letterSpacing={letterSpacing} fill="#1e3a5f">
+        <textPath href={`#${nameArcId}`} startOffset="50%" textAnchor="middle">
+          {name.toUpperCase()}
+        </textPath>
+      </text>
+
+      {/* Diamond markers at arc ends (equator) */}
+      <text x={cx - 108} y={cy + 4} fontSize="9" fill="#1e3a5f" textAnchor="middle">◆</text>
+      <text x={cx + 108} y={cy + 4} fontSize="9" fill="#1e3a5f" textAnchor="middle">◆</text>
+
+      {/* Bottom decorative dots along outer ring */}
+      {[150, 165, 180, 195, 210].map((angle, i) => {
+        const rad = (angle * Math.PI) / 180;
+        return <circle key={i} cx={cx + 112 * Math.cos(rad)} cy={cy + 112 * Math.sin(rad)} r={1.5} fill="#1e3a5f" />;
+      })}
+      {[330, 345, 360, 15, 30].map((angle, i) => {
+        const rad = (angle * Math.PI) / 180;
+        return <circle key={`r${i}`} cx={cx + 112 * Math.cos(rad)} cy={cy + 112 * Math.sin(rad)} r={1.5} fill="#1e3a5f" />;
+      })}
+
+      {/* Building icon centered at top inside */}
+      <g transform={`translate(${cx},${cy - 18})`}>
+        <rect x="-13" y="-8" width="26" height="20" fill="none" stroke="#1e3a5f" strokeWidth="1.5" />
+        <polygon points="0,-20 -16,-8 16,-8" fill="none" stroke="#1e3a5f" strokeWidth="1.5" />
+        <rect x="-4" y="4" width="8" height="8" fill="#1e3a5f" />
+        <rect x="-10" y="-4" width="5" height="5" fill="#1e3a5f" />
+        <rect x="5" y="-4" width="5" height="5" fill="#1e3a5f" />
+      </g>
+
+      {/* Thin divider line */}
+      <line x1={cx - 48} y1={cy + 8} x2={cx + 48} y2={cy + 8} stroke="#1e3a5f" strokeWidth="0.75" />
+
+      {/* CSS GROUP HOLDINGS */}
+      <text x={cx} y={cy + 22} textAnchor="middle" fontSize="8.5" fontWeight="bold"
+        fontFamily="Georgia, serif" letterSpacing="2" fill="#1e3a5f">CSS GROUP</text>
+      <text x={cx} y={cy + 34} textAnchor="middle" fontSize="8.5" fontWeight="bold"
+        fontFamily="Georgia, serif" letterSpacing="2" fill="#1e3a5f">HOLDINGS</text>
+
+      {/* Stars row */}
+      <text x={cx} y={cy + 50} textAnchor="middle" fontSize="9" fill="#1e3a5f" letterSpacing="5">★ ★ ★</text>
+
+      {/* Current date — always live */}
+      <text x={cx} y={cy + 64} textAnchor="middle" fontSize="7.5" fontFamily="monospace"
+        letterSpacing="1" fill="#1e3a5f">{date}</text>
+    </svg>
+  );
+};
+
+// ── Seal View Modal ────────────────────────────────────────────────────────────
+const SealViewModal = ({ dept, onClose }) => {
+  const handleDownload = () => {
+    const svgEl = document.getElementById('seal-svg-export');
+    if (!svgEl) return;
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(svgEl);
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${dept.name.replace(/\s+/g, '_')}_Seal.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border/30">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-foreground">Department Seal</h3>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{dept.name} · Auto-generated · Live Date</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl text-muted-foreground transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Seal preview */}
+        <div className="p-8 flex items-center justify-center">
+          <div id="seal-svg-export" className="w-56 h-56 drop-shadow-xl">
+            <DepartmentSeal name={dept.name} />
+          </div>
+        </div>
+
+        {/* Info strip */}
+        <div className="mx-6 mb-4 p-3 bg-primary/5 rounded-xl flex items-start gap-2">
+          <Info size={12} className="text-primary shrink-0 mt-0.5" />
+          <p className="text-[10px] text-primary/80 font-medium leading-relaxed">
+            This seal is auto-generated for <strong>{dept.name}</strong>. The date shown is always today's date. It appears as a watermark on official PDF documents from this department.
+          </p>
+        </div>
+
+        {/* Download button */}
+        <div className="px-6 pb-6">
+          <button
+            onClick={handleDownload}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-primary/30 text-primary font-bold text-xs uppercase tracking-widest hover:bg-primary/5 transition-all active:scale-[0.98]"
+          >
+            <Download size={14} />
+            Download Seal (SVG)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── DeptItem ──────────────────────────────────────────────────────────────────
-const DeptItem = ({ dept, onDelete, onUploadStamp, onEdit }) => {
-  const hasStamp = !!dept.stamp;
+const DeptItem = ({ dept, onDelete, onViewSeal, onEdit }) => {
   return (
     <div className="glass bg-white/80 p-3 lg:p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
       <div className="flex items-center space-x-4 min-w-0">
@@ -27,13 +171,8 @@ const DeptItem = ({ dept, onDelete, onUploadStamp, onEdit }) => {
           <h4 className="text-sm font-bold text-foreground truncate">{dept.name}</h4>
           <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
             <p className="text-[9px] text-muted-foreground uppercase font-mono">{dept.type}</p>
-            {hasStamp && (
-              <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest flex items-center gap-0.5">
-                <CheckCircle2 size={9} /> Stamp
-              </span>
-            )}
             {dept.headName && (
-              <span className="text-[9px] text-muted-foreground/70 italic truncate max-w-[100px]">{dept.headName}</span>
+              <span className="text-[9px] text-muted-foreground/70 italic truncate max-w-[120px]">{dept.headName}</span>
             )}
           </div>
         </div>
@@ -47,11 +186,11 @@ const DeptItem = ({ dept, onDelete, onUploadStamp, onEdit }) => {
           <Pencil size={14} />
         </button>
         <button
-          onClick={onUploadStamp}
-          className={`p-2 transition-all rounded-lg ${hasStamp ? 'text-emerald-600 hover:bg-emerald-50' : 'text-muted-foreground hover:text-primary hover:bg-primary/5'}`}
-          title={hasStamp ? 'Replace Department Stamp/Seal' : 'Upload Department Stamp/Seal'}
+          onClick={onViewSeal}
+          className="p-2 text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+          title="View Department Seal"
         >
-          <Stamp size={14} />
+          <Eye size={14} />
         </button>
         <button
           onClick={onDelete}
@@ -197,8 +336,8 @@ const EditDeptModal = ({ dept, onClose, onSaved }) => {
               <Info size={12} className="shrink-0 mt-0.5" />
               <span>
                 {dept.codeChangedByDept
-                  ? `This department has changed their access code from the original. Resetting here will override their custom code and they will need to log in with the new code you set.`
-                  : `Enter a new access code to replace the current one. The department will need to use this new code on their next login.`}
+                  ? `This department has changed their access code from the original. Resetting here will override their custom code.`
+                  : `Enter a new access code to replace the current one. The department will use this new code on their next login.`}
               </span>
             </div>
             <div className="flex gap-3">
@@ -243,9 +382,8 @@ const DepartmentManager = ({ onViewChange }) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [pendingDept, setPendingDept] = useState(null);
   const [editingDept, setEditingDept] = useState(null);
+  const [sealDept, setSealDept] = useState(null);
   const [newDeptData, setNewDeptData] = useState({ name: '', type: 'Operational', accessCode: '' });
-  const [pendingStampDept, setPendingStampDept] = useState(null);
-  const stampInputRef = useRef(null);
 
   const [isStrategicOpen, setIsStrategicOpen] = useState(true);
   const [isOperationalOpen, setIsOperationalOpen] = useState(true);
@@ -288,26 +426,6 @@ const DepartmentManager = ({ onViewChange }) => {
     setPendingDept(null);
   };
 
-  const handleStampClick = (dept) => {
-    setPendingStampDept(dept);
-    stampInputRef.current?.click();
-  };
-
-  const handleStampSelected = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !pendingStampDept) return;
-    setIsProcessing(true);
-    try {
-      await uploadDepartmentStamp(pendingStampDept.id, file);
-      toast.success(`Stamp updated for ${pendingStampDept.name}`);
-      await loadDepts();
-    } finally {
-      setIsProcessing(false);
-      setPendingStampDept(null);
-      e.target.value = '';
-    }
-  };
-
   const strategic   = departments.filter(d => d.type === 'Strategic');
   const operational = departments.filter(d => d.type === 'Operational');
   const filteredS   = strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -329,8 +447,6 @@ const DepartmentManager = ({ onViewChange }) => {
 
   return (
     <Layout user={user} currentView="department_manager" onViewChange={onViewChange}>
-      <input ref={stampInputRef} type="file" accept="image/*" className="hidden" onChange={handleStampSelected} />
-
       <div className="max-w-6xl mx-auto space-y-10 pb-20">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -364,14 +480,14 @@ const DepartmentManager = ({ onViewChange }) => {
           </div>
         </div>
 
-        {/* Stamp vs Signature info box */}
+        {/* Info box — seal vs signature */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 flex items-start gap-3 p-4 bg-primary/5 border border-primary/15 rounded-2xl">
-            <Stamp size={16} className="text-primary shrink-0 mt-0.5" />
+          <div className="flex-1 flex items-start gap-3 p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl">
+            <Eye size={16} className="text-indigo-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-[10px] font-black text-primary uppercase tracking-widest">Department Stamp / Seal</p>
+              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Department Seal (Auto-generated)</p>
               <p className="text-[10px] text-muted-foreground font-medium mt-0.5 leading-relaxed">
-                The institutional seal uploaded here (via the <strong>stamp icon</strong>) appears as a watermark on official PDF documents. Each department has one seal — upload it once from this page.
+                Each department gets a unique seal generated automatically with their name and today's date. Click the <strong>eye icon</strong> on any department card to view or download it. It is embedded as a watermark on official PDF documents.
               </p>
             </div>
           </div>
@@ -414,7 +530,7 @@ const DepartmentManager = ({ onViewChange }) => {
                     dept={dept}
                     onEdit={() => setEditingDept(dept)}
                     onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
-                    onUploadStamp={() => handleStampClick(dept)}
+                    onViewSeal={() => setSealDept(dept)}
                   />
                 ))}
               </div>
@@ -447,7 +563,7 @@ const DepartmentManager = ({ onViewChange }) => {
                     dept={dept}
                     onEdit={() => setEditingDept(dept)}
                     onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
-                    onUploadStamp={() => handleStampClick(dept)}
+                    onViewSeal={() => setSealDept(dept)}
                   />
                 ))}
               </div>
@@ -461,7 +577,7 @@ const DepartmentManager = ({ onViewChange }) => {
             <div>
               <h3 className="text-base font-bold text-foreground">Department Access Credentials</h3>
               <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                A strikethrough on the login code means the department has changed their own code for security. Click Edit to reset it.
+                A strikethrough means the department changed their own code. Click <strong>Edit</strong> to reset it for them.
               </p>
             </div>
             <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{departments.length} Total</span>
@@ -474,55 +590,70 @@ const DepartmentManager = ({ onViewChange }) => {
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Login Code (Original)</th>
                   <th className="py-3 px-4">Head</th>
-                  <th className="py-3 px-4">Stamp</th>
+                  <th className="py-3 px-4">Seal</th>
                   <th className="py-3 px-4">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {departments.map((dept) => (
-                  <tr key={dept.id} className="border-b border-border/30 hover:bg-muted/10 transition-colors group">
-                    <td className="py-3 px-4 text-xs font-bold text-foreground">{dept.name}</td>
-                    <td className="py-3 px-4">
-                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${dept.type === 'Strategic' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                        {dept.type}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-mono font-bold ${dept.codeChangedByDept ? 'line-through text-muted-foreground/50 decoration-red-400 decoration-2' : 'text-foreground'}`}>
-                          {dept.accessCodeLabel || '—'}
+                {departments.map((dept) => {
+                  // Show accessCodeLabel (admin set); fall back to legacy accessCode if label not yet set
+                  const displayCode = dept.accessCodeLabel || dept.accessCode || null;
+                  return (
+                    <tr key={dept.id} className="border-b border-border/30 hover:bg-muted/10 transition-colors group">
+                      <td className="py-3 px-4 text-xs font-bold text-foreground">{dept.name}</td>
+                      <td className="py-3 px-4">
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${dept.type === 'Strategic' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                          {dept.type}
                         </span>
-                        {dept.codeChangedByDept && (
-                          <span className="text-[8px] font-black bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
-                            Code Changed
-                          </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        {displayCode ? (
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-mono font-bold ${dept.codeChangedByDept ? 'line-through text-muted-foreground/40 decoration-red-400 decoration-2' : 'text-foreground'}`}>
+                              {displayCode}
+                            </span>
+                            {dept.codeChangedByDept && (
+                              <span className="text-[8px] font-black bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
+                                Code Changed
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[9px] text-muted-foreground/40 italic">Not recorded</span>
                         )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">{dept.headName || '—'}</td>
-                    <td className="py-3 px-4">
-                      {dept.stamp ? (
-                        <span className="text-[9px] font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 size={10} /> On file</span>
-                      ) : (
-                        <span className="text-[9px] text-muted-foreground/50">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => setEditingDept(dept)}
-                        className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                        title="Edit"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">{dept.headName || '—'}</td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => setSealDept(dept)}
+                          className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
+                          title="View Seal"
+                        >
+                          <Eye size={13} />
+                        </button>
+                      </td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => setEditingDept(dept)}
+                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                          title="Edit"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {/* Seal View Modal */}
+      {sealDept && (
+        <SealViewModal dept={sealDept} onClose={() => setSealDept(null)} />
+      )}
 
       {/* Edit Modal */}
       {editingDept && (

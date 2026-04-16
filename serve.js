@@ -909,7 +909,7 @@ app.get('/api/departments', async (req, res) => {
     const departments = await prisma.department.findMany({
       orderBy: { name: 'asc' },
       select: isAuthenticated
-        ? { id: true, name: true, type: true, code: true, headName: true, headTitle: true, headEmail: true, phone: true, address: true, parentId: true, stamp: true, accessCodeLabel: true, codeChangedByDept: true }
+        ? { id: true, name: true, type: true, code: true, headName: true, headTitle: true, headEmail: true, phone: true, address: true, parentId: true, stamp: true, accessCode: true, accessCodeLabel: true, codeChangedByDept: true }
         : { id: true, name: true, type: true, code: true }
     });
     res.json(departments);
