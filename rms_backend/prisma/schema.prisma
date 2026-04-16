@@ -38,9 +38,10 @@ model Department {
   code            String?          @unique // Optional short code
   name            String           @unique
   type            String           @default("Operational") // "Strategic", "Operational"
-  accessCode      String? // Legacy plain access code (deprecated)
-  accessCodeHash  String? // Bcrypt hash for departmental login
-  accessCodeLabel String? // Admin-visible login code label
+  accessCode          String? // Legacy plain access code (deprecated)
+  accessCodeHash      String? // Bcrypt hash for departmental login
+  accessCodeLabel     String? // Admin-visible login code label (original as set by admin)
+  codeChangedByDept   Boolean @default(false) // True when dept self-changed their code
   headName        String?
   headTitle       String?
   headEmail       String?

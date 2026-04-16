@@ -47,12 +47,13 @@ const app = express();
 const prisma = new PrismaClient();
 let isSystemReady = false; // Flag for database/seed readiness
 
-// Auto-migrate: add new Attachment tracking columns if they don't exist yet
+// Auto-migrate: add new columns if they don't exist yet (idempotent)
 ;(async () => {
   try {
     await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "stageName" TEXT`;
     await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "stageKey" TEXT`;
     await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "uploaderDept" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "Department" ADD COLUMN IF NOT EXISTS "codeChangedByDept" BOOLEAN DEFAULT FALSE`;
   } catch (e) {
     // Non-fatal — columns likely already exist or DB not ready yet
   }
@@ -908,7 +909,7 @@ app.get('/api/departments', async (req, res) => {
     const departments = await prisma.department.findMany({
       orderBy: { name: 'asc' },
       select: isAuthenticated
-        ? { id: true, name: true, type: true, code: true, headName: true, headTitle: true, headEmail: true, parentId: true, stamp: true }
+        ? { id: true, name: true, type: true, code: true, headName: true, headTitle: true, headEmail: true, phone: true, address: true, parentId: true, stamp: true, accessCodeLabel: true, codeChangedByDept: true }
         : { id: true, name: true, type: true, code: true }
     });
     res.json(departments);
@@ -1225,6 +1226,33 @@ app.post('/api/departments', authenticateToken, requireRoles(['global_admin']), 
   } catch (error) { sendError(res, 500, error.message); }
 });
 
+// Edit department info (Admin only)
+app.put('/api/departments/:id', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, type, headName, headTitle, headEmail, phone, address } = req.body;
+    if (!name?.trim()) return sendError(res, 400, 'Department name is required.');
+    const updated = await prisma.department.update({
+      where: { id: parseInt(id) },
+      data: {
+        name: name.trim(),
+        ...(type ? { type } : {}),
+        headName: headName ?? null,
+        headTitle: headTitle ?? null,
+        headEmail: headEmail ?? null,
+        phone: phone ?? null,
+        address: address ?? null
+      }
+    });
+    await prisma.activityLog.create({ data: {
+      userId: getNumericUserId(req.user) || null,
+      action: 'Department Updated',
+      details: `Admin updated info for ${updated.name}`
+    }});
+    res.json(updated);
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
 app.delete('/api/departments/:id', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -1274,7 +1302,7 @@ app.put('/api/departments/:id/access-code', authenticateToken, requireRoles(['gl
     const accessCodeHash = await bcrypt.hash(parsed.data.accessCode, 10);
     const updated = await prisma.department.update({
       where: { id: parseInt(id) },
-      data: { accessCodeHash, accessCodeLabel: parsed.data.accessCode }
+      data: { accessCodeHash, accessCodeLabel: parsed.data.accessCode, codeChangedByDept: false }
     });
     await prisma.activityLog.create({
       data: {
@@ -1284,6 +1312,36 @@ app.put('/api/departments/:id/access-code', authenticateToken, requireRoles(['gl
       }
     });
     res.json({ success: true, department: updated.name });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
+// Department self-service access code change
+app.put('/api/department/access-code', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'department' || !req.user.deptId)
+      return sendError(res, 403, 'Only department accounts can change their access code.');
+    const { currentCode, newCode, confirmCode } = req.body;
+    if (!currentCode || !newCode) return sendError(res, 400, 'Both current and new codes are required.');
+    if (newCode !== confirmCode) return sendError(res, 400, 'New codes do not match. Please re-enter.');
+    if (newCode.trim().length < 4) return sendError(res, 400, 'New access code must be at least 4 characters.');
+    const dept = await prisma.department.findUnique({ where: { id: req.user.deptId } });
+    if (!dept) return sendError(res, 404, 'Department not found.');
+    const valid = dept.accessCodeHash
+      ? await bcrypt.compare(currentCode.trim(), dept.accessCodeHash)
+      : dept.accessCode === currentCode.trim();
+    if (!valid) return sendError(res, 401, 'The current access code you entered is incorrect.');
+    const newHash = await bcrypt.hash(newCode.trim(), 10);
+    // accessCodeLabel intentionally NOT updated — admin still sees the original code with a "changed" indicator
+    await prisma.department.update({
+      where: { id: req.user.deptId },
+      data: { accessCodeHash: newHash, codeChangedByDept: true }
+    });
+    await prisma.activityLog.create({ data: {
+      userId: getNumericUserId(req.user) || null,
+      action: 'Access Code Changed',
+      details: `${dept.name} changed their own access code`
+    }});
+    res.json({ ok: true });
   } catch (error) { sendError(res, 500, error.message); }
 });
 

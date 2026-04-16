@@ -153,6 +153,15 @@ export const deptAPI = {
   },
   async updateHead(deptId, payload) {
     return api.put(`/departments/${deptId}/head`, payload);
+  },
+  async updateDepartment(deptId, payload) {
+    return api.put(`/departments/${deptId}`, payload);
+  },
+  async resetAccessCode(deptId, accessCode) {
+    return api.put(`/departments/${deptId}/access-code`, { accessCode });
+  },
+  async changeDeptAccessCode(currentCode, newCode, confirmCode) {
+    return api.put('/department/access-code', { currentCode, newCode, confirmCode });
   }
 };
 

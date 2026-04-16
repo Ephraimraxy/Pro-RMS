@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Lock, ArrowRight, CheckCircle2, Building2, UserCircle2, Eye, EyeOff, Smartphone } from 'lucide-react';
+import { Lock, ArrowRight, CheckCircle2, Building2, Eye, EyeOff, Smartphone, HelpCircle, X, PhoneCall } from 'lucide-react';
 import { getDepartments } from '../lib/store';
 import { toast } from 'react-hot-toast';
 
@@ -16,6 +16,7 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [showForgotCode, setShowForgotCode] = useState(false);
   const { deptLogin } = useAuth();
 
   useEffect(() => {
@@ -222,6 +223,17 @@ const Login = () => {
                 <span>{isSubmitting ? "Authenticating..." : "Enter RMS Portal"}</span>
                 {!isSubmitting && <ArrowRight size={16} />}
               </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotCode(true)}
+                  className="text-[11px] text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1.5 group"
+                >
+                  <HelpCircle size={12} className="group-hover:scale-110 transition-transform" />
+                  Forgot your access code?
+                </button>
+              </div>
             </form>
           </div>
 
@@ -230,6 +242,66 @@ const Login = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Forgot Access Code Modal ── */}
+      {showForgotCode && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 animate-in zoom-in-95 duration-200 relative">
+            <button
+              onClick={() => setShowForgotCode(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="flex flex-col items-center text-center space-y-5">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <PhoneCall size={28} className="text-primary" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-bold text-foreground tracking-tight">Need Help With Your Code?</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  No worries — it happens to the best of us.
+                </p>
+              </div>
+
+              <div className="w-full bg-primary/5 border border-primary/15 rounded-2xl p-5 space-y-3 text-left">
+                <p className="text-sm text-foreground font-semibold">Please reach out to:</p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-[9px] font-black text-primary">1</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Your <span className="font-semibold text-foreground">System Administrator</span> — they can reset your access code immediately from the Department Manager.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-[9px] font-black text-primary">2</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      The <span className="font-semibold text-foreground">ICT Department</span> — they will verify your identity and issue a new code promptly.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground/70 leading-relaxed italic">
+                For security reasons, access codes cannot be self-recovered. Our team is happy to assist you.
+              </p>
+
+              <button
+                onClick={() => setShowForgotCode(false)}
+                className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all active:scale-[0.98]"
+              >
+                Got it, thank you
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PWA Floating Install Button ── */}
       {!isStandalone && (

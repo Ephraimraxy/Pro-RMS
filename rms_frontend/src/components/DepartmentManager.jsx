@@ -1,67 +1,256 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
-import { CORPORATE_HIERARCHY } from '../constants/departments';
-import { Plus, Trash2, Building2, Briefcase, Search, MoreVertical, ChevronDown, ChevronRight, Eye, EyeOff, Upload } from 'lucide-react';
-
-const DeptItem = ({ name, type, onDelete, onUploadStamp }) => (
-  <div className="glass bg-white/80 p-3 lg:p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
-    <div className="flex items-center space-x-4">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-        type === 'Strategic' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted border border-border/50 text-muted-foreground'
-      }`}>
-        <Building2 size={18} />
-      </div>
-      <div>
-        <h4 className="text-sm font-bold text-foreground">{name}</h4>
-        <div className="flex items-center space-x-2">
-          <p className="text-[10px] text-muted-foreground uppercase font-medium tracking-tight font-mono">{type}</p>
-          <span className="text-[10px] text-primary/60 font-mono tracking-tighter border border-primary/20 px-1 rounded bg-primary/5">CODE: {name.substring(0,3).toUpperCase()}-2026</span>
-        </div>
-      </div>
-    </div>
-    <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-all">
-       <button onClick={onUploadStamp} className="p-2 text-muted-foreground hover:text-primary transition-colors" title="Upload Stamp">
-         <Upload size={14} />
-       </button>
-       <button onClick={onDelete} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
-         <Trash2 size={14} />
-       </button>
-       <button className="p-2 text-muted-foreground hover:text-primary transition-colors">
-         <MoreVertical size={14} />
-       </button>
-    </div>
-  </div>
-);
-
+import {
+  Plus, Trash2, Building2, Briefcase, Search, ChevronDown, ChevronRight,
+  Eye, EyeOff, Upload, Pencil, X, Save, Loader2, Stamp, KeyRound,
+  CheckCircle2, AlertTriangle, RotateCcw, Info, User, Mail, Phone, MapPin, BadgeCheck
+} from 'lucide-react';
 import { getDepartments, addDepartment, deleteDepartment, uploadDepartmentStamp } from '../lib/store';
+import { deptAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import Modal from './Modal';
 import ConfirmModal from './ConfirmModal';
 
+// ── DeptItem ──────────────────────────────────────────────────────────────────
+const DeptItem = ({ dept, onDelete, onUploadStamp, onEdit }) => {
+  const hasStamp = !!dept.stamp;
+  return (
+    <div className="glass bg-white/80 p-3 lg:p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
+      <div className="flex items-center space-x-4 min-w-0">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+          dept.type === 'Strategic' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted border border-border/50 text-muted-foreground'
+        }`}>
+          <Building2 size={18} />
+        </div>
+        <div className="min-w-0">
+          <h4 className="text-sm font-bold text-foreground truncate">{dept.name}</h4>
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+            <p className="text-[9px] text-muted-foreground uppercase font-mono">{dept.type}</p>
+            {hasStamp && (
+              <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest flex items-center gap-0.5">
+                <CheckCircle2 size={9} /> Stamp
+              </span>
+            )}
+            {dept.headName && (
+              <span className="text-[9px] text-muted-foreground/70 italic truncate max-w-[100px]">{dept.headName}</span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all shrink-0 ml-2">
+        <button
+          onClick={onEdit}
+          className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
+          title="Edit Department"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={onUploadStamp}
+          className={`p-2 transition-all rounded-lg ${hasStamp ? 'text-emerald-600 hover:bg-emerald-50' : 'text-muted-foreground hover:text-primary hover:bg-primary/5'}`}
+          title={hasStamp ? 'Replace Department Stamp/Seal' : 'Upload Department Stamp/Seal'}
+        >
+          <Stamp size={14} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-all"
+          title="Delete Department"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── Edit Department Modal ─────────────────────────────────────────────────────
+const EditDeptModal = ({ dept, onClose, onSaved }) => {
+  const [form, setForm] = useState({
+    name: dept.name || '',
+    type: dept.type || 'Operational',
+    headName: dept.headName || '',
+    headTitle: dept.headTitle || '',
+    headEmail: dept.headEmail || '',
+    phone: dept.phone || '',
+    address: dept.address || '',
+  });
+  const [newCode, setNewCode] = useState('');
+  const [showCode, setShowCode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [resettingCode, setResettingCode] = useState(false);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) { toast.error('Department name is required.'); return; }
+    setSaving(true);
+    try {
+      await deptAPI.updateDepartment(dept.id, form);
+      toast.success(`${form.name} updated successfully.`);
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to update department.');
+    } finally { setSaving(false); }
+  };
+
+  const handleResetCode = async () => {
+    if (!newCode.trim() || newCode.trim().length < 4) {
+      toast.error('New access code must be at least 4 characters.');
+      return;
+    }
+    setResettingCode(true);
+    try {
+      await deptAPI.resetAccessCode(dept.id, newCode.trim());
+      toast.success(`Access code reset for ${dept.name}. The department will need to log in with the new code.`);
+      setNewCode('');
+      onSaved();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to reset access code.');
+    } finally { setResettingCode(false); }
+  };
+
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white rounded-t-3xl px-6 pt-6 pb-4 border-b border-border/30 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <Building2 size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-foreground">Edit Department</h3>
+                <p className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate max-w-[200px]">{dept.name}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl text-muted-foreground transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSave} className="p-6 space-y-6">
+          {/* Basic Info */}
+          <div className="space-y-4">
+            <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em]">Basic Information</p>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Department Name</label>
+              <input value={form.name} onChange={set('name')} className="w-full border border-border/50 rounded-xl px-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {['Operational', 'Strategic'].map(t => (
+                <button key={t} type="button" onClick={() => setForm(f => ({ ...f, type: t }))}
+                  className={`py-2.5 rounded-xl border text-xs font-bold uppercase tracking-tight transition-all ${form.type === t ? 'bg-primary/10 border-primary/50 text-primary' : 'border-border/50 text-muted-foreground hover:border-border'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Head Info */}
+          <div className="space-y-4">
+            <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em]">Head Official</p>
+            {[
+              { key: 'headName', label: 'Full Name', icon: User, placeholder: 'Dr. John Doe' },
+              { key: 'headTitle', label: 'Designation / Title', icon: BadgeCheck, placeholder: 'General Manager' },
+              { key: 'headEmail', label: 'Official Email', icon: Mail, placeholder: 'head@cssgroup.internal', type: 'email' },
+              { key: 'phone', label: 'Contact Phone', icon: Phone, placeholder: '+234 800 000 0000' },
+              { key: 'address', label: 'Office Address', icon: MapPin, placeholder: 'Floor 3, CSS Tower...' },
+            ].map(({ key, label, icon: Icon, placeholder, type }) => (
+              <div key={key} className="relative">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-1">{label}</label>
+                <div className="flex items-center border border-border/50 rounded-xl focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 bg-white">
+                  <Icon size={14} className="text-muted-foreground ml-3 shrink-0" />
+                  <input value={form[key]} onChange={set(key)} type={type || 'text'} placeholder={placeholder}
+                    className="flex-1 px-3 py-3 text-sm font-medium bg-transparent outline-none" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button type="submit" disabled={saving}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-bold py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-primary/90 transition-all disabled:opacity-50 shadow-lg shadow-primary/20 active:scale-95">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {saving ? 'Saving…' : 'Save Department'}
+          </button>
+        </form>
+
+        {/* Access Code Reset */}
+        <div className="px-6 pb-6">
+          <div className="border-t border-border/30 pt-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <KeyRound size={14} className="text-amber-500" />
+              <p className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.25em]">Reset Access Code</p>
+              {dept.codeChangedByDept && (
+                <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                  Dept-modified
+                </span>
+              )}
+            </div>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-700 font-medium leading-relaxed flex items-start gap-2">
+              <Info size={12} className="shrink-0 mt-0.5" />
+              <span>
+                {dept.codeChangedByDept
+                  ? `This department has changed their access code from the original. Resetting here will override their custom code and they will need to log in with the new code you set.`
+                  : `Enter a new access code to replace the current one. The department will need to use this new code on their next login.`}
+              </span>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1 flex items-center border border-border/50 rounded-xl focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/10 bg-white">
+                <KeyRound size={14} className="text-muted-foreground ml-3 shrink-0" />
+                <input
+                  value={newCode}
+                  onChange={e => setNewCode(e.target.value)}
+                  type={showCode ? 'text' : 'password'}
+                  placeholder="New access code (min 4 chars)"
+                  className="flex-1 px-3 py-3 text-sm font-mono bg-transparent outline-none"
+                />
+                <button type="button" onClick={() => setShowCode(v => !v)} className="px-3 text-muted-foreground hover:text-foreground">
+                  {showCode ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetCode}
+                disabled={resettingCode || !newCode.trim()}
+                className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-40 shrink-0 shadow-md shadow-amber-500/20"
+              >
+                {resettingCode ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 const DepartmentManager = ({ onViewChange }) => {
   const { user } = useAuth();
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Modal states
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [pendingDept, setPendingDept] = useState(null);
+  const [editingDept, setEditingDept] = useState(null);
   const [newDeptData, setNewDeptData] = useState({ name: '', type: 'Operational', accessCode: '' });
   const [pendingStampDept, setPendingStampDept] = useState(null);
   const stampInputRef = useRef(null);
 
-  // Section states
   const [isStrategicOpen, setIsStrategicOpen] = useState(true);
   const [isOperationalOpen, setIsOperationalOpen] = useState(true);
   const [showAccessCode, setShowAccessCode] = useState(false);
-
-  const openAddModal = (type = 'Operational') => {
-    setNewDeptData({ name: '', type, accessCode: '' });
-    setIsAddModalOpen(true);
-  };
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const loadDepts = async () => {
     const data = await getDepartments();
@@ -69,30 +258,28 @@ const DepartmentManager = ({ onViewChange }) => {
     setLoading(false);
   };
 
-  useEffect(() => {
-    loadDepts();
-  }, []);
-
-  const [isProcessing, setIsProcessing] = useState(false);
+  useEffect(() => { loadDepts(); }, []);
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
-    if (!newDeptData.name) return;
+    if (!newDeptData.name || !newDeptData.accessCode) {
+      toast.error('Department name and access code are required.');
+      return;
+    }
     setIsProcessing(true);
-    // Simulate real network delay for UX
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 400));
     await addDepartment(newDeptData);
     await loadDepts();
     setIsProcessing(false);
     setIsAddModalOpen(false);
-    setNewDeptData({ name: '', type: 'Operational' });
+    setNewDeptData({ name: '', type: 'Operational', accessCode: '' });
     toast.success(`${newDeptData.name} Department added`);
   };
 
   const confirmDelete = async () => {
     if (!pendingDept) return;
     setIsProcessing(true);
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 400));
     await deleteDepartment(pendingDept.id);
     await loadDepts();
     setIsProcessing(false);
@@ -100,9 +287,6 @@ const DepartmentManager = ({ onViewChange }) => {
     toast.error(`${pendingDept.name} Department removed`);
     setPendingDept(null);
   };
-
-  const strategic = departments.filter(d => d.type === 'Strategic');
-  const operational = departments.filter(d => d.type === 'Operational');
 
   const handleStampClick = (dept) => {
     setPendingStampDept(dept);
@@ -115,6 +299,7 @@ const DepartmentManager = ({ onViewChange }) => {
     setIsProcessing(true);
     try {
       await uploadDepartmentStamp(pendingStampDept.id, file);
+      toast.success(`Stamp updated for ${pendingStampDept.name}`);
       await loadDepts();
     } finally {
       setIsProcessing(false);
@@ -123,11 +308,16 @@ const DepartmentManager = ({ onViewChange }) => {
     }
   };
 
+  const strategic   = departments.filter(d => d.type === 'Strategic');
+  const operational = departments.filter(d => d.type === 'Operational');
+  const filteredS   = strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredO   = operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
   if (loading) {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center space-y-6">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
           <div className="absolute inset-0 flex items-center justify-center text-primary">
             <Briefcase size={24} className="animate-pulse" />
           </div>
@@ -139,8 +329,10 @@ const DepartmentManager = ({ onViewChange }) => {
 
   return (
     <Layout user={user} currentView="department_manager" onViewChange={onViewChange}>
-      <input ref={stampInputRef} type="file" className="hidden" onChange={handleStampSelected} />
-      <div className="max-w-6xl mx-auto space-y-12 pb-20">
+      <input ref={stampInputRef} type="file" accept="image/*" className="hidden" onChange={handleStampSelected} />
+
+      <div className="max-w-6xl mx-auto space-y-10 pb-20">
+        {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight flex items-center space-x-3">
@@ -151,136 +343,179 @@ const DepartmentManager = ({ onViewChange }) => {
               Manage operational units and strategic control departments.
             </p>
           </div>
-          
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input 
-                type="text" 
-                placeholder="Search departments..." 
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search departments..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-white/80 border border-border/50 rounded-xl py-3 pl-12 pr-4 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 w-64 shadow-sm transition-all"
+                onChange={e => setSearchTerm(e.target.value)}
+                className="bg-white/80 border border-border/50 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 w-56 shadow-sm"
               />
             </div>
-            <button 
+            <button
               onClick={() => setIsAddModalOpen(true)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center space-x-2"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-5 rounded-xl transition-all shadow-lg shadow-primary/20 flex items-center gap-2 text-sm"
             >
-              <Plus size={18} />
-              <span>Add Department</span>
+              <Plus size={17} />
+              Add Department
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Strategic Column */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-border/50 pb-4">
-               <button 
-                 onClick={() => setIsStrategicOpen(!isStrategicOpen)}
-                 className="flex items-center space-x-2 text-lg font-bold text-foreground hover:text-primary transition-colors group"
-               >
-                 {isStrategicOpen ? <ChevronDown size={20} className="text-primary"/> : <ChevronRight size={20} />}
-                 <span>Strategic Control</span>
-               </button>
-               <div className="flex items-center space-x-4">
-                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{strategic.length} Total</span>
-                 <button 
-                   onClick={() => openAddModal('Strategic')}
-                   className="p-1 px-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all flex items-center space-x-1"
-                 >
-                   <Plus size={14} />
-                   <span className="text-[10px] font-bold uppercase">Add</span>
-                 </button>
-               </div>
+        {/* Stamp vs Signature info box */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 flex items-start gap-3 p-4 bg-primary/5 border border-primary/15 rounded-2xl">
+            <Stamp size={16} className="text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest">Department Stamp / Seal</p>
+              <p className="text-[10px] text-muted-foreground font-medium mt-0.5 leading-relaxed">
+                The institutional seal uploaded here (via the <strong>stamp icon</strong>) appears as a watermark on official PDF documents. Each department has one seal — upload it once from this page.
+              </p>
             </div>
-            
+          </div>
+          <div className="flex-1 flex items-start gap-3 p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl">
+            <BadgeCheck size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Head Officer Signature</p>
+              <p className="text-[10px] text-muted-foreground font-medium mt-0.5 leading-relaxed">
+                The handwritten signature of the department head — uploaded by the department themselves via their <strong>Dept Profile</strong> page. It auto-embeds above the signature line on PDFs.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Dept Columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Strategic */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-border/50 pb-3">
+              <button onClick={() => setIsStrategicOpen(v => !v)} className="flex items-center space-x-2 text-base font-bold hover:text-primary transition-colors group">
+                {isStrategicOpen ? <ChevronDown size={18} className="text-primary" /> : <ChevronRight size={18} />}
+                <span>Strategic Control</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{strategic.length} Total</span>
+                <button onClick={() => { setNewDeptData({ name: '', type: 'Strategic', accessCode: '' }); setIsAddModalOpen(true); }}
+                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all">
+                  <Plus size={13} />
+                  <span className="text-[9px] font-bold uppercase">Add</span>
+                </button>
+              </div>
+            </div>
             {isStrategicOpen && (
-              <div className="grid gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                {strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+              <div className="space-y-2.5 animate-in fade-in duration-300">
+                {filteredS.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic p-4 text-center">No strategic units found</p>
-                ) : (
-                  strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                    <DeptItem
-                      key={dept.id}
-                      name={dept.name}
-                      type="Strategic"
-                      onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
-                      onUploadStamp={() => handleStampClick(dept)}
-                    />
-                  ))
-                )}
+                ) : filteredS.map(dept => (
+                  <DeptItem
+                    key={dept.id}
+                    dept={dept}
+                    onEdit={() => setEditingDept(dept)}
+                    onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
+                    onUploadStamp={() => handleStampClick(dept)}
+                  />
+                ))}
               </div>
             )}
           </div>
 
-          {/* Operational Column */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-border/50 pb-4">
-               <button 
-                 onClick={() => setIsOperationalOpen(!isOperationalOpen)}
-                 className="flex items-center space-x-2 text-lg font-bold text-foreground hover:text-primary transition-colors group"
-               >
-                 {isOperationalOpen ? <ChevronDown size={20} className="text-primary"/> : <ChevronRight size={20} />}
-                 <span>Operational Units</span>
-               </button>
-               <div className="flex items-center space-x-4">
-                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{operational.length} Total</span>
-                 <button 
-                   onClick={() => openAddModal('Operational')}
-                   className="p-1 px-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all flex items-center space-x-1"
-                 >
-                   <Plus size={14} />
-                   <span className="text-[10px] font-bold uppercase">Add</span>
-                 </button>
-               </div>
+          {/* Operational */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-border/50 pb-3">
+              <button onClick={() => setIsOperationalOpen(v => !v)} className="flex items-center space-x-2 text-base font-bold hover:text-primary transition-colors group">
+                {isOperationalOpen ? <ChevronDown size={18} className="text-primary" /> : <ChevronRight size={18} />}
+                <span>Operational Units</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{operational.length} Total</span>
+                <button onClick={() => { setNewDeptData({ name: '', type: 'Operational', accessCode: '' }); setIsAddModalOpen(true); }}
+                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all">
+                  <Plus size={13} />
+                  <span className="text-[9px] font-bold uppercase">Add</span>
+                </button>
+              </div>
             </div>
-            
             {isOperationalOpen && (
-              <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar animate-in fade-in slide-in-from-top-2 duration-300">
-                {operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar animate-in fade-in duration-300">
+                {filteredO.length === 0 ? (
                   <p className="text-xs text-muted-foreground italic p-4 text-center">No operational units found</p>
-                ) : (
-                  operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).map(dept => (
-                    <DeptItem
-                      key={dept.id}
-                      name={dept.name}
-                      type="Operational"
-                      onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
-                      onUploadStamp={() => handleStampClick(dept)}
-                    />
-                  ))
-                )}
+                ) : filteredO.map(dept => (
+                  <DeptItem
+                    key={dept.id}
+                    dept={dept}
+                    onEdit={() => setEditingDept(dept)}
+                    onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
+                    onUploadStamp={() => handleStampClick(dept)}
+                  />
+                ))}
               </div>
             )}
           </div>
         </div>
 
+        {/* Access Codes Table */}
         <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-foreground">Department Access Codes</h3>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{departments.length} Total</span>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="text-base font-bold text-foreground">Department Access Credentials</h3>
+              <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                A strikethrough on the login code means the department has changed their own code for security. Click Edit to reset it.
+              </p>
+            </div>
+            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{departments.length} Total</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-muted/30 text-muted-foreground text-[10px] font-bold uppercase tracking-widest border-b border-border/50">
+                <tr className="bg-muted/30 text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground border-b border-border/50">
                   <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4">Code</th>
-                  <th className="py-3 px-4">Login Code</th>
+                  <th className="py-3 px-4">Type</th>
+                  <th className="py-3 px-4">Login Code (Original)</th>
                   <th className="py-3 px-4">Head</th>
-                  <th className="py-3 px-4">Head Email</th>
+                  <th className="py-3 px-4">Stamp</th>
+                  <th className="py-3 px-4">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {departments.map((dept) => (
-                  <tr key={dept.id} className="border-b border-border/40">
-                    <td className="py-3 px-4 text-sm font-semibold text-foreground">{dept.name}</td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground font-mono">{dept.code || '—'}</td>
-                    <td className="py-3 px-4 text-xs text-foreground font-mono">{dept.accessCodeLabel || '—'}</td>
+                  <tr key={dept.id} className="border-b border-border/30 hover:bg-muted/10 transition-colors group">
+                    <td className="py-3 px-4 text-xs font-bold text-foreground">{dept.name}</td>
+                    <td className="py-3 px-4">
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${dept.type === 'Strategic' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                        {dept.type}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-mono font-bold ${dept.codeChangedByDept ? 'line-through text-muted-foreground/50 decoration-red-400 decoration-2' : 'text-foreground'}`}>
+                          {dept.accessCodeLabel || '—'}
+                        </span>
+                        {dept.codeChangedByDept && (
+                          <span className="text-[8px] font-black bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
+                            Code Changed
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-4 text-xs text-muted-foreground">{dept.headName || '—'}</td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">{dept.headEmail || '—'}</td>
+                    <td className="py-3 px-4">
+                      {dept.stamp ? (
+                        <span className="text-[9px] font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 size={10} /> On file</span>
+                      ) : (
+                        <span className="text-[9px] text-muted-foreground/50">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <button
+                        onClick={() => setEditingDept(dept)}
+                        className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        title="Edit"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -289,97 +524,61 @@ const DepartmentManager = ({ onViewChange }) => {
         </div>
       </div>
 
-      {/* Add Department Modal */}
-      <Modal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
-        title="Add New Department"
-        size="xl"
+      {/* Edit Modal */}
+      {editingDept && (
+        <EditDeptModal
+          dept={editingDept}
+          onClose={() => setEditingDept(null)}
+          onSaved={() => { loadDepts(); setEditingDept(null); }}
+        />
+      )}
+
+      {/* Add Modal */}
+      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add New Department" size="xl"
         footer={(
           <>
-            <button 
-              onClick={() => setIsAddModalOpen(false)}
-              className="flex-1 px-4 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted transition-all"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={handleAddSubmit}
-              disabled={isProcessing}
-              className="flex-1 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin"></div>
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <span>Create Department</span>
-              )}
+            <button onClick={() => setIsAddModalOpen(false)} className="flex-1 px-4 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted transition-all">Cancel</button>
+            <button onClick={handleAddSubmit} disabled={isProcessing}
+              className="flex-1 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+              {isProcessing ? <><Loader2 size={14} className="animate-spin" /><span>Creating…</span></> : <span>Create Department</span>}
             </button>
           </>
         )}
       >
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Department Name</label>
-            <input 
-              type="text" 
-              value={newDeptData.name}
-              onChange={(e) => setNewDeptData({...newDeptData, name: e.target.value})}
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Department Name</label>
+            <input type="text" value={newDeptData.name} onChange={e => setNewDeptData(d => ({ ...d, name: e.target.value }))}
               placeholder="e.g. Finance & Accounts"
-              className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 focus:ring-2 focus:ring-primary/20 outline-none"
-            />
+              className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 focus:ring-2 focus:ring-primary/20 outline-none" />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Login Access Code</label>
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Login Access Code</label>
             <div className="relative">
-              <input 
-                type={showAccessCode ? "text" : "password"} 
-                value={newDeptData.accessCode}
-                onChange={(e) => setNewDeptData({...newDeptData, accessCode: e.target.value})}
+              <input type={showAccessCode ? 'text' : 'password'} value={newDeptData.accessCode}
+                onChange={e => setNewDeptData(d => ({ ...d, accessCode: e.target.value }))}
                 placeholder="e.g. HATCH-2026"
-                className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 pr-12 focus:ring-2 focus:ring-primary/20 outline-none font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => setShowAccessCode(!showAccessCode)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-primary transition-colors"
-                title={showAccessCode ? "Hide Access Code" : "Show Access Code"}
-              >
+                className="w-full bg-muted/30 border border-border/50 rounded-xl p-4 pr-12 focus:ring-2 focus:ring-primary/20 outline-none font-mono" />
+              <button type="button" onClick={() => setShowAccessCode(v => !v)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-primary">
                 {showAccessCode ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">ClassificationType</label>
-            <div className="grid grid-cols-2 gap-3">
-              {['Operational', 'Strategic'].map(type => (
-                <button
-                  key={type}
-                  onClick={() => setNewDeptData({...newDeptData, type})}
-                  className={`p-4 rounded-xl border transition-all text-xs font-bold uppercase tracking-tight ${
-                    newDeptData.type === type 
-                    ? 'bg-primary/10 border-primary/50 text-primary shadow-sm' 
-                    : 'bg-white border-border/50 text-muted-foreground hover:border-border'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            {['Operational', 'Strategic'].map(type => (
+              <button key={type} type="button" onClick={() => setNewDeptData(d => ({ ...d, type }))}
+                className={`p-4 rounded-xl border transition-all text-xs font-bold uppercase ${newDeptData.type === type ? 'bg-primary/10 border-primary/50 text-primary' : 'bg-white border-border/50 text-muted-foreground hover:border-border'}`}>
+                {type}
+              </button>
+            ))}
           </div>
         </div>
       </Modal>
 
-      <ConfirmModal 
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={confirmDelete}
-        isProcessing={isProcessing}
-        title="Delete Department"
-        message={`Are you sure you want to permanently delete the "${pendingDept?.name}" department? This action cannot be undone.`}
-      />
+      <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete}
+        isProcessing={isProcessing} title="Delete Department"
+        message={`Are you sure you want to permanently delete "${pendingDept?.name}"? This action cannot be undone.`} />
     </Layout>
   );
 };

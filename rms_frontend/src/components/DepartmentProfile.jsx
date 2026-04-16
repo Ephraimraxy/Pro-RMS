@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Building2, User, Mail, ShieldCheck, AlertCircle, 
-  Upload, Save, BadgeCheck, Phone, MapPin, 
-  Loader2, PenTool, CheckCircle2, ChevronLeft,
-  ArrowLeft, LayoutDashboard, Fingerprint, Shield
+import {
+  Building2, User, Mail, ShieldCheck, AlertCircle,
+  Upload, Save, BadgeCheck, Phone, MapPin,
+  Loader2, PenTool, CheckCircle2,
+  ArrowLeft, Fingerprint, Lock, Eye, EyeOff, KeyRound
 } from 'lucide-react';
 import Layout from './Layout';
-import { reqAPI } from '../lib/api';
+import { reqAPI, deptAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 
 const DepartmentProfile = ({ user, onViewChange }) => {
@@ -22,6 +22,10 @@ const DepartmentProfile = ({ user, onViewChange }) => {
     address: '',
     hasSignature: false
   });
+
+  const [codeForm, setCodeForm] = useState({ current: '', newCode: '', confirm: '' });
+  const [showCodeFields, setShowCodeFields] = useState({ current: false, newCode: false, confirm: false });
+  const [changingCode, setChangingCode] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -75,6 +79,28 @@ const DepartmentProfile = ({ user, onViewChange }) => {
     } finally {
       setUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleChangeCode = async (e) => {
+    e.preventDefault();
+    if (codeForm.newCode !== codeForm.confirm) {
+      toast.error('New code and confirmation do not match');
+      return;
+    }
+    if (codeForm.newCode.length < 6) {
+      toast.error('New access code must be at least 6 characters');
+      return;
+    }
+    setChangingCode(true);
+    try {
+      await deptAPI.changeDeptAccessCode(codeForm.current, codeForm.newCode, codeForm.confirm);
+      toast.success('Access code updated successfully');
+      setCodeForm({ current: '', newCode: '', confirm: '' });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update access code');
+    } finally {
+      setChangingCode(false);
     }
   };
 
@@ -354,6 +380,65 @@ const DepartmentProfile = ({ user, onViewChange }) => {
                  * All changes are logged for internal consult & control (ICC) auditing purposes.
                </div>
              </div>
+          </div>
+
+          {/* ── Change Access Code ── */}
+          <div className="glass bg-white/80 rounded-[2rem] border border-border/40 p-6 shadow-lg space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/10">
+                <KeyRound size={18} className="text-amber-600" />
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase tracking-[0.15em] text-foreground">Change Access Code</span>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Update your department login credentials</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleChangeCode} className="space-y-4">
+              {[
+                { key: 'current', label: 'Current Access Code', placeholder: 'Enter current code' },
+                { key: 'newCode', label: 'New Access Code', placeholder: 'Min. 6 characters' },
+                { key: 'confirm', label: 'Confirm New Code', placeholder: 'Re-enter new code' },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key} className="space-y-1.5">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wider px-0.5">{label}</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 group-focus-within:text-amber-500 transition-colors" size={14} />
+                    <input
+                      type={showCodeFields[key] ? 'text' : 'password'}
+                      value={codeForm[key]}
+                      onChange={e => setCodeForm(prev => ({ ...prev, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      required
+                      className="w-full bg-white border border-border/50 rounded-xl pl-9 pr-10 py-3 text-sm font-mono tracking-widest focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCodeFields(prev => ({ ...prev, [key]: !prev[key] }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-amber-500 transition-colors"
+                    >
+                      {showCodeFields[key] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="pt-1 p-3 rounded-xl bg-amber-500/5 border border-amber-500/15 flex items-start gap-2">
+                <AlertCircle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-amber-700/80 font-medium leading-relaxed">
+                  After changing your code, you will need to use the new code on your next login. Keep it safe.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={changingCode}
+                className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-500/90 text-white font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 active:scale-[0.98] disabled:opacity-50"
+              >
+                {changingCode ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
+                {changingCode ? 'Updating...' : 'Update Access Code'}
+              </button>
+            </form>
           </div>
         </div>
       </div>
