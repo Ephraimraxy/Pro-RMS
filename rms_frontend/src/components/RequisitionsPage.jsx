@@ -1052,7 +1052,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
 };
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const RequisitionsPage = ({ onViewChange }) => {
+const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) => {
   const { user } = useAuth();
   const [requisitions, setRequisitions] = useState([]);
   const [departments, setDepartments]   = useState([]);
@@ -1066,6 +1066,19 @@ const RequisitionsPage = ({ onViewChange }) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletePendingAction, setDeletePendingAction] = useState(null);
 
+  const openReqById = async (id, allReqs) => {
+    const list = allReqs || requisitions;
+    const cached = list.find(r => r.id === parseInt(id));
+    if (cached) {
+      setSelectedReq(cached);
+    } else {
+      try {
+        const fetched = await reqAPI.getRequisition(id);
+        setSelectedReq(fetched);
+      } catch(err) {}
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     const [data, depts] = await Promise.all([getRequisitions(), getDepartments()]);
@@ -1073,34 +1086,27 @@ const RequisitionsPage = ({ onViewChange }) => {
     setDepartments(depts);
     setLoading(false);
 
-    // Check for deep link after data loads
+    // Check for deep link after data loads (localStorage fallback)
     const pendingId = localStorage.getItem('rms_pending_requisition_id');
     if (pendingId) {
       localStorage.removeItem('rms_pending_requisition_id');
-      const req = data.find(r => r.id === parseInt(pendingId));
-      if (req) {
-        setSelectedReq(req);
-      } else {
-        getRequisitionDetail(pendingId).then(setSelectedReq).catch(() => {});
-      }
+      await openReqById(pendingId, data);
     }
   };
 
   useEffect(() => { loadData(); }, []);
 
+  // Deep link via prop (from Dashboard eye button)
+  useEffect(() => {
+    if (!initialReqId || loading) return;
+    openReqById(initialReqId);
+    onDeepLinkConsumed?.();
+  }, [initialReqId, loading]);
+
   // Listen for custom event so it works even if already on this page
   useEffect(() => {
     const handleOpenReq = async (e) => {
-      const id = e.detail;
-      const cached = requisitions.find(r => r.id === parseInt(id));
-      if (cached) {
-        setSelectedReq(cached);
-      } else {
-        try {
-          const fetched = await reqAPI.getRequisition(id);
-          setSelectedReq(fetched);
-        } catch(err) {}
-      }
+      await openReqById(e.detail);
     };
     window.addEventListener('openRequisition', handleOpenReq);
     return () => window.removeEventListener('openRequisition', handleOpenReq);

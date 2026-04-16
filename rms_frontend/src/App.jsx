@@ -104,10 +104,13 @@ const AppContent = () => {
   const [currentView, setCurrentView] = useState(getViewFromHash);
   const [deptProfile, setDeptProfile] = useState(null);
   const [showDeptModal, setShowDeptModal] = useState(false);
+  const [deepLinkReqId, setDeepLinkReqId] = useState(null);
 
-  // navigate() replaces bare setCurrentView so every change is recorded in browser history
-  const navigate = useCallback((view) => {
+  // navigate(view) — normal navigation
+  // navigate('requisitions', { reqId: 31 }) — deep-link directly into a requisition
+  const navigate = useCallback((view, opts = {}) => {
     const target = VALID_VIEWS.includes(view) ? view : 'dashboard';
+    if (opts.reqId) setDeepLinkReqId(opts.reqId);
     setCurrentView(target);
     window.history.pushState({ view: target }, '', `#${target}`);
   }, []);
@@ -167,7 +170,7 @@ const AppContent = () => {
 
   const views = {
     dashboard: <Dashboard onViewChange={navigate} />,
-    requisitions: <RequisitionsPage onViewChange={navigate} />,
+    requisitions: <RequisitionsPage onViewChange={navigate} initialReqId={deepLinkReqId} onDeepLinkConsumed={() => setDeepLinkReqId(null)} />,
     memos: <MemoManagement onViewChange={navigate} />,
     activity: <MyActivity onViewChange={navigate} />,
     workflow_builder: <WorkflowBuilder onViewChange={navigate} />,

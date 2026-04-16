@@ -210,7 +210,7 @@ const Dashboard = ({ onViewChange }) => {
                             <span className="text-[9px] font-black text-muted-foreground uppercase opacity-60">{r.department}</span>
                           </td>
                           <td className="py-4 px-6 bg-white/50 border-y border-r border-border/30 rounded-r-2xl group-hover:bg-white transition-colors text-right">
-                            <button onClick={() => onViewChange('requisitions')} className="p-2.5 bg-background hover:bg-primary hover:text-white rounded-xl text-primary transition-all border border-primary/10 shadow-sm active:scale-90">
+                            <button onClick={() => onViewChange('requisitions', { reqId: r.id })} className="p-2.5 bg-background hover:bg-primary hover:text-white rounded-xl text-primary transition-all border border-primary/10 shadow-sm active:scale-90">
                               <Eye size={18} />
                             </button>
                           </td>
