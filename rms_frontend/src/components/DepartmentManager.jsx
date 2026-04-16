@@ -13,96 +13,103 @@ import Modal from './Modal';
 import ConfirmModal from './ConfirmModal';
 
 // ── Auto-generated Department Seal SVG ────────────────────────────────────────
-const DepartmentSeal = ({ name }) => {
+const DepartmentSeal = ({ name, id = '' }) => {
   const cx = 125, cy = 125;
+  const color = '#1a5c1a';
   const date = new Date().toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric'
+    day: 'numeric', month: 'long', year: 'numeric'
   }).toUpperCase();
 
-  const safeName = name.replace(/[^a-zA-Z0-9]/g, '_');
-  const len = name.length;
-  const fontSize = len <= 14 ? 12 : len <= 22 ? 10.5 : 9;
-  const letterSpacing = len <= 14 ? 2.5 : len <= 22 ? 1.5 : 1;
-  const arcR = 96;
+  const uid = id ? `${id}` : name.replace(/[^a-zA-Z0-9]/g, '_');
+  const arcR = 93;
+  const topId = `sealTop_${uid}`;
+  const botId = `sealBot_${uid}`;
 
-  const nameArcId = `nameArc_${safeName}`;
+  const len = name.length;
+  const fontSize = len <= 14 ? 12.5 : len <= 22 ? 11 : 9.5;
+  const letterSpacing = len <= 14 ? 2 : len <= 22 ? 1.2 : 0.8;
 
   return (
     <svg viewBox="0 0 250 250" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
       <defs>
-        <path id={nameArcId}
-          d={`M ${cx - arcR},${cy} a ${arcR},${arcR} 0 0,1 ${arcR * 2},0`} />
+        {/* Top arc: sweep=1 → path goes over the top, text reads left-to-right outward */}
+        <path id={topId} d={`M ${cx - arcR},${cy} a ${arcR},${arcR} 0 0,1 ${arcR * 2},0`} />
+        {/* Bottom arc: sweep=0 → path goes under the bottom, text reads left-to-right inward */}
+        <path id={botId} d={`M ${cx - arcR},${cy} a ${arcR},${arcR} 0 0,0 ${arcR * 2},0`} />
       </defs>
 
-      {/* White background fill */}
+      {/* White background */}
       <circle cx={cx} cy={cy} r={120} fill="white" />
 
       {/* Outer double rings */}
-      <circle cx={cx} cy={cy} r={115} fill="none" stroke="#1e3a5f" strokeWidth="3.5" />
-      <circle cx={cx} cy={cy} r={108} fill="none" stroke="#1e3a5f" strokeWidth="1" />
+      <circle cx={cx} cy={cy} r={116} fill="none" stroke={color} strokeWidth="4.5" />
+      <circle cx={cx} cy={cy} r={107} fill="none" stroke={color} strokeWidth="1.5" />
 
-      {/* Inner dashed ring */}
-      <circle cx={cx} cy={cy} r={70} fill="none" stroke="#1e3a5f" strokeWidth="1.5" strokeDasharray="3 3" />
+      {/* Inner ring */}
+      <circle cx={cx} cy={cy} r={72} fill="none" stroke={color} strokeWidth="1.5" />
 
-      {/* Department name curved along top arc */}
-      <text fontSize={fontSize} fontWeight="bold" fontFamily="Georgia, serif"
-        letterSpacing={letterSpacing} fill="#1e3a5f">
-        <textPath href={`#${nameArcId}`} startOffset="50%" textAnchor="middle">
+      {/* Department name on top arc */}
+      <text fontSize={fontSize} fontWeight="bold" fontFamily="Arial, sans-serif"
+        letterSpacing={letterSpacing} fill={color}>
+        <textPath href={`#${topId}`} startOffset="50%" textAnchor="middle">
           {name.toUpperCase()}
         </textPath>
       </text>
 
-      {/* Diamond markers at arc ends (equator) */}
-      <text x={cx - 108} y={cy + 4} fontSize="9" fill="#1e3a5f" textAnchor="middle">◆</text>
-      <text x={cx + 108} y={cy + 4} fontSize="9" fill="#1e3a5f" textAnchor="middle">◆</text>
+      {/* "DEPARTMENT" on bottom arc */}
+      <text fontSize="10" fontWeight="bold" fontFamily="Arial, sans-serif"
+        letterSpacing="2.5" fill={color}>
+        <textPath href={`#${botId}`} startOffset="50%" textAnchor="middle">
+          DEPARTMENT
+        </textPath>
+      </text>
 
-      {/* Bottom decorative dots along outer ring */}
-      {[150, 165, 180, 195, 210].map((angle, i) => {
-        const rad = (angle * Math.PI) / 180;
-        return <circle key={i} cx={cx + 112 * Math.cos(rad)} cy={cy + 112 * Math.sin(rad)} r={1.5} fill="#1e3a5f" />;
-      })}
-      {[330, 345, 360, 15, 30].map((angle, i) => {
-        const rad = (angle * Math.PI) / 180;
-        return <circle key={`r${i}`} cx={cx + 112 * Math.cos(rad)} cy={cy + 112 * Math.sin(rad)} r={1.5} fill="#1e3a5f" />;
-      })}
+      {/* Diamond separators at equator */}
+      <text x={cx - arcR - 4} y={cy + 4} fontSize="8" fill={color} textAnchor="middle">◆</text>
+      <text x={cx + arcR + 4} y={cy + 4} fontSize="8" fill={color} textAnchor="middle">◆</text>
 
-      {/* Building icon centered at top inside */}
-      <g transform={`translate(${cx},${cy - 18})`}>
-        <rect x="-13" y="-8" width="26" height="20" fill="none" stroke="#1e3a5f" strokeWidth="1.5" />
-        <polygon points="0,-20 -16,-8 16,-8" fill="none" stroke="#1e3a5f" strokeWidth="1.5" />
-        <rect x="-4" y="4" width="8" height="8" fill="#1e3a5f" />
-        <rect x="-10" y="-4" width="5" height="5" fill="#1e3a5f" />
-        <rect x="5" y="-4" width="5" height="5" fill="#1e3a5f" />
-      </g>
+      {/* CSS Farms logo centered */}
+      <image href="/logo.jpg" x={cx - 45} y={cy - 32} width="90" height="50"
+        preserveAspectRatio="xMidYMid meet" />
 
-      {/* Thin divider line */}
-      <line x1={cx - 48} y1={cy + 8} x2={cx + 48} y2={cy + 8} stroke="#1e3a5f" strokeWidth="0.75" />
+      {/* Thin divider below logo */}
+      <line x1={cx - 44} y1={cy + 22} x2={cx + 44} y2={cy + 22} stroke={color} strokeWidth="0.8" />
 
-      {/* CSS GROUP HOLDINGS */}
-      <text x={cx} y={cy + 22} textAnchor="middle" fontSize="8.5" fontWeight="bold"
-        fontFamily="Georgia, serif" letterSpacing="2" fill="#1e3a5f">CSS GROUP</text>
-      <text x={cx} y={cy + 34} textAnchor="middle" fontSize="8.5" fontWeight="bold"
-        fontFamily="Georgia, serif" letterSpacing="2" fill="#1e3a5f">HOLDINGS</text>
-
-      {/* Stars row */}
-      <text x={cx} y={cy + 50} textAnchor="middle" fontSize="9" fill="#1e3a5f" letterSpacing="5">★ ★ ★</text>
-
-      {/* Current date — always live */}
-      <text x={cx} y={cy + 64} textAnchor="middle" fontSize="7.5" fontFamily="monospace"
-        letterSpacing="1" fill="#1e3a5f">{date}</text>
+      {/* Date below divider */}
+      <text x={cx} y={cy + 35} textAnchor="middle" fontSize="8" fontFamily="Arial, sans-serif"
+        fontWeight="bold" letterSpacing="1" fill={color}>{date}</text>
     </svg>
   );
 };
 
 // ── Seal View Modal ────────────────────────────────────────────────────────────
 const SealViewModal = ({ dept, onClose }) => {
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const svgEl = document.getElementById('seal-svg-export');
     if (!svgEl) return;
+
+    // Inline logo.jpg as base64 so the downloaded SVG is self-contained
+    let logoDataUrl = null;
+    try {
+      const res = await fetch('/logo.jpg');
+      const blob = await res.blob();
+      logoDataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch { /* logo unavailable — download without it */ }
+
+    const clone = svgEl.cloneNode(true);
+    if (logoDataUrl) {
+      const imgEl = clone.querySelector('image');
+      if (imgEl) imgEl.setAttribute('href', logoDataUrl);
+    }
+
     const serializer = new XMLSerializer();
-    const svgStr = serializer.serializeToString(svgEl);
-    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
+    const svgStr = serializer.serializeToString(clone);
+    const dlBlob = new Blob([svgStr], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(dlBlob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${dept.name.replace(/\s+/g, '_')}_Seal.svg`;
@@ -129,8 +136,8 @@ const SealViewModal = ({ dept, onClose }) => {
 
         {/* Seal preview */}
         <div className="p-8 flex items-center justify-center">
-          <div id="seal-svg-export" className="w-56 h-56 drop-shadow-xl">
-            <DepartmentSeal name={dept.name} />
+          <div id="seal-svg-export" className="w-60 h-60 drop-shadow-xl">
+            <DepartmentSeal name={dept.name} id={String(dept.id)} />
           </div>
         </div>
 
