@@ -170,6 +170,9 @@ model Attachment {
   storageKey    String?
   mimeType      String?
   size          Int?
+  stageName     String?         // Human-readable stage label at time of upload
+  stageKey      String?         // Machine key matching PrintStageModal stage IDs (e.g. fwd-5, app-3, submission)
+  uploaderDept  String?         // Department name of uploader at time of upload
   requisitionId Int?
   requisition   Requisition?    @relation(fields: [requisitionId], references: [id])
   uploadedById  Int?

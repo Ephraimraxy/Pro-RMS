@@ -286,6 +286,8 @@ const PrintStageModal = ({ req, detail, onClose }) => {
   const [selectedStage, setSelectedStage] = useState('all');
   const [generating, setGenerating] = useState(false);
 
+  const attachments = detail?.attachments || [];
+
   // Build printable stages from forward events and approvals
   const stages = [];
   if (detail?.forwardEvents?.length) {
@@ -294,6 +296,7 @@ const PrintStageModal = ({ req, detail, onClose }) => {
         id: `fwd-${evt.id}`,
         label: `${evt.action === 'created' ? 'Created' : evt.action === 'forwarded' ? 'Forwarded' : 'Returned'}: ${evt.fromDepartment?.name || 'Dept'} → ${evt.toDepartment?.name || 'Sender'}`,
         date: new Date(evt.createdAt).toLocaleString(),
+        rawDate: evt.createdAt,
         type: 'forward'
       });
     });
@@ -304,18 +307,56 @@ const PrintStageModal = ({ req, detail, onClose }) => {
         id: `app-${a.id}`,
         label: `${a.stage?.name || 'Approval'}: ${a.action} by ${a.user?.name || 'User'}`,
         date: new Date(a.createdAt).toLocaleString(),
+        rawDate: a.createdAt,
         type: 'approval'
       });
     });
   }
 
+  // Compute which attachments belong to each scope
+  const getRelevantAttachments = (stageId) => {
+    if (stageId === 'all') return attachments;
+    // Filter by stageKey match first (tagged uploads)
+    const byKey = attachments.filter(a => a.stageKey === stageId);
+    if (byKey.length > 0) return byKey;
+    // Fallback: attachments uploaded up to this stage's timestamp
+    const stage = stages.find(s => s.id === stageId);
+    if (!stage) return attachments;
+    const cutoff = new Date(stage.rawDate).getTime();
+    return attachments.filter(a => new Date(a.createdAt).getTime() <= cutoff);
+  };
+
+  const relevantAttachments = getRelevantAttachments(selectedStage);
+
+  // Trigger browser download for a single attachment
+  const triggerAttachmentDownload = (a) => {
+    const token = localStorage.getItem('rms_token');
+    const link = document.createElement('a');
+    link.href = `/api/attachments/${a.id}/download?token=${token}`;
+    link.download = a.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   const handleGenerate = async () => {
     setGenerating(true);
-    const toastId = toast.loading('Generating PDF report...');
+    const toastId = toast.loading('Generating report package...');
     try {
       const stageParam = selectedStage === 'all' ? null : selectedStage;
       await downloadDynamicPdf(req.id, stageParam);
-      toast.success('Report downloaded successfully!', { id: toastId });
+
+      // Download relevant attachments alongside the PDF
+      if (relevantAttachments.length > 0) {
+        // Stagger downloads slightly to avoid browser blocking
+        for (let i = 0; i < relevantAttachments.length; i++) {
+          await new Promise(r => setTimeout(r, i * 300));
+          triggerAttachmentDownload(relevantAttachments[i]);
+        }
+        toast.success(`Report + ${relevantAttachments.length} attachment(s) downloaded.`, { id: toastId });
+      } else {
+        toast.success('Report downloaded successfully!', { id: toastId });
+      }
       onClose();
     } catch (err) {
       toast.error('Failed to generate report.', { id: toastId });
@@ -333,26 +374,53 @@ const PrintStageModal = ({ req, detail, onClose }) => {
             </div>
             <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground"><X size={16} /></button>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1.5">Select which stage to include in the downloaded report.</p>
+          <p className="text-[11px] text-muted-foreground mt-1.5">Select a scope — the PDF and any matching attachments will download together.</p>
         </div>
         <div className="p-5 max-h-[50vh] overflow-y-auto space-y-2">
           <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selectedStage === 'all' ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}>
             <input type="radio" name="stage" value="all" checked={selectedStage === 'all'} onChange={() => setSelectedStage('all')} className="text-primary" />
-            <div>
+            <div className="flex-1">
               <span className="text-xs font-bold text-foreground">Full Report (All Stages)</span>
               <p className="text-[10px] text-muted-foreground">Complete document including all actions and signatures</p>
             </div>
+            {attachments.length > 0 && (
+              <span className="text-[9px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+                +{attachments.length} file{attachments.length > 1 ? 's' : ''}
+              </span>
+            )}
           </label>
-          {stages.map(s => (
-            <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selectedStage === s.id ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}>
-              <input type="radio" name="stage" value={s.id} checked={selectedStage === s.id} onChange={() => setSelectedStage(s.id)} className="text-primary" />
-              <div className="flex-1">
-                <span className="text-xs font-bold text-foreground">{s.label}</span>
-                <p className="text-[10px] text-muted-foreground">{s.date}</p>
-              </div>
-            </label>
-          ))}
+          {stages.map(s => {
+            const stageFiles = getRelevantAttachments(s.id);
+            return (
+              <label key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selectedStage === s.id ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-primary/30'}`}>
+                <input type="radio" name="stage" value={s.id} checked={selectedStage === s.id} onChange={() => setSelectedStage(s.id)} className="text-primary" />
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-foreground">{s.label}</span>
+                  <p className="text-[10px] text-muted-foreground">{s.date}</p>
+                </div>
+                {stageFiles.length > 0 && (
+                  <span className="text-[9px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+                    +{stageFiles.length} file{stageFiles.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </label>
+            );
+          })}
         </div>
+        {relevantAttachments.length > 0 && (
+          <div className="px-5 pb-3">
+            <div className="bg-muted/30 rounded-xl p-3 space-y-1.5 max-h-32 overflow-y-auto">
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-2">Attachments included in this download</p>
+              {relevantAttachments.map(a => (
+                <div key={a.id} className="flex items-center gap-2 text-[10px]">
+                  <FileText size={10} className="text-primary shrink-0" />
+                  <span className="flex-1 truncate text-foreground font-medium">{a.filename}</span>
+                  {a.uploaderDept && <span className="text-muted-foreground/60 shrink-0 font-bold">{a.uploaderDept}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="p-5 border-t border-border/50 bg-muted/10">
           <button
             onClick={handleGenerate}
@@ -360,7 +428,9 @@ const PrintStageModal = ({ req, detail, onClose }) => {
             className="w-full flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-xs uppercase tracking-widest"
           >
             {generating ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            Download Report
+            {relevantAttachments.length > 0
+              ? `Download Report + ${relevantAttachments.length} Attachment${relevantAttachments.length > 1 ? 's' : ''}`
+              : 'Download Report'}
           </button>
         </div>
       </div>
@@ -519,11 +589,14 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
 
 // ── Detail Modal ─────────────────────────────────────────────────────────────
 const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) => {
-  const [detail, setDetail]   = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [acting, setActing]   = useState(false);
+  const [detail, setDetail]         = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [acting, setActing]         = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
-  const [printModal, setPrintModal]   = useState(false);
+  const [printModal, setPrintModal] = useState(false);
+  const [newFiles, setNewFiles]     = useState([]);
+  const [uploading, setUploading]   = useState(false);
+  const fileInputRef                = React.useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -533,6 +606,21 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
     });
     return () => { cancelled = true; };
   }, [req.id]);
+
+  const handleAttachFiles = async (stageCtx) => {
+    if (!newFiles.length) return;
+    setUploading(true);
+    try {
+      const { uploadAttachments } = await import('../lib/store');
+      await uploadAttachments(req.id, newFiles, stageCtx);
+      const updated = await getRequisitionDetail(req.id);
+      setDetail(updated);
+      setNewFiles([]);
+      toast.success(`${newFiles.length} file(s) attached successfully.`);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'File upload failed. Please try again.');
+    } finally { setUploading(false); }
+  };
 
   // Is this an incoming (target dept) requisition for the current user?
   const isIncoming = user?.deptId && detail?.targetDepartmentId === user.deptId;
@@ -699,24 +787,39 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               )}
 
               {/* Attachments Section */}
+              {/* ── Enclosures (existing attachments) ── */}
               {attachments.length > 0 && (
                 <div className="space-y-3 pt-4 border-t border-border/50">
                   <div className="flex items-center space-x-2">
                      <Paperclip size={13} className="text-primary" />
                      <p className="text-[10px] font-black text-foreground uppercase tracking-[0.1em]">Enclosures ({attachments.length})</p>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2">
                     {attachments.map(a => (
                       <div key={a.id} className="flex items-center gap-2 p-3 bg-muted/20 rounded-xl border border-border/30 text-xs hover:border-primary/20 transition-all group">
                         <FileText size={13} className="text-primary shrink-0" />
-                        <div className="flex-1 truncate">
+                        <div className="flex-1 min-w-0">
                            <p className="truncate text-foreground font-bold text-[11px]">{a.filename}</p>
-                           <p className="text-[9px] text-muted-foreground uppercase">{a.size ? `${(a.size / 1024).toFixed(0)} KB` : 'N/A'}</p>
+                           <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                             <span className="text-[9px] text-muted-foreground font-mono">{a.size ? `${(a.size / 1024).toFixed(0)} KB` : 'N/A'}</span>
+                             {(a.uploadedBy?.name || a.uploaderDept) && (
+                               <span className="text-[9px] text-primary/70 font-bold uppercase tracking-wide">
+                                 {a.uploaderDept || a.uploadedBy?.department?.name || ''}
+                                 {a.uploadedBy?.name ? ` · ${a.uploadedBy.name}` : ''}
+                               </span>
+                             )}
+                             {a.stageName && (
+                               <span className="text-[9px] text-muted-foreground/60 italic">{a.stageName}</span>
+                             )}
+                             {a.createdAt && (
+                               <span className="text-[9px] text-muted-foreground/50 font-mono">{new Date(a.createdAt).toLocaleDateString()}</span>
+                             )}
+                           </div>
                         </div>
                         <button
                           onClick={() => setPreviewFile(a)}
                           title="Preview"
-                          className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5"
+                          className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"
                         >
                           <Eye size={14} />
                         </button>
@@ -724,7 +827,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                           href={`/api/attachments/${a.id}/download?token=${localStorage.getItem('rms_token')}`}
                           download
                           title="Download"
-                          className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5"
+                          className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"
                         >
                           <Download size={14} />
                         </a>
@@ -733,6 +836,96 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                   </div>
                 </div>
               )}
+
+              {/* ── Post-Creation Attachment Upload ── */}
+              {(() => {
+                // Compute stage context for tagging
+                const fwdEvents = detail?.forwardEvents || [];
+                const approvals = detail?.approvals || [];
+                const latestFwd = fwdEvents[fwdEvents.length - 1];
+                const latestApp = approvals[approvals.length - 1];
+                let stageName, stageKey;
+                if (latestFwd) {
+                  stageName = `${latestFwd.toDepartment?.name || 'Department'} Review`;
+                  stageKey  = `fwd-${latestFwd.id}`;
+                } else if (detail?.currentStage) {
+                  stageName = detail.currentStage.name;
+                  stageKey  = `app-${detail.currentStage.id}`;
+                } else if (latestApp) {
+                  stageName = latestApp.stage?.name || 'Approval Stage';
+                  stageKey  = `app-${latestApp.id}`;
+                } else {
+                  stageName = 'Initial Submission';
+                  stageKey  = 'submission';
+                }
+                const uploaderDept = user?.name || '';
+
+                return (
+                  <div className="space-y-3 pt-4 border-t border-dashed border-border/40">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <ArrowDownToLine size={13} className="text-primary" />
+                        <p className="text-[10px] font-black text-foreground uppercase tracking-[0.1em]">Attach Documents</p>
+                      </div>
+                      <span className="text-[9px] font-mono text-muted-foreground/60 italic truncate max-w-[120px]" title={stageName}>
+                        Stage: {stageName}
+                      </span>
+                    </div>
+
+                    <input
+                      type="file"
+                      multiple
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept="*/*"
+                      onChange={e => setNewFiles(prev => {
+                        const added = Array.from(e.target.files);
+                        const names = new Set(prev.map(f => f.name));
+                        return [...prev, ...added.filter(f => !names.has(f.name))];
+                      })}
+                    />
+
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-border/40 rounded-xl p-4 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                    >
+                      <div className="flex flex-col items-center gap-1.5">
+                        <Paperclip size={18} className="text-muted-foreground/50 group-hover:text-primary transition-colors" />
+                        <p className="text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors">
+                          Click to select files
+                        </p>
+                        <p className="text-[9px] text-muted-foreground/50">PDF, images, Word, Excel — any format</p>
+                      </div>
+                    </div>
+
+                    {newFiles.length > 0 && (
+                      <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        {newFiles.map((f, i) => (
+                          <div key={i} className="flex items-center gap-2 px-3 py-2 bg-primary/5 rounded-lg border border-primary/10">
+                            <FileText size={12} className="text-primary shrink-0" />
+                            <span className="flex-1 truncate text-[11px] font-bold text-foreground">{f.name}</span>
+                            <span className="text-[9px] font-mono text-muted-foreground shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                            <button
+                              onClick={() => setNewFiles(newFiles.filter((_, j) => j !== i))}
+                              className="p-0.5 text-muted-foreground hover:text-destructive rounded transition-colors shrink-0"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => handleAttachFiles({ stageName, stageKey, uploaderDept })}
+                          disabled={uploading}
+                          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-bold py-2.5 px-4 rounded-xl text-[11px] uppercase tracking-widest transition-all hover:bg-primary/90 disabled:opacity-50 shadow-md shadow-primary/20 active:scale-95"
+                        >
+                          {uploading ? <Loader2 size={13} className="animate-spin" /> : <ArrowDownToLine size={13} />}
+                          {uploading ? 'Uploading...' : `Attach ${newFiles.length} File${newFiles.length > 1 ? 's' : ''}`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Right Sidebar Column */}

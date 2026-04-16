@@ -47,6 +47,17 @@ const app = express();
 const prisma = new PrismaClient();
 let isSystemReady = false; // Flag for database/seed readiness
 
+// Auto-migrate: add new Attachment tracking columns if they don't exist yet
+;(async () => {
+  try {
+    await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "stageName" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "stageKey" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "uploaderDept" TEXT`;
+  } catch (e) {
+    // Non-fatal — columns likely already exist or DB not ready yet
+  }
+})();
+
 const normalizeTrustProxy = (value) => {
   if (value == null) return undefined;
   const raw = String(value).trim();
@@ -2548,6 +2559,9 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
     if (!files || files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
     const userId = getNumericUserId(req.user);
+    const stageName   = req.body?.stageName   || null;
+    const stageKey    = req.body?.stageKey    || null;
+    const uploaderDept = req.body?.uploaderDept || null;
     const attachments = [];
     for (const file of files) {
       const storageKey = generateStorageKey(`attachments/${id}`, file.originalname);
@@ -2559,7 +2573,10 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
           mimeType: file.mimetype,
           size: file.size,
           requisitionId: parseInt(id),
-          uploadedById: userId || null
+          uploadedById: userId || null,
+          stageName,
+          stageKey,
+          uploaderDept
         }
       });
       attachments.push(created);
@@ -2679,7 +2696,8 @@ app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res)
     }
     const attachments = await prisma.attachment.findMany({
       where: { requisitionId: parseInt(id) },
-      include: { uploadedBy: { select: { name: true } } }
+      orderBy: { createdAt: 'asc' },
+      include: { uploadedBy: { select: { name: true, department: { select: { name: true } } } } }
     });
     res.json(attachments);
   } catch (error) { sendError(res, 500, error.message); }

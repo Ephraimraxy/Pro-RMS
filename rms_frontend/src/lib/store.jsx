@@ -134,23 +134,24 @@ export async function getSyncQueueStatus() {
   return { pending: queue.length };
 }
 
-export async function uploadAttachments(requisitionId, files) {
+export async function uploadAttachments(requisitionId, files, { stageName, stageKey, uploaderDept } = {}) {
   if (!navigator.onLine) {
     toast.error("Attachments require an active connection");
     throw new Error('Offline - attachments blocked');
   }
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
-  
+  if (stageName)    formData.append('stageName', stageName);
+  if (stageKey)     formData.append('stageKey', stageKey);
+  if (uploaderDept) formData.append('uploaderDept', uploaderDept);
+
   try {
     const response = await api.post(`/requisitions/${requisitionId}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
-    toast.success(`${files.length} files attached successfully`);
     return response;
   } catch (err) {
     console.error("Upload failed:", err);
-    toast.error("File upload failed");
     throw err;
   }
 }
