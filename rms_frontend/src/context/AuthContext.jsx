@@ -119,6 +119,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = (updatedFields, newToken) => {
+    const merged = { ...user, ...updatedFields };
+    setUser(merged);
+    localStorage.setItem('rms_user', JSON.stringify(merged));
+    if (newToken) {
+      localStorage.setItem('rms_token', newToken);
+      // Keep offline session in sync too
+      try {
+        const offline = localStorage.getItem('rms_offline_session');
+        if (offline) {
+          const parsed = JSON.parse(offline);
+          localStorage.setItem('rms_offline_session', JSON.stringify({ ...parsed, user: merged, token: newToken }));
+        }
+      } catch (_) {}
+    }
+  };
+
   const logout = async () => {
     await authAPI.logout();
     setUser(null);
@@ -127,7 +144,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, deptLogin, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, deptLogin, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

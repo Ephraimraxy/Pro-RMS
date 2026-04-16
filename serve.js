@@ -836,6 +836,64 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, (req, res) => res.json({ user: req.user }));
 
+// Full profile — includes createdAt, last activity
+app.get('/api/auth/me/full', authenticateToken, async (req, res) => {
+  try {
+    const userId = getNumericUserId(req.user);
+    if (!userId) return res.json({ user: req.user, lastActivity: null });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, role: true, createdAt: true, department: { select: { id: true, name: true } } }
+    });
+    if (!user) return res.json({ user: req.user, lastActivity: null });
+    const lastActivity = await prisma.activityLog.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
+    res.json({ user, lastActivity });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
+// Update own name / email (admin users only — dept accounts have no userId)
+app.put('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const userId = getNumericUserId(req.user);
+    if (!userId) return sendError(res, 403, 'Profile editing is not available for department accounts. Use the Dept Profile page instead.');
+    const { name, email } = req.body;
+    if (!name?.trim()) return sendError(res, 400, 'Name cannot be empty.');
+    if (email && email !== req.user.email) {
+      const clash = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+      if (clash && clash.id !== userId) return sendError(res, 409, 'That email address is already used by another account.');
+    }
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { name: name.trim(), ...(email ? { email: email.trim().toLowerCase() } : {}) },
+      select: { id: true, name: true, email: true, role: true }
+    });
+    const userData = { ...req.user, name: updated.name, email: updated.email };
+    if (req.token) tokenBlacklist.add(req.token);
+    const newToken = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
+    await prisma.activityLog.create({ data: { userId, action: 'Profile Updated', details: `${updated.name} updated their profile` } });
+    res.json({ user: updated, token: newToken });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
+// Change own password (admin users only)
+app.put('/api/auth/me/password', authenticateToken, async (req, res) => {
+  try {
+    const userId = getNumericUserId(req.user);
+    if (!userId) return sendError(res, 403, 'Password change is not available for department accounts.');
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return sendError(res, 400, 'Both current and new passwords are required.');
+    if (newPassword.length < 8) return sendError(res, 400, 'New password must be at least 8 characters long.');
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return sendError(res, 404, 'Account not found.');
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) return sendError(res, 401, 'The current password you entered is incorrect.');
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+    await prisma.activityLog.create({ data: { userId, action: 'Password Changed', details: `${user.name} changed their account password` } });
+    res.json({ ok: true });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
 // Data
 app.get('/api/departments', async (req, res) => {
   try {

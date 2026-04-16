@@ -80,6 +80,15 @@ export const authAPI = {
     }
     localStorage.removeItem('rms_token');
     localStorage.removeItem('rms_user');
+  },
+  async getFullProfile() {
+    return api.get('/auth/me/full');
+  },
+  async updateProfile(data) {
+    return api.put('/auth/me', data);
+  },
+  async changePassword(data) {
+    return api.put('/auth/me/password', data);
   }
 };
 

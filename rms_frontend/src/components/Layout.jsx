@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNetwork } from '../App';
-import { 
-  LayoutDashboard, FileText, ClipboardCheck, History, Settings, 
+import {
+  LayoutDashboard, FileText, ClipboardCheck, History, Settings,
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
   ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw,
   Building2, ShieldAlert
 } from 'lucide-react';
+import UserProfilePanel from './UserProfilePanel';
 import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications } from '../lib/store';
 import { reqAPI } from '../lib/api';
 
@@ -36,7 +37,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange, currentView }) => {
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange, currentView, onShowProfile }) => {
   const { isOnline } = useNetwork();
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -217,9 +218,13 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
           <LogOut size={18} />
         </button>
 
-        <div className="w-8 h-8 rounded-xl bg-muted/50 border border-border/40 flex items-center justify-center text-primary/70 shadow-sm overflow-hidden group hover:border-primary/30 transition-all cursor-pointer">
-           <UserIcon size={16} className="group-hover:scale-110 transition-transform" />
-        </div>
+        <button
+          onClick={onShowProfile}
+          title="My Profile"
+          className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm overflow-hidden group hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all cursor-pointer font-black text-xs"
+        >
+          {user?.name ? user.name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') : <UserIcon size={16} />}
+        </button>
       </div>
     </div>
   </nav>
@@ -238,6 +243,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
   const [syncPending, setSyncPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [showOversightMenu, setShowOversightMenu] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     const fetchNotifs = async () => {
@@ -305,6 +311,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         onLogout={logout}
         onViewChange={onViewChange}
         currentView={currentView}
+        onShowProfile={() => setShowProfile(true)}
       />
 
       {syncPending > 0 && (
@@ -440,6 +447,12 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
           )}
         </nav>
       </div>
+
+      <UserProfilePanel
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        onViewChange={(view) => { onViewChange(view); setShowProfile(false); }}
+      />
     </div>
   );
 };
