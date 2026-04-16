@@ -2239,6 +2239,79 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       }
     };
 
+    // ── Load CSS Farms logo for seal ─────────────────────
+    const sealLogoPath = path.join(__dirname, 'samples', 'logo.jpg');
+    let sealLogoBytes = null;
+    try { if (fs.existsSync(sealLogoPath)) sealLogoBytes = fs.readFileSync(sealLogoPath); } catch {}
+    let sealLogoImg = null;
+    if (sealLogoBytes) sealLogoImg = await embedSafe(sealLogoBytes);
+
+    // ── Load dept head signatures for processing chain ───
+    // Collect unique dept IDs referenced in forward events
+    const evtDeptIds = new Set(filteredEvents.flatMap(e => [e.fromDeptId, e.toDeptId]).filter(Boolean));
+    const deptSigMap = new Map(); // deptId → { headName, headTitle, sigBytes }
+    if (evtDeptIds.size > 0) {
+      const deptRows = await prisma.department.findMany({
+        where: { id: { in: [...evtDeptIds] } },
+        select: { id: true, headName: true, headTitle: true, headEmail: true }
+      });
+      const headEmails = deptRows.filter(d => d.headEmail).map(d => d.headEmail);
+      const headUserRows = headEmails.length > 0
+        ? await prisma.user.findMany({
+            where: { email: { in: headEmails } },
+            select: { email: true, name: true, signature: { select: { imageKey: true } } }
+          })
+        : [];
+      const headUserByEmail = new Map(headUserRows.map(u => [u.email, u]));
+      for (const dept of deptRows) {
+        const hu = dept.headEmail ? headUserByEmail.get(dept.headEmail) : null;
+        let sigBytes = null;
+        if (hu?.signature?.imageKey) {
+          sigBytes = await getObjectBuffer(hu.signature.imageKey).catch(() => null);
+        }
+        deptSigMap.set(dept.id, {
+          headName: sanitizeText(dept.headName || hu?.name || ''),
+          headTitle: sanitizeText(dept.headTitle || ''),
+          sigBytes
+        });
+      }
+    }
+
+    // ── Helper: Draw auto-generated circular seal ─────────
+    // Draws a CSS Farms-branded seal at (cx, cy) with dept name + date
+    const drawSeal = async (pg, cx, cy, deptName, dateStr) => {
+      const r  = 36; // outer radius
+      const ir = 27; // inner ring radius
+      const green = rgb(0.1, 0.36, 0.1);
+      const nameUpper = sanitizeText((deptName || '').toUpperCase());
+      const nameDisp  = nameUpper.length > 24 ? nameUpper.substring(0, 22) + '..' : nameUpper;
+      const nameFontSz = nameDisp.length > 16 ? 4.5 : 5.5;
+
+      // Outer ring — white fill so content inside is on a clean background
+      pg.drawCircle({ x: cx, y: cy, size: r,  color: rgb(1, 1, 1), borderColor: green, borderWidth: 3.5 });
+      // Inner ring — no fill (already on white from outer)
+      pg.drawCircle({ x: cx, y: cy, size: ir, borderColor: green, borderWidth: 1.2 });
+
+      // CSS Farms logo centred
+      if (sealLogoImg) {
+        const lw = 38, lh = 21;
+        pg.drawImage(sealLogoImg, { x: cx - lw / 2, y: cy - lh / 2 + 5, width: lw, height: lh });
+      }
+
+      // Date below logo
+      const dw = boldFont.widthOfTextAtSize(dateStr, 4);
+      pg.drawText(dateStr, { x: cx - dw / 2, y: cy - 12, size: 4, font: boldFont, color: green });
+
+      // Dept name at top (in the ring band between r and ir)
+      const nw = boldFont.widthOfTextAtSize(nameDisp, nameFontSz);
+      pg.drawText(nameDisp, { x: cx - nw / 2, y: cy + r - 9, size: nameFontSz, font: boldFont, color: green });
+
+      // "DEPARTMENT" label at bottom ring band
+      const dl  = 'DEPARTMENT';
+      const dlw = boldFont.widthOfTextAtSize(dl, 5);
+      pg.drawText(dl, { x: cx - dlw / 2, y: cy - r + 3, size: 5, font: boldFont, color: green });
+    };
+
     // ══════════════════════════════════════════════════════
     // PAGE 1: DOCUMENT HEADER
     // ══════════════════════════════════════════════════════
@@ -2385,49 +2458,94 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       page.drawText('PROCESSING CHAIN — FILE MOVEMENT HISTORY', { x: margin, y, size: 10, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
       y -= 20;
 
+      // Layout: left column = event text (margin → margin+295)
+      //         right column = signature + seal (margin+310 → A4_W-margin)
+      //           sub-cols:  sig at sigColX (width 65), seal centred at sealCX
+      const leftColMax  = margin + 295;
+      const sigColX     = margin + 315;
+      const sigColW     = 65;
+      const sealCX      = sigColX + sigColW + 16 + 36; // after sig + gap + seal radius
+      const minRowH     = 90; // minimum pts per row so seal always fits
+
       for (let i = 0; i < filteredEvents.length; i++) {
         const evt = filteredEvents[i];
-        ensureSpace(50);
-        
-        const actionLabel = evt.action === 'created' ? 'CREATED' : evt.action === 'forwarded' ? 'FORWARDED' : 'RETURNED';
+        ensureSpace(minRowH);
+
+        const rowTopY    = y; // top of this row in pdf-lib coords (y up)
+        let   textY      = y; // cursor for left-column text
+
+        const actionLabel = evt.action === 'created' ? 'CREATED'
+                          : evt.action === 'forwarded' ? 'FORWARDED' : 'RETURNED';
         const fromName = sanitizeText(evt.fromDepartment?.name || 'Department');
         const toName   = sanitizeText(evt.toDepartment?.name   || 'Sender');
-        const dateStr  = new Date(evt.createdAt).toLocaleString();
+        const evtDateStr = new Date(evt.createdAt).toLocaleString();
 
-        // Step number + action
-        page.drawText(`${i + 1}.`, { x: margin, y, size: 9, font: boldFont });
-        page.drawText(`[${actionLabel}]`, { x: margin + 15, y, size: 9, font: boldFont, color: evt.action === 'returned' ? rgb(0.8, 0.4, 0) : rgb(0.1, 0.5, 0.2) });
-        page.drawText(`${fromName}  ->  ${toName}`, { x: margin + 85, y, size: 9, font });
-        y -= 13;
+        // ── LEFT COLUMN: event text ───────────────────────
+        page.drawText(`${i + 1}.`, { x: margin, y: textY, size: 9, font: boldFont });
+        page.drawText(`[${actionLabel}]`, {
+          x: margin + 15, y: textY, size: 9, font: boldFont,
+          color: evt.action === 'returned' ? rgb(0.8, 0.4, 0) : rgb(0.1, 0.5, 0.2)
+        });
+        page.drawText(`${fromName}  ->  ${toName}`, { x: margin + 85, y: textY, size: 9, font });
+        textY -= 13;
 
-        page.drawText(`Date: ${dateStr}`, { x: margin + 30, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+        page.drawText(`Date: ${evtDateStr}`, { x: margin + 30, y: textY, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
         if (evt.actorName) {
-          page.drawText(sanitizeText(`By: ${evt.actorName}`), { x: margin + 250, y, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+          page.drawText(sanitizeText(`By: ${evt.actorName}`), { x: margin + 220, y: textY, size: 8, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
         }
-        y -= 13;
+        textY -= 13;
 
-        // Comment/note
         if (evt.note) {
-          ensureSpace(20);
-          page.drawText(sanitizeText(`Comment: "${evt.note}"`), { x: margin + 30, y, size: 8, font: italicFont, color: rgb(0.2, 0.2, 0.2) });
-          y -= 13;
+          const noteStr = sanitizeText(`Comment: "${evt.note}"`);
+          const maxNC   = Math.floor((leftColMax - margin - 30) / (italicFont.widthOfTextAtSize('M', 8) * 0.6));
+          const words   = noteStr.split(' ');
+          let   line    = '';
+          for (const w of words) {
+            const t = line ? `${line} ${w}` : w;
+            if (t.length > maxNC && line) {
+              page.drawText(line, { x: margin + 30, y: textY, size: 8, font: italicFont, color: rgb(0.2, 0.2, 0.2) });
+              textY -= 11; line = w;
+            } else { line = t; }
+          }
+          if (line) { page.drawText(line, { x: margin + 30, y: textY, size: 8, font: italicFont, color: rgb(0.2, 0.2, 0.2) }); textY -= 11; }
         }
 
-        // Embed department stamp for this stage
-        const deptForStamp = evt.action === 'returned' ? evt.fromDepartment : evt.toDepartment;
-        if (deptForStamp?.stamp?.imageKey) {
+        // ── RIGHT COLUMN: signature + seal ───────────────
+        const sigData  = deptSigMap.get(evt.fromDeptId);
+        const sealDate = new Date(evt.createdAt).toLocaleDateString('en-GB', {
+          day: 'numeric', month: 'long', year: 'numeric'
+        }).toUpperCase();
+
+        // Signature image — positioned from row top
+        let sigBot = rowTopY - 3;
+        if (sigData?.sigBytes) {
           try {
-            const stampBuffer = await getObjectBuffer(deptForStamp.stamp.imageKey);
-            const stampImg = await embedSafe(stampBuffer);
-            if (stampImg) {
-              ensureSpace(40);
-              const dims = stampImg.scale(0.12);
-              page.drawImage(stampImg, { x: A4_W - margin - dims.width - 5, y: y - 5, width: dims.width, height: dims.height, opacity: 0.6 });
-              page.drawText(deptForStamp.name || '', { x: A4_W - margin - dims.width - 5, y: y - dims.height - 10, size: 6, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+            const sigImg = await embedSafe(sigData.sigBytes);
+            if (sigImg) {
+              const scale = Math.min(sigColW / sigImg.width, 35 / sigImg.height);
+              const sw = sigImg.width * scale, sh = sigImg.height * scale;
+              page.drawImage(sigImg, { x: sigColX, y: sigBot - sh, width: sw, height: sh, opacity: 0.9 });
+              sigBot -= sh;
             }
-          } catch (_) { /* stamp embed skip */ }
+          } catch {}
         }
-        y -= 8;
+
+        // Head name + title below signature
+        if (sigData?.headName) {
+          page.drawText(sigData.headName, { x: sigColX, y: sigBot - 8, size: 7, font: italicFont, color: rgb(0.15, 0.15, 0.15) });
+          sigBot -= 10;
+          if (sigData.headTitle) {
+            const ht = sigData.headTitle.length > 30 ? sigData.headTitle.substring(0, 28) + '..' : sigData.headTitle;
+            page.drawText(ht, { x: sigColX, y: sigBot - 7, size: 6, font: italicFont, color: rgb(0.4, 0.4, 0.4) });
+          }
+        }
+
+        // Auto-generated seal — centred at sealCX, 38pts below row top
+        const sealCY = rowTopY - 38;
+        await drawSeal(page, sealCX, sealCY, evt.fromDepartment?.name || '', sealDate);
+
+        // Advance y past both columns + breathing room
+        y = Math.min(textY, sealCY - 38) - 12;
       }
     }
 
