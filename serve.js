@@ -2280,36 +2280,39 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     // ── Helper: Draw auto-generated circular seal ─────────
     // Draws a CSS Farms-branded seal at (cx, cy) with dept name + date
     const drawSeal = async (pg, cx, cy, deptName, dateStr) => {
-      const r  = 36; // outer radius
-      const ir = 27; // inner ring radius
+      const r   = 38; // outer ring radius
+      const r2  = 31; // second outer ring (double-ring effect)
+      const ir  = 21; // inner ring radius
       const green = rgb(0.1, 0.36, 0.1);
       const nameUpper = sanitizeText((deptName || '').toUpperCase());
-      const nameDisp  = nameUpper.length > 24 ? nameUpper.substring(0, 22) + '..' : nameUpper;
-      const nameFontSz = nameDisp.length > 16 ? 4.5 : 5.5;
+      const nameDisp  = nameUpper.length > 20 ? nameUpper.substring(0, 18) + '..' : nameUpper;
+      const nameFontSz = nameDisp.length > 14 ? 4.5 : 5.5;
 
       // Outer ring — white fill so content inside is on a clean background
-      pg.drawCircle({ x: cx, y: cy, size: r,  color: rgb(1, 1, 1), borderColor: green, borderWidth: 3.5 });
-      // Inner ring — no fill (already on white from outer)
-      pg.drawCircle({ x: cx, y: cy, size: ir, borderColor: green, borderWidth: 1.2 });
+      pg.drawCircle({ x: cx, y: cy, size: r,  color: rgb(1, 1, 1), borderColor: green, borderWidth: 4 });
+      // Second outer ring (thin) — gives the double-ring look from the reference
+      pg.drawCircle({ x: cx, y: cy, size: r2, borderColor: green, borderWidth: 1.0 });
+      // Inner ring
+      pg.drawCircle({ x: cx, y: cy, size: ir, borderColor: green, borderWidth: 1.0 });
 
-      // CSS Farms logo centred
+      // CSS Farms logo centred inside inner ring
       if (sealLogoImg) {
-        const lw = 38, lh = 21;
-        pg.drawImage(sealLogoImg, { x: cx - lw / 2, y: cy - lh / 2 + 5, width: lw, height: lh });
+        const lw = 32, lh = 18;
+        pg.drawImage(sealLogoImg, { x: cx - lw / 2, y: cy - lh / 2 + 4, width: lw, height: lh });
       }
 
-      // Date below logo
-      const dw = boldFont.widthOfTextAtSize(dateStr, 4);
-      pg.drawText(dateStr, { x: cx - dw / 2, y: cy - 12, size: 4, font: boldFont, color: green });
+      // Date below logo (inside inner ring)
+      const dw = boldFont.widthOfTextAtSize(dateStr, 3.8);
+      pg.drawText(dateStr, { x: cx - dw / 2, y: cy - 12, size: 3.8, font: boldFont, color: green });
 
-      // Dept name at top (in the ring band between r and ir)
+      // Dept name at top — in the text band between r2 and r (chord ~45pt wide here)
       const nw = boldFont.widthOfTextAtSize(nameDisp, nameFontSz);
-      pg.drawText(nameDisp, { x: cx - nw / 2, y: cy + r - 9, size: nameFontSz, font: boldFont, color: green });
+      pg.drawText(nameDisp, { x: cx - nw / 2, y: cy + r - 10, size: nameFontSz, font: boldFont, color: green });
 
-      // "DEPARTMENT" label at bottom ring band
+      // "DEPARTMENT" label at bottom — shifted inward so chord is wide enough (~45pt)
       const dl  = 'DEPARTMENT';
       const dlw = boldFont.widthOfTextAtSize(dl, 5);
-      pg.drawText(dl, { x: cx - dlw / 2, y: cy - r + 3, size: 5, font: boldFont, color: green });
+      pg.drawText(dl, { x: cx - dlw / 2, y: cy - r + 9, size: 5, font: boldFont, color: green });
     };
 
     // ══════════════════════════════════════════════════════
@@ -2464,8 +2467,8 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       const leftColMax  = margin + 295;
       const sigColX     = margin + 315;
       const sigColW     = 65;
-      const sealCX      = sigColX + sigColW + 16 + 36; // after sig + gap + seal radius
-      const minRowH     = 90; // minimum pts per row so seal always fits
+      const sealCX      = sigColX + sigColW + 16 + 38; // after sig + gap + seal radius
+      const minRowH     = 95; // minimum pts per row so seal always fits
 
       for (let i = 0; i < filteredEvents.length; i++) {
         const evt = filteredEvents[i];
