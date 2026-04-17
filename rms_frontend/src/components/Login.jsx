@@ -97,7 +97,7 @@ const Login = () => {
             <div className="w-14 h-14 bg-white/15 border border-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
               <img src="/favicon.svg" alt="Logo" className="w-9 h-9 object-contain" />
             </div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group Holdings</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group of Company</p>
           </div>
 
           <div className="mt-12">
@@ -250,7 +250,7 @@ const Login = () => {
           </div>
 
           <div className="mt-8 text-center">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">© 2026 CSS Group Holdings</p>
+            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">© 2026 CSS Group of Company</p>
           </div>
         </div>
       </div>
