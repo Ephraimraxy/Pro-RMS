@@ -59,13 +59,17 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   const senderCode = user?.deptCode || '';
   const isPrivileged = SUPER_ADMIN_PRIVILEGED_CODES.includes(senderCode) || user?.role === 'global_admin';
 
-  // Filter: exclude the sender's own dept from the target list; Super Admin is shown but restricted
+  // Helpers for restricted departments
+  const isSuperAdmin   = (dept) => dept?.name?.toLowerCase() === 'super admin';
+  const isChairmanCEO  = (dept) => /ceo|chairman/i.test(dept?.name || '');
+  const senderIsGM     = /general\s*manager|^\s*gm\s*$/i.test(user?.deptName || '');
+
+  // Filter: exclude sender's own dept; hide Chairman/CEO for non-GM departments
   const targetableDepts = departments.filter(d => {
-    if (d.id === user?.deptId) return false; // can't send to yourself
+    if (d.id === user?.deptId) return false;         // can't send to yourself
+    if (isChairmanCEO(d) && !senderIsGM) return false; // only GM can route to Chairman/CEO
     return true;
   });
-
-  const isSuperAdmin = (dept) => dept?.name?.toLowerCase() === 'super admin';
 
   const handleTargetChange = async (deptIdStr) => {
     setFormData(prev => ({ ...prev, targetDepartmentId: deptIdStr }));

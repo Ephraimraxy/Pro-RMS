@@ -446,9 +446,14 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
   const [acting, setActing]     = useState(false);
   const [refining, setRefining] = useState(false);
 
-  const forwardDepts = departments.filter(d =>
-    d.id !== req.departmentId && d.id !== detail?.targetDepartmentId
-  );
+  const { user: currentUser } = useAuth();
+  const senderIsGM = /general\s*manager|^\s*gm\s*$/i.test(currentUser?.deptName || '');
+
+  const forwardDepts = departments.filter(d => {
+    if (d.id === req.departmentId || d.id === detail?.targetDepartmentId) return false;
+    if (/ceo|chairman/i.test(d.name) && !senderIsGM) return false; // only GM can forward to Chairman/CEO
+    return true;
+  });
 
   // Work out who "Return to Sender" will actually send to by reading the
   // forwardEvents chain — it's whoever LAST sent the document to the current holder,
