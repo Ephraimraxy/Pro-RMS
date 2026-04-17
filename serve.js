@@ -395,36 +395,16 @@ const computeContentHash = (requisition) => {
 
 const checkDeptReadiness = async (deptId) => {
   if (!deptId) return { ready: false, reason: 'Department ID missing' };
-  const dept = await prisma.department.findUnique({
-    where: { id: deptId },
-    include: { users: true }
-  });
+  const dept = await prisma.department.findUnique({ where: { id: deptId } });
   if (!dept) return { ready: false, reason: 'Department not found' };
-  if (dept.name === 'Super Admin') return { ready: true };
+  // Super Admin and Chairman/CEO depts are always ready
+  if (dept.name === 'Super Admin' || /ceo|chairman/i.test(dept.name)) return { ready: true };
 
-  if (!dept.headName || !dept.headEmail) {
+  // Only block if the department has never filled in ANY profile info at all
+  if (!dept.headName) {
     return {
       ready: false,
-      reason: `Your department profile is incomplete. Please go to Dept Profile and fill in the Head Official name and email before submitting a request.`
-    };
-  }
-
-  const headUser = await prisma.user.findFirst({
-    where: { email: dept.headEmail },
-    include: { signature: true }
-  });
-
-  if (!headUser) {
-    return {
-      ready: false,
-      reason: `The head official for "${dept.name}" (${dept.headEmail}) has not created a system account yet. Please ask them to log in and set up their profile first.`
-    };
-  }
-
-  if (!headUser.signature) {
-    return {
-      ready: false,
-      reason: `The head official for "${dept.name}" has not uploaded a digital signature yet. Please go to Dept Profile → Signature and upload one before submitting.`
+      reason: `Your department profile is incomplete. Please go to Dept Profile and fill in your Head Official's name before submitting.`
     };
   }
 
@@ -2407,35 +2387,44 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
       }
     });
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
-    // Fetch extra columns not in Prisma schema (added via raw ALTER TABLE)
-    const extRows = await prisma.$queryRaw`
-      SELECT "finalApprovalStatus", "finalApprovedByDeptId", "finalApprovedAt",
-             "finalApprovedNote", "currentVettingDeptId", "treatedByDeptId", "treatedAt"
-      FROM "Requisition" WHERE id = ${parseInt(id)} LIMIT 1
-    `;
-    const ext = extRows?.[0] || {};
+    // Fetch extra columns not in Prisma schema — safe fallback if columns don't exist yet
+    let ext = {};
+    try {
+      const extRows = await prisma.$queryRaw`
+        SELECT "finalApprovalStatus", "finalApprovedByDeptId", "finalApprovedAt",
+               "finalApprovedNote", "currentVettingDeptId", "treatedByDeptId", "treatedAt"
+        FROM "Requisition" WHERE id = ${parseInt(id)} LIMIT 1
+      `;
+      ext = extRows?.[0] || {};
+    } catch (_) { /* columns not yet migrated — ignore */ }
+
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
     if (
       req.user.role === 'department' && userDeptId &&
       requisition.departmentId       !== userDeptId &&
       requisition.targetDepartmentId !== userDeptId
     ) {
-      // Also allow vetting depts and the dept that final-approved to view
       const finalApprovedByDeptId = ext.finalApprovedByDeptId ? parseInt(ext.finalApprovedByDeptId) : null;
       const currentVettingDeptId  = ext.currentVettingDeptId  ? parseInt(ext.currentVettingDeptId)  : null;
       const treatedByDeptId       = ext.treatedByDeptId       ? parseInt(ext.treatedByDeptId)       : null;
-      const vettingRows = await prisma.$queryRaw`
-        SELECT 1 FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} AND "deptId" = ${userDeptId} LIMIT 1
-      `;
-      const wasVetter = Array.isArray(vettingRows) && vettingRows.length > 0;
+      let wasVetter = false;
+      try {
+        const vettingRows = await prisma.$queryRaw`
+          SELECT 1 FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} AND "deptId" = ${userDeptId} LIMIT 1
+        `;
+        wasVetter = Array.isArray(vettingRows) && vettingRows.length > 0;
+      } catch (_) { /* VettingEvent table not yet created */ }
       if (!wasVetter && currentVettingDeptId !== userDeptId && finalApprovedByDeptId !== userDeptId && treatedByDeptId !== userDeptId) {
         return res.status(403).json({ error: 'You do not have permission to perform this action.' });
       }
     }
-    // Attach vetting events
-    const vettingEvents = await prisma.$queryRaw`
-      SELECT * FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} ORDER BY "createdAt" ASC
-    `;
+    // Attach vetting events — safe fallback
+    let vettingEvents = [];
+    try {
+      vettingEvents = await prisma.$queryRaw`
+        SELECT * FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} ORDER BY "createdAt" ASC
+      `;
+    } catch (_) { /* VettingEvent table not yet created */ }
     res.json({ ...requisition, ...ext, vettingEvents: vettingEvents || [] });
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2990,12 +2979,15 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
     // Also include requisitions where they are the current vetting dept
     if (req.user.role === 'department' && req.user.deptId) {
       const deptId = parseInt(req.user.deptId);
-      // Extra IDs from columns not in Prisma schema
-      const vettingIds = await prisma.$queryRaw`
-        SELECT id FROM "Requisition"
-        WHERE "currentVettingDeptId" = ${deptId} OR "finalApprovedByDeptId" = ${deptId}
-      `;
-      const extraIds = (vettingIds || []).map(r => parseInt(r.id));
+      // Extra IDs from columns not in Prisma schema — safe fallback if columns don't exist yet
+      let extraIds = [];
+      try {
+        const vettingIds = await prisma.$queryRaw`
+          SELECT id FROM "Requisition"
+          WHERE "currentVettingDeptId" = ${deptId} OR "finalApprovedByDeptId" = ${deptId}
+        `;
+        extraIds = (vettingIds || []).map(r => parseInt(r.id));
+      } catch (_) { /* columns not yet migrated — ignore */ }
       where = {
         OR: [
           { departmentId: deptId },
