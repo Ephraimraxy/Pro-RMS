@@ -61,10 +61,58 @@ let isSystemReady = false; // Flag for database/seed readiness
         "value" TEXT NOT NULL DEFAULT ''
       )
     `;
+    // Final Approval Workflow columns (idempotent)
+    await prisma.$executeRaw`ALTER TABLE "Requisition" ADD COLUMN IF NOT EXISTS "finalApprovalStatus" TEXT DEFAULT 'none'`;
+    await prisma.$executeRaw`ALTER TABLE "Requisition" ADD COLUMN IF NOT EXISTS "finalApprovedByDeptId" INTEGER`;
+    await prisma.$executeRaw`ALTER TABLE "Requisition" ADD COLUMN IF NOT EXISTS "finalApprovedAt" TIMESTAMPTZ`;
+    await prisma.$executeRaw`ALTER TABLE "Requisition" ADD COLUMN IF NOT EXISTS "finalApprovedNote" TEXT`;
+    await prisma.$executeRaw`ALTER TABLE "Requisition" ADD COLUMN IF NOT EXISTS "currentVettingDeptId" INTEGER`;
+    await prisma.$executeRaw`ALTER TABLE "Requisition" ADD COLUMN IF NOT EXISTS "treatedByDeptId" INTEGER`;
+    await prisma.$executeRaw`ALTER TABLE "Requisition" ADD COLUMN IF NOT EXISTS "treatedAt" TIMESTAMPTZ`;
+    // VettingEvent table (ICC → Audit → Account chain)
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "VettingEvent" (
+        "id"            SERIAL PRIMARY KEY,
+        "requisitionId" INTEGER NOT NULL REFERENCES "Requisition"("id") ON DELETE CASCADE,
+        "deptId"        INTEGER NOT NULL,
+        "deptName"      TEXT,
+        "action"        TEXT NOT NULL,
+        "comment"       TEXT,
+        "attachmentKey" TEXT,
+        "attachmentName" TEXT,
+        "actorName"     TEXT,
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
   } catch (e) {
     // Non-fatal — columns/tables likely already exist or DB not ready yet
   }
 })();
+
+// ── Final Approval Authority ──────────────────────────────────────────────────
+// Returns: 'hr' | 'gm' | 'chairman' | null (no authority)
+const checkFinalApproveAuthority = (deptName, amount) => {
+  const n = (deptName || '').toLowerCase();
+  const amt = parseFloat(amount) || 0;
+  const isChairman = /ceo|chairman/i.test(n);
+  const isGM       = /general\s*manager|\bgm\b/i.test(n);
+  const isHR       = /\bhr\b|human\s*resource/i.test(n);
+
+  if (isChairman) return 'chairman'; // Chairman/CEO approves all amounts
+  if (isGM && amt >= 50000) return 'gm';
+  if (isHR && amt < 50000)  return 'hr';
+  return null; // Not authorised for this amount
+};
+
+// Vetting chain order: ICC → Audit → Account
+const VETTING_CHAIN = ['icc', 'audit', 'account'];
+const getVettingChainIndex = (deptName) => {
+  const n = (deptName || '').toLowerCase();
+  if (/\bicc\b|integrity|compliance/i.test(n))  return 0;
+  if (/audit/i.test(n))                          return 1;
+  if (/account/i.test(n))                        return 2;
+  return -1;
+};
 
 const normalizeTrustProxy = (value) => {
   if (value == null) return undefined;
@@ -1885,6 +1933,259 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
   } catch (error) { sendError(res, 500, error.message); }
 });
 
+// ── Final Approve ─────────────────────────────────────────────────────────────
+app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({ note: z.string().optional() }).safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload' });
+    const { note } = parsed.data;
+
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+
+    // Load dept name to check authority
+    let deptName = req.user.deptName || req.user.name || '';
+    if (!deptName && userDeptId) {
+      const d = await prisma.department.findUnique({ where: { id: userDeptId }, select: { name: true } });
+      deptName = d?.name || '';
+    }
+
+    const req_ = await prisma.$queryRaw`SELECT id, amount, "finalApprovalStatus" FROM "Requisition" WHERE id = ${parseInt(id)} LIMIT 1`;
+    if (!req_ || req_.length === 0) return res.status(404).json({ error: 'Requisition not found' });
+    const { amount, finalApprovalStatus } = req_[0];
+
+    if (finalApprovalStatus && finalApprovalStatus !== 'none') {
+      return res.status(409).json({ error: 'This requisition has already been finally approved.' });
+    }
+
+    const authority = isAdmin ? 'chairman' : checkFinalApproveAuthority(deptName, amount);
+    if (!authority) {
+      return res.status(403).json({ error: `Your department does not have authority to final-approve this amount.` });
+    }
+
+    await prisma.$executeRaw`
+      UPDATE "Requisition"
+      SET "finalApprovalStatus" = 'approved',
+          "finalApprovedByDeptId" = ${userDeptId || null},
+          "finalApprovedAt" = NOW(),
+          "finalApprovedNote" = ${note || null}
+      WHERE id = ${parseInt(id)}
+    `;
+
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: 'Final Approval',
+        details: `Req #${id} finally approved by ${deptName}. Note: ${note || 'none'}`
+      }
+    });
+
+    const updated = await prisma.$queryRaw`
+      SELECT r.*, d.name AS "deptName", td.name AS "targetDeptName"
+      FROM "Requisition" r
+      LEFT JOIN "Department" d  ON d.id = r."departmentId"
+      LEFT JOIN "Department" td ON td.id = r."targetDepartmentId"
+      WHERE r.id = ${parseInt(id)} LIMIT 1
+    `;
+    res.json(updated[0] || {});
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
+// ── Send to Vetting (after final approval) ────────────────────────────────────
+app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({ vettingDeptId: z.number() }).safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: 'vettingDeptId is required' });
+    const { vettingDeptId } = parsed.data;
+
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+
+    // Only the dept that final-approved (or admin) can send to vetting
+    const rows = await prisma.$queryRaw`SELECT "finalApprovedByDeptId", "finalApprovalStatus", title FROM "Requisition" WHERE id = ${parseInt(id)} LIMIT 1`;
+    if (!rows || rows.length === 0) return res.status(404).json({ error: 'Requisition not found' });
+    const { finalApprovedByDeptId, finalApprovalStatus } = rows[0];
+
+    if (finalApprovalStatus !== 'approved') {
+      return res.status(400).json({ error: 'Requisition must be finally approved before sending to vetting.' });
+    }
+    if (!isAdmin && userDeptId !== parseInt(finalApprovedByDeptId)) {
+      return res.status(403).json({ error: 'Only the final-approving department can send to vetting.' });
+    }
+
+    const vettingDept = await prisma.department.findUnique({ where: { id: vettingDeptId }, select: { name: true } });
+    if (!vettingDept) return res.status(404).json({ error: 'Vetting department not found' });
+
+    await prisma.$executeRaw`
+      UPDATE "Requisition"
+      SET "currentVettingDeptId" = ${vettingDeptId}, "finalApprovalStatus" = 'vetting'
+      WHERE id = ${parseInt(id)}
+    `;
+
+    // Log the vetting start event
+    await prisma.$executeRaw`
+      INSERT INTO "VettingEvent" ("requisitionId", "deptId", "deptName", "action", "comment", "actorName")
+      VALUES (${parseInt(id)}, ${vettingDeptId}, ${vettingDept.name}, 'sent_to_vetting', ${'Sent to vetting chain'}, ${req.user?.name || 'System'})
+    `;
+
+    // Notify vetting dept
+    await notifyDepartmentHead({
+      departmentId: vettingDeptId,
+      requisition: { id: parseInt(id), title: rows[0].title || `Requisition #${id}` },
+      subject: `📋 Approved Requisition for Vetting: #${id}`,
+      lines: [
+        `A finally-approved requisition has been sent to your department for vetting.`,
+        `Please log in to review, comment, and forward to the next department.`
+      ]
+    }).catch(() => {});
+
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: 'Sent to Vetting',
+        details: `Req #${id} sent to ${vettingDept.name} for vetting`
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
+// ── Vetting Action (comment + optional attachment + forward/treat) ─────────────
+app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const parsed = z.object({
+      action:  z.enum(['forward', 'treated']),
+      comment: z.string().optional(),
+      nextDeptId: z.number().optional()  // required for 'forward', omitted for 'treated'
+    }).safeParse(body || {});
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid vetting payload' });
+    const { action, comment, nextDeptId } = parsed.data;
+
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+
+    const rows = await prisma.$queryRaw`
+      SELECT r.id, r.title, r."currentVettingDeptId", r."finalApprovalStatus", r."finalApprovedByDeptId",
+             d.name AS "approverDeptName"
+      FROM "Requisition" r
+      LEFT JOIN "Department" d ON d.id = r."finalApprovedByDeptId"
+      WHERE r.id = ${parseInt(id)} LIMIT 1
+    `;
+    if (!rows || rows.length === 0) return res.status(404).json({ error: 'Requisition not found' });
+    const row = rows[0];
+
+    const currentVettingDeptId = row.currentVettingDeptId ? parseInt(row.currentVettingDeptId) : null;
+    const finalApprovedByDeptId = row.finalApprovedByDeptId ? parseInt(row.finalApprovedByDeptId) : null;
+
+    // Allow: current vetting dept, final approving dept (chairman can treat), or admin
+    const isCurrentVetter    = userDeptId === currentVettingDeptId;
+    const isFinalApprover    = userDeptId === finalApprovedByDeptId;
+    const canAct = isAdmin || isCurrentVetter || (action === 'treated' && isFinalApprover);
+    if (!canAct) {
+      return res.status(403).json({ error: 'You are not the current vetting department for this requisition.' });
+    }
+
+    // Handle optional file attachment
+    let attachmentKey = null;
+    let attachmentName = null;
+    if (req.file) {
+      attachmentKey  = generateStorageKey(`vetting/${id}`, req.file.originalname);
+      attachmentName = req.file.originalname;
+      await putObject({ key: attachmentKey, body: req.file.buffer, contentType: req.file.mimetype });
+      // Also save as standard attachment so it shows up in the file list
+      await prisma.attachment.create({
+        data: {
+          filename: req.file.originalname,
+          storageKey: attachmentKey,
+          mimeType: req.file.mimetype,
+          size: req.file.size,
+          requisitionId: parseInt(id),
+          uploadedById: getNumericUserId(req.user) || null,
+          stageName: 'Vetting',
+          stageKey: 'vetting',
+          uploaderDept: req.user?.name || 'Vetting Dept'
+        }
+      });
+    }
+
+    // Get acting dept name
+    let actingDeptName = req.user?.name || '';
+    if (!actingDeptName && userDeptId) {
+      const d = await prisma.department.findUnique({ where: { id: userDeptId }, select: { name: true } });
+      actingDeptName = d?.name || '';
+    }
+
+    // Insert vetting event
+    await prisma.$executeRaw`
+      INSERT INTO "VettingEvent" ("requisitionId", "deptId", "deptName", "action", "comment", "attachmentKey", "attachmentName", "actorName")
+      VALUES (${parseInt(id)}, ${userDeptId || 0}, ${actingDeptName}, ${action}, ${comment || null}, ${attachmentKey}, ${attachmentName}, ${req.user?.name || actingDeptName})
+    `;
+
+    if (action === 'treated') {
+      await prisma.$executeRaw`
+        UPDATE "Requisition"
+        SET "finalApprovalStatus" = 'treated',
+            "treatedByDeptId" = ${userDeptId || null},
+            "treatedAt" = NOW(),
+            "currentVettingDeptId" = NULL
+        WHERE id = ${parseInt(id)}
+      `;
+
+      // Notify creator dept
+      const creatorRows = await prisma.$queryRaw`SELECT "departmentId" FROM "Requisition" WHERE id = ${parseInt(id)} LIMIT 1`;
+      if (creatorRows?.[0]?.departmentId) {
+        await notifyDepartmentHead({
+          departmentId: parseInt(creatorRows[0].departmentId),
+          requisition: { id: parseInt(id), title: row.title || `Requisition #${id}` },
+          subject: `✅ Requisition Treated: #${id}`,
+          lines: [
+            `Your requisition has been fully treated by ${actingDeptName}.`,
+            `All vetting stages are complete.`
+          ]
+        }).catch(() => {});
+      }
+    } else {
+      // Forward to next vetting dept
+      if (!nextDeptId) return res.status(400).json({ error: 'nextDeptId is required for forward action' });
+      const nextDept = await prisma.department.findUnique({ where: { id: nextDeptId }, select: { name: true } });
+      if (!nextDept) return res.status(404).json({ error: 'Next vetting department not found' });
+
+      await prisma.$executeRaw`
+        UPDATE "Requisition"
+        SET "currentVettingDeptId" = ${nextDeptId}
+        WHERE id = ${parseInt(id)}
+      `;
+
+      await notifyDepartmentHead({
+        departmentId: nextDeptId,
+        requisition: { id: parseInt(id), title: row.title || `Requisition #${id}` },
+        subject: `📋 Approved Requisition for Vetting: #${id}`,
+        lines: [
+          `A finally-approved requisition has been forwarded to your department for vetting.`,
+          `Forwarded by: ${actingDeptName}`,
+          comment ? `Note: ${comment}` : null,
+          `Please log in to review and process.`
+        ].filter(Boolean)
+      }).catch(() => {});
+    }
+
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: action === 'treated' ? 'Requisition Treated' : 'Vetting Forwarded',
+        details: `Req #${id}: ${action} by ${actingDeptName}. ${comment ? `Note: ${comment}` : ''}`
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
 app.post('/api/requisitions/:id/approve', authenticateToken, approvalLimiter, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2102,14 +2403,36 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
       }
     });
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
+    // Fetch extra columns not in Prisma schema (added via raw ALTER TABLE)
+    const extRows = await prisma.$queryRaw`
+      SELECT "finalApprovalStatus", "finalApprovedByDeptId", "finalApprovedAt",
+             "finalApprovedNote", "currentVettingDeptId", "treatedByDeptId", "treatedAt"
+      FROM "Requisition" WHERE id = ${parseInt(id)} LIMIT 1
+    `;
+    const ext = extRows?.[0] || {};
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
     if (
-      req.user.role === 'department' && req.user.deptId &&
-      requisition.departmentId !== req.user.deptId &&
-      requisition.targetDepartmentId !== req.user.deptId
+      req.user.role === 'department' && userDeptId &&
+      requisition.departmentId       !== userDeptId &&
+      requisition.targetDepartmentId !== userDeptId
     ) {
-      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+      // Also allow vetting depts and the dept that final-approved to view
+      const finalApprovedByDeptId = ext.finalApprovedByDeptId ? parseInt(ext.finalApprovedByDeptId) : null;
+      const currentVettingDeptId  = ext.currentVettingDeptId  ? parseInt(ext.currentVettingDeptId)  : null;
+      const treatedByDeptId       = ext.treatedByDeptId       ? parseInt(ext.treatedByDeptId)       : null;
+      const vettingRows = await prisma.$queryRaw`
+        SELECT 1 FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} AND "deptId" = ${userDeptId} LIMIT 1
+      `;
+      const wasVetter = Array.isArray(vettingRows) && vettingRows.length > 0;
+      if (!wasVetter && currentVettingDeptId !== userDeptId && finalApprovedByDeptId !== userDeptId && treatedByDeptId !== userDeptId) {
+        return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+      }
     }
-    res.json(requisition);
+    // Attach vetting events
+    const vettingEvents = await prisma.$queryRaw`
+      SELECT * FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} ORDER BY "createdAt" ASC
+    `;
+    res.json({ ...requisition, ...ext, vettingEvents: vettingEvents || [] });
   } catch (error) { sendError(res, 500, error.message); }
 });
 
@@ -2660,11 +2983,20 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
   try {
     let where = {};
     // RBAC: Department users see their own requisitions AND incoming ones targeted at them
+    // Also include requisitions where they are the current vetting dept
     if (req.user.role === 'department' && req.user.deptId) {
+      const deptId = parseInt(req.user.deptId);
+      // Extra IDs from columns not in Prisma schema
+      const vettingIds = await prisma.$queryRaw`
+        SELECT id FROM "Requisition"
+        WHERE "currentVettingDeptId" = ${deptId} OR "finalApprovedByDeptId" = ${deptId}
+      `;
+      const extraIds = (vettingIds || []).map(r => parseInt(r.id));
       where = {
         OR: [
-          { departmentId: req.user.deptId },
-          { targetDepartmentId: req.user.deptId }
+          { departmentId: deptId },
+          { targetDepartmentId: deptId },
+          ...(extraIds.length > 0 ? [{ id: { in: extraIds } }] : [])
         ]
       };
     }

@@ -247,6 +247,25 @@ export const userAPI = {
   }
 };
 
+export const vettingAPI = {
+  async finalApprove(reqId, note = '') {
+    return api.post(`/requisitions/${reqId}/final-approve`, { note });
+  },
+  async sendToVetting(reqId, vettingDeptId) {
+    return api.post(`/requisitions/${reqId}/send-to-vetting`, { vettingDeptId });
+  },
+  async vettingAction(reqId, { action, comment, nextDeptId, file }) {
+    const formData = new FormData();
+    formData.append('action', action);
+    if (comment) formData.append('comment', comment);
+    if (nextDeptId) formData.append('nextDeptId', String(nextDeptId));
+    if (file) formData.append('file', file);
+    return api.post(`/requisitions/${reqId}/vetting-action`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  }
+};
+
 export const aiAPI = {
   async refineDraft(rawDescription, mode = 'auto') {
     try {

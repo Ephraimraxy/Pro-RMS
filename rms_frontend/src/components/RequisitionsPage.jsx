@@ -7,14 +7,15 @@ import ConfirmModal from './ConfirmModal';
 import VoiceDictation from './VoiceDictation';
 import { useAuth } from '../context/AuthContext';
 import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments } from '../lib/store';
-import { forwardAPI, aiAPI, settingsAPI } from '../lib/api';
+import { forwardAPI, aiAPI, settingsAPI, vettingAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import {
   Search, Plus, Eye, FileText, X,
   ChevronRight, Paperclip, ShieldCheck, Clock,
   ArrowRightCircle, CornerDownLeft, Loader2, Send, Trash2, Printer,
   Building2, ArrowRight, ArrowLeft, History, Download, AlertTriangle,
-  ExternalLink, ArrowDownToLine, MessageSquare, RotateCcw, Forward as ForwardIcon
+  ExternalLink, ArrowDownToLine, MessageSquare, RotateCcw, Forward as ForwardIcon,
+  CheckCircle2, Award, ChevronDown, Gavel
 } from 'lucide-react';
 import { reqAPI } from '../lib/api';
 
@@ -600,6 +601,305 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
   );
 };
 
+// ── Final Approve Panel ───────────────────────────────────────────────────────
+const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
+  const [note, setNote]         = useState('');
+  const [acting, setActing]     = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  // Determine this dept's authority level
+  const deptName = user?.name || '';
+  const amount   = parseFloat(req.amount || 0);
+  const isChairman = /ceo|chairman/i.test(deptName);
+  const isGM       = /general\s*manager|\bgm\b/i.test(deptName);
+  const isHR       = /\bhr\b|human\s*resource/i.test(deptName);
+
+  let authorityLabel = null;
+  if (isChairman)               authorityLabel = 'Chairman / CEO Authority';
+  else if (isGM && amount >= 50000)  authorityLabel = 'GM Authority (₦50k+)';
+  else if (isHR && amount < 50000)   authorityLabel = 'HR Authority (< ₦50k)';
+
+  if (!authorityLabel) return null; // Not authorised
+
+  // Don't show if already finally approved
+  if (detail?.finalApprovalStatus && detail.finalApprovalStatus !== 'none') return null;
+
+  const handleApprove = async () => {
+    setActing(true);
+    try {
+      await vettingAPI.finalApprove(req.id, note);
+      toast.success('Requisition finally approved!');
+      setShowModal(true);
+      onApproved();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Final approval failed. Please try again.');
+    } finally { setActing(false); }
+  };
+
+  return (
+    <>
+      <div className="space-y-3 border border-emerald-200 rounded-2xl p-4 bg-emerald-50/60 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+        <div className="flex items-center gap-2 pl-1">
+          <Gavel size={14} className="text-emerald-700" />
+          <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Final Approval</p>
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-[9px] font-black text-emerald-700 uppercase">{authorityLabel}</span>
+        </div>
+        <textarea
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="Optional approval note or remarks..."
+          className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300 min-h-[60px] resize-none shadow-inner"
+        />
+        <button
+          onClick={handleApprove}
+          disabled={acting}
+          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-emerald-500/20"
+        >
+          {acting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+          {acting ? 'Processing…' : 'Final Approve'}
+        </button>
+      </div>
+
+      {showModal && (
+        <VettingSelectionModal
+          reqId={req.id}
+          departments={departments}
+          onClose={() => setShowModal(false)}
+          onDone={() => { setShowModal(false); onApproved(); }}
+        />
+      )}
+    </>
+  );
+};
+
+// ── Vetting Selection Modal ────────────────────────────────────────────────────
+const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
+  const [selectedId, setSelectedId] = useState('');
+  const [acting, setActing]         = useState(false);
+
+  // Only show ICC, Audit, Account depts
+  const vettingDepts = departments.filter(d => {
+    const n = (d.name || '').toLowerCase();
+    return /\bicc\b|integrity|compliance|audit|account/i.test(n);
+  });
+
+  const handleSend = async () => {
+    if (!selectedId) { toast.error('Please select a department.'); return; }
+    setActing(true);
+    try {
+      await vettingAPI.sendToVetting(reqId, parseInt(selectedId));
+      toast.success('Requisition sent to vetting department!');
+      onDone();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to send to vetting.');
+    } finally { setActing(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-in fade-in zoom-in-95 duration-300">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center">
+            <Award size={20} className="text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-foreground">Send to Vetting</h3>
+            <p className="text-xs text-muted-foreground">Select the first department to vet this approved requisition</p>
+          </div>
+          <button onClick={onClose} className="ml-auto p-2 rounded-xl hover:bg-muted transition-colors">
+            <X size={16} className="text-muted-foreground" />
+          </button>
+        </div>
+
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 font-semibold">
+          Vetting chain: <strong>ICC → Audit → Account</strong>. The first selected dept will receive the requisition and forward it along the chain.
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">First Vetting Department</label>
+          <select
+            value={selectedId}
+            onChange={e => setSelectedId(e.target.value)}
+            className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none shadow-sm"
+          >
+            <option value="">— Select department —</option>
+            {vettingDepts.map(d => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+            {vettingDepts.length === 0 && <option disabled>No ICC/Audit/Account depts found</option>}
+          </select>
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:bg-muted transition-all"
+          >
+            Skip for Now
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={!selectedId || acting}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all disabled:opacity-50 shadow-md shadow-emerald-500/20"
+          >
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            Send to Vetting
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Vetting Panel (for ICC / Audit / Account) ─────────────────────────────────
+const VettingPanel = ({ req, detail, user, departments, onDone }) => {
+  const [comment, setComment]   = useState('');
+  const [file, setFile]         = useState(null);
+  const [acting, setActing]     = useState(false);
+  const [mode, setMode]         = useState(null); // 'forward' | 'treated'
+  const [nextDeptId, setNextDeptId] = useState('');
+  const fileRef = React.useRef(null);
+
+  const deptName = user?.name || '';
+  const isChairman = /ceo|chairman/i.test(deptName);
+  const currentVettingDeptId = detail?.currentVettingDeptId ? parseInt(detail.currentVettingDeptId) : null;
+  const isCurrentVetter = user?.deptId && currentVettingDeptId === user.deptId;
+  const finalApprovalStatus = detail?.finalApprovalStatus;
+
+  // Chairman can always treat; vetting dept can forward or treat
+  const canTreat = isChairman || isCurrentVetter;
+  const canForward = isCurrentVetter;
+
+  if (!canTreat && !canForward) return null;
+  if (!finalApprovalStatus || finalApprovalStatus === 'none') return null;
+  if (finalApprovalStatus === 'treated') return null;
+
+  // Filter next vetting depts: ICC → Audit → Account
+  const getChainIndex = (name) => {
+    const n = (name || '').toLowerCase();
+    if (/\bicc\b|integrity|compliance/i.test(n)) return 0;
+    if (/audit/i.test(n)) return 1;
+    if (/account/i.test(n)) return 2;
+    return -1;
+  };
+  const myChainIdx = getChainIndex(deptName);
+  const nextDepts = departments.filter(d => {
+    const idx = getChainIndex(d.name);
+    return idx > myChainIdx && idx >= 0;
+  });
+
+  const submit = async (action) => {
+    if (action === 'forward' && !nextDeptId) {
+      setMode('forward');
+      return;
+    }
+    setActing(true);
+    try {
+      await vettingAPI.vettingAction(req.id, {
+        action,
+        comment: comment || undefined,
+        nextDeptId: action === 'forward' ? parseInt(nextDeptId) : undefined,
+        file: file || undefined
+      });
+      toast.success(action === 'treated' ? 'Requisition marked as treated!' : 'Forwarded to next vetting department.');
+      onDone();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Action failed. Please try again.');
+    } finally { setActing(false); }
+  };
+
+  return (
+    <div className="space-y-3 border border-blue-200 rounded-2xl p-4 bg-blue-50/50 shadow-sm relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+      <div className="flex items-center gap-2 pl-1">
+        <Award size={14} className="text-blue-700" />
+        <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Vetting Review</p>
+        {finalApprovalStatus === 'vetting' && (
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-[9px] font-black text-blue-700 uppercase">In Vetting</span>
+        )}
+      </div>
+
+      <textarea
+        value={comment}
+        onChange={e => setComment(e.target.value)}
+        placeholder="Your vetting comment or observations (optional)..."
+        className="w-full bg-white border border-blue-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-300 min-h-[72px] resize-none shadow-inner"
+      />
+
+      {/* File attach */}
+      <div>
+        <input type="file" ref={fileRef} className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
+        {file ? (
+          <div className="flex items-center gap-2 px-3 py-2 bg-blue-100 rounded-xl border border-blue-200">
+            <FileText size={13} className="text-blue-600 shrink-0" />
+            <span className="flex-1 truncate text-[11px] font-bold text-foreground">{file.name}</span>
+            <button onClick={() => setFile(null)} className="p-0.5 text-muted-foreground hover:text-destructive rounded shrink-0"><X size={12} /></button>
+          </div>
+        ) : (
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-2 text-[11px] font-bold text-blue-700 hover:text-blue-900 transition-colors px-2 py-1 rounded-lg hover:bg-blue-100"
+          >
+            <Paperclip size={13} /> Attach supporting document
+          </button>
+        )}
+      </div>
+
+      {/* Forward dept selector */}
+      {mode === 'forward' && (
+        <div className="p-3 bg-white border border-blue-200 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
+          <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest flex items-center justify-between">
+            <span>Forward to next vetting dept</span>
+            <button onClick={() => setMode(null)} className="text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-black/5 text-[10px] normal-case font-normal">Cancel</button>
+          </label>
+          <select
+            value={nextDeptId}
+            onChange={e => setNextDeptId(e.target.value)}
+            className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none shadow-sm"
+          >
+            <option value="">— Select next department —</option>
+            {nextDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {nextDepts.length === 0 && <option disabled>No further departments in chain</option>}
+          </select>
+          <button
+            onClick={() => submit('forward')}
+            disabled={!nextDeptId || acting}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm"
+          >
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            Confirm Forward
+          </button>
+        </div>
+      )}
+
+      {mode !== 'forward' && (
+        <div className={`grid gap-2 pt-1 ${canForward && nextDepts.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {canForward && nextDepts.length > 0 && (
+            <button
+              onClick={() => submit('forward')}
+              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-sm transition-all shadow-sm"
+            >
+              <ArrowRightCircle size={18} />
+              <span>Forward to Next</span>
+            </button>
+          )}
+          {canTreat && (
+            <button
+              onClick={() => submit('treated')}
+              disabled={acting}
+              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm transition-all disabled:opacity-50 shadow-sm"
+            >
+              {acting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+              <span>Mark Treated</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Detail Modal ─────────────────────────────────────────────────────────────
 const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) => {
   const [detail, setDetail]         = useState(null);
@@ -717,6 +1017,21 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                   Incoming Action
                 </span>
               )}
+              {detail?.finalApprovalStatus === 'approved' && (
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-emerald-500 border border-emerald-600 text-white shadow-lg shadow-emerald-500/20 flex items-center gap-1">
+                  <CheckCircle2 size={10} /> Finally Approved
+                </span>
+              )}
+              {detail?.finalApprovalStatus === 'vetting' && (
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-purple-500 border border-purple-600 text-white shadow-lg shadow-purple-500/20 flex items-center gap-1">
+                  <Award size={10} /> In Vetting
+                </span>
+              )}
+              {detail?.finalApprovalStatus === 'treated' && (
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-teal-500 border border-teal-600 text-white shadow-lg shadow-teal-500/20 flex items-center gap-1">
+                  <CheckCircle2 size={10} /> Treated
+                </span>
+              )}
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tighter leading-tight">{req.title}</h2>
             <div className="flex items-center gap-4 text-xs tracking-wide text-muted-foreground font-semibold">
@@ -796,6 +1111,40 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                       onEscalate={handleEscalate}
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Final Approve Panel — for dept users (Chairman/CEO, GM, HR) */}
+              {user?.role === 'department' && detail && !loading && (
+                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
+                  <FinalApprovePanel
+                    req={req}
+                    detail={detail}
+                    user={user}
+                    departments={departments}
+                    onApproved={() => {
+                      getRequisitionDetail(req.id).then(d => setDetail(d));
+                      onAction();
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Vetting Panel — for ICC, Audit, Account and Chairman */}
+              {user?.role === 'department' && detail && !loading &&
+               detail.finalApprovalStatus && detail.finalApprovalStatus !== 'none' &&
+               detail.finalApprovalStatus !== 'treated' && (
+                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
+                  <VettingPanel
+                    req={req}
+                    detail={detail}
+                    user={user}
+                    departments={departments}
+                    onDone={() => {
+                      getRequisitionDetail(req.id).then(d => setDetail(d));
+                      onAction();
+                    }}
+                  />
                 </div>
               )}
 
@@ -1023,6 +1372,41 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                   </>
                 ) : null}
               </div>
+
+              {/* Vetting Chain History */}
+              {detail?.vettingEvents?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Vetting History</p>
+                  <div className="space-y-2">
+                    {detail.vettingEvents.map((ev, i) => (
+                      <div key={ev.id || i} className="flex gap-2 p-2.5 bg-white rounded-xl border border-border/30 shadow-sm">
+                        <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <Award size={11} className="text-purple-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-black text-foreground truncate">{ev.deptName || 'Dept'}</span>
+                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${
+                              ev.action === 'treated' ? 'bg-teal-100 text-teal-700' :
+                              ev.action === 'forward' ? 'bg-blue-100 text-blue-700' :
+                              'bg-muted text-muted-foreground'
+                            }`}>{ev.action?.replace(/_/g, ' ')}</span>
+                          </div>
+                          {ev.comment && <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">{ev.comment}</p>}
+                          {ev.attachmentName && (
+                            <p className="text-[9px] text-primary/70 mt-0.5 flex items-center gap-1">
+                              <Paperclip size={9} /> {ev.attachmentName}
+                            </p>
+                          )}
+                          <p className="text-[8px] text-muted-foreground/50 mt-0.5 font-mono">
+                            {ev.actorName && `${ev.actorName} · `}{ev.createdAt ? new Date(ev.createdAt).toLocaleString() : ''}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Identity & Verification */}
               {verCode && (
