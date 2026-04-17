@@ -10,6 +10,8 @@ export const AIFeaturesProvider = ({ children }) => {
   const [aiEnabled, setAiEnabled] = useState(true);
 
   const fetchSetting = useCallback(async () => {
+    // Skip if not authenticated — avoids 401 → refresh → reload loop on login screen
+    if (!localStorage.getItem('rms_token')) return;
     try {
       const res = await settingsAPI.get('ai_features_enabled');
       // Treat null/missing as enabled; only explicitly 'false' disables
