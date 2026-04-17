@@ -1783,6 +1783,8 @@ app.post('/api/requisitions/bulk-delete', authenticateToken, async (req, res) =>
 // GET /api/system-settings/:key  — read one setting (public for dept-level reads like chairman access)
 app.get('/api/system-settings/:key', authenticateToken, async (req, res) => {
   try {
+    // Ensure table exists (idempotent — protects against boot-race on Railway)
+    await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "SystemSetting" ("key" TEXT PRIMARY KEY, "value" TEXT NOT NULL DEFAULT '')`;
     const rows = await prisma.$queryRaw`
       SELECT "value" FROM "SystemSetting" WHERE "key" = ${req.params.key} LIMIT 1
     `;
@@ -1796,6 +1798,8 @@ app.put('/api/system-settings/:key', authenticateToken, async (req, res) => {
   try {
     const { value } = req.body;
     if (value === undefined) return res.status(400).json({ error: 'value is required' });
+    // Ensure table exists (idempotent — protects against boot-race on Railway)
+    await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "SystemSetting" ("key" TEXT PRIMARY KEY, "value" TEXT NOT NULL DEFAULT '')`;
     await prisma.$executeRaw`
       INSERT INTO "SystemSetting" ("key", "value") VALUES (${req.params.key}, ${value})
       ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value"
