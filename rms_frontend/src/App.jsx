@@ -3,6 +3,50 @@ import Login from './components/Login'
 import PublicVerify from './components/PublicVerify'
 import DepartmentHeadModal from './components/DepartmentHeadModal'
 
+// ── Error Boundary — catches failed lazy-chunk imports so the app never goes blank ──
+class ChunkErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { failed: false, error: null }; }
+  static getDerivedStateFromError(error) { return { failed: true, error }; }
+  componentDidCatch(error) {
+    // If it's a chunk-load failure, a hard reload usually fixes it
+    if (/Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError/i.test(error?.message || '')) {
+      // Give React one tick to paint the error UI before reloading
+      setTimeout(() => window.location.reload(), 3000);
+    }
+  }
+  render() {
+    if (this.state.failed) {
+      const isChunk = /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError/i.test(this.state.error?.message || '');
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8 text-center space-y-5">
+          <div className="w-14 h-14 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center mx-auto">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-destructive">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-bold text-foreground">
+              {isChunk ? 'New version available' : 'Something went wrong'}
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              {isChunk
+                ? 'The app was updated. The page will reload automatically in a moment…'
+                : 'An unexpected error occurred. Please refresh the page.'}
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all"
+          >
+            Reload Now
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const Dashboard = React.lazy(() => import('./components/Dashboard'))
 const WorkflowBuilder = React.lazy(() => import('./components/WorkflowBuilder'))
 const DepartmentManager = React.lazy(() => import('./components/DepartmentManager'))
@@ -182,14 +226,16 @@ const AppContent = () => {
 
   return (
     <>
-      <Suspense fallback={
-        <div className="flex-1 flex flex-col items-center justify-center p-12">
-          <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-          <p className="mt-4 text-xs font-mono text-muted-foreground animate-pulse">Loading module...</p>
-        </div>
-      }>
-        {views[activeView] || views.dashboard}
-      </Suspense>
+      <ChunkErrorBoundary>
+        <Suspense fallback={
+          <div className="flex-1 flex flex-col items-center justify-center p-12">
+            <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+            <p className="mt-4 text-xs font-mono text-muted-foreground animate-pulse">Loading module...</p>
+          </div>
+        }>
+          {views[activeView] || views.dashboard}
+        </Suspense>
+      </ChunkErrorBoundary>
       <DepartmentHeadModal
         isOpen={showDeptModal}
         department={deptProfile}

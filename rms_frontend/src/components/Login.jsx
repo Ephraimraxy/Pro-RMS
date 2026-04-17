@@ -11,7 +11,7 @@ const Login = () => {
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
   const [showMfa, setShowMfa] = useState(false);
-  
+
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -33,7 +33,7 @@ const Login = () => {
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    
+
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsStandalone(true);
     }
@@ -65,7 +65,19 @@ const Login = () => {
       // Unify login to use the department portal (Backend now handles Super Admin role internally)
       await deptLogin(selectedDept, accessCode, mfaCode);
     } catch (err) {
-      const displayString = err.response?.data?.error || err.message || "Invalid Authentication Details";
+      const status = err.response?.status;
+      let displayString;
+      if (status === 401) {
+        displayString = err.response?.data?.error || 'Incorrect access code. Please try again.';
+      } else if (status === 429) {
+        displayString = 'Too many attempts. Please wait a moment and try again.';
+      } else if (status >= 500 || status === 502 || status === 503) {
+        displayString = 'The server is temporarily unavailable. Please try again in a few seconds.';
+      } else if (!navigator.onLine || err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+        displayString = 'No internet connection. Please check your network and try again.';
+      } else {
+        displayString = err.response?.data?.error || err.message || 'Authentication failed. Please try again.';
+      }
       setError(displayString);
       setIsSubmitting(false);
     }
@@ -267,7 +279,7 @@ const Login = () => {
               </div>
 
               <div className="w-full bg-primary/5 border border-primary/15 rounded-2xl p-5 space-y-3 text-left">
-                <p className="text-sm text-foreground font-semibold">Please reach out to:</p>
+                <p className="text-sm text-foreground font-semibold">Please reach out to 080********:</p>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2.5">
                     <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -305,7 +317,7 @@ const Login = () => {
 
       {/* ── PWA Floating Install Button ── */}
       {!isStandalone && (
-        <button 
+        <button
           onClick={handleInstallApp}
           className="fixed bottom-6 right-6 z-[100] glass border border-primary/20 bg-white/40 hover:bg-white/60 text-primary py-2.5 px-5 rounded-full shadow-2xl flex items-center space-x-2.5 transition-all active:scale-95 group animate-in slide-in-from-bottom-10"
         >
