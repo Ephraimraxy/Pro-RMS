@@ -354,14 +354,14 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               {user?.role === 'department' && (
                 <SidebarItem 
                   icon={deptStatus.isReady ? Building2 : ShieldAlert} 
-                  label="Dept Profile" 
+                  label="Profile" 
                   active={currentView === 'dept_profile'} 
                   onClick={() => onViewChange('dept_profile')} 
                   isCollapsed={isCollapsed} 
                 />
               )}
               
-              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
+              <SidebarItem icon={FileText} label="MEMO" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
               <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} isCollapsed={isCollapsed} />
               <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
             </div>
@@ -421,7 +421,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
           {user?.role === 'department' ? (
             <>
               <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
-              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
+              <SidebarItem icon={FileText} label="MEMO" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
                  <PenTool size={20} />
               </div>
@@ -435,7 +435,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
                  <PenTool size={20} />
               </div>
-              <SidebarItem icon={FileText} label="Management" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
+              <SidebarItem icon={FileText} label="MEMO" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
               <button
                 onClick={() => setShowOversightMenu(v => !v)}
                 className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${['workflow_builder','department_manager','audit_logs'].includes(currentView) || showOversightMenu ? 'text-primary' : 'text-muted-foreground'}`}
