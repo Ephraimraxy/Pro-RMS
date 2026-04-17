@@ -14,16 +14,16 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const { isOnline } = useNetwork();
 
-  const [types, setTypes]               = useState([]);
+  const [types, setTypes] = useState([]);
   const [selectedType, setSelectedType] = useState(null);
-  const [departments, setDepartments]   = useState([]);
-  const [files, setFiles]               = useState([]);
-  const [submitting, setSubmitting]     = useState(false);
-  const [refining, setRefining]         = useState(false);
-  const [aiPreview, setAiPreview]       = useState(null);
+  const [departments, setDepartments] = useState([]);
+  const [files, setFiles] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [aiPreview, setAiPreview] = useState(null);
 
   // Activation check state for target department
-  const [activation, setActivation]     = useState(null);   // null | { activated, headName }
+  const [activation, setActivation] = useState(null);   // null | { activated, headName }
   const [checkingActivation, setCheckingActivation] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -117,9 +117,9 @@ const RequisitionForm = ({ isOpen, onClose }) => {
       });
 
       const actionMsgs = {
-        submit:  'Ready to submit — AI has refined your request.',
+        submit: 'Ready to submit — AI has refined your request.',
         forward: 'AI suggests forwarding this to another department for processing.',
-        draft:   'Saved as draft — AI recommends adding more detail before submitting.',
+        draft: 'Saved as draft — AI recommends adding more detail before submitting.',
       };
       toast.success(actionMsgs[res.recommendedAction] || 'AI refinement complete. Please review.', { duration: 5000 });
     } catch (err) {
@@ -153,12 +153,12 @@ const RequisitionForm = ({ isOpen, onClose }) => {
       const finalAmount = isMemoType ? null : (aiPreview ? aiPreview.amount : null);
 
       const payload = {
-        description:        finalDesc,
-        title:              finalDesc,
-        type:               selectedType.name,
-        amount:             finalAmount,
-        departmentId:       user?.deptId || undefined,
-        urgency:            formData.urgency,
+        description: finalDesc,
+        title: finalDesc,
+        type: selectedType.name,
+        amount: finalAmount,
+        departmentId: user?.deptId || undefined,
+        urgency: formData.urgency,
         isDraft,
         targetDepartmentId: formData.targetDepartmentId ? parseInt(formData.targetDepartmentId) : undefined
       };
@@ -186,11 +186,11 @@ const RequisitionForm = ({ isOpen, onClose }) => {
 
   return (
     <div className="w-full flex flex-col gap-5 animate-in fade-in duration-500 pb-10">
-      
+
       {/* Top Header / Back Button Navigation */}
       <div className="flex items-center justify-between">
-        <button 
-          onClick={!submitting ? onClose : undefined} 
+        <button
+          onClick={!submitting ? onClose : undefined}
           disabled={submitting}
           className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group disabled:opacity-40"
         >
@@ -277,15 +277,14 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                   <CheckCircle2 size={12} /> {aiPreview.typeLabel}
                 </span>
                 {aiPreview.recommendedAction && (
-                  <span className={`text-[10px] uppercase font-black tracking-widest px-2 py-1 rounded-full flex items-center gap-1 ${
-                    aiPreview.recommendedAction === 'submit'  ? 'bg-emerald-100 text-emerald-700' :
-                    aiPreview.recommendedAction === 'forward' ? 'bg-blue-100 text-blue-700' :
-                    aiPreview.recommendedAction === 'draft'   ? 'bg-amber-100 text-amber-700' :
-                    'bg-red-100 text-red-700'
-                  }`}>
+                  <span className={`text-[10px] uppercase font-black tracking-widest px-2 py-1 rounded-full flex items-center gap-1 ${aiPreview.recommendedAction === 'submit' ? 'bg-emerald-100 text-emerald-700' :
+                      aiPreview.recommendedAction === 'forward' ? 'bg-blue-100 text-blue-700' :
+                        aiPreview.recommendedAction === 'draft' ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                    }`}>
                     AI: {aiPreview.recommendedAction === 'submit' ? '✓ Ready to Submit' :
-                         aiPreview.recommendedAction === 'forward' ? '→ Forward Recommended' :
-                         aiPreview.recommendedAction === 'draft' ? '✎ Needs More Detail' : '✗ Blocked'}
+                      aiPreview.recommendedAction === 'forward' ? '→ Forward Recommended' :
+                        aiPreview.recommendedAction === 'draft' ? '✎ Needs More Detail' : '✗ Blocked'}
                   </span>
                 )}
               </div>
@@ -357,7 +356,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
           {/* ── Send To Department ── */}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
-              Send To Department (optional)
+              Send To Department
             </label>
             <select
               value={formData.targetDepartmentId}
@@ -368,7 +367,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
               <option value="">— Route through normal workflow —</option>
               {targetableDepts.map(d => {
                 const superAdmin = isSuperAdmin(d);
-                const blocked    = superAdmin && !isPrivileged;
+                const blocked = superAdmin && !isPrivileged;
                 return (
                   <option
                     key={d.id}
@@ -395,7 +394,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                 <div className="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">
                   <CheckCircle2 size={14} className="shrink-0 mt-0.5 text-emerald-600" />
                   <span>
-                    <strong>{activation.headName || 'Department'}</strong> is activated and will receive an email notification.
+                    <strong>{activation.departmentName || 'Department'}</strong> is activated and will receive an email notification.
                   </span>
                 </div>
               ) : (
@@ -425,11 +424,10 @@ const RequisitionForm = ({ isOpen, onClose }) => {
             />
             <div
               onClick={() => isOnline && !submitting && fileInputRef.current?.click()}
-              className={`border-2 border-dashed border-border/50 rounded-2xl p-6 flex flex-col items-center justify-center space-y-2 transition-all ${
-                isOnline && !submitting
+              className={`border-2 border-dashed border-border/50 rounded-2xl p-6 flex flex-col items-center justify-center space-y-2 transition-all ${isOnline && !submitting
                   ? 'bg-white/40 hover:bg-white/80 cursor-pointer'
                   : 'bg-muted/30 opacity-50 cursor-not-allowed'
-              }`}
+                }`}
             >
               <Upload size={22} className="text-muted-foreground" />
               <p className="text-xs text-foreground font-medium text-center">Click to upload · PDF, JPG, PNG, DOC (max 10 MB)</p>
@@ -470,21 +468,21 @@ const RequisitionForm = ({ isOpen, onClose }) => {
             {submitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Save Draft
           </button>
-          
+
           <button
-              type="button"
-              onClick={e => handleSubmit(e, false)}
-              disabled={submitting || refining || !selectedType || !(aiPreview ? aiPreview.description : formData.description?.trim()) || (formData.targetDepartmentId && activation && !activation.activated)}
-              className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? (
-                <><Loader2 size={16} className="animate-spin" /> Submitting…</>
-              ) : refining ? (
-                <><Loader2 size={16} className="animate-spin" /> AI Analyzing…</>
-              ) : (
-                <><Send size={16} /> Confirm & Submit Request</>
-              )}
-            </button>
+            type="button"
+            onClick={e => handleSubmit(e, false)}
+            disabled={submitting || refining || !selectedType || !(aiPreview ? aiPreview.description : formData.description?.trim()) || (formData.targetDepartmentId && activation && !activation.activated)}
+            className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? (
+              <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+            ) : refining ? (
+              <><Loader2 size={16} className="animate-spin" /> AI Analyzing…</>
+            ) : (
+              <><Send size={16} /> Confirm & Submit Request</>
+            )}
+          </button>
         </div>
       </div>
     </div>

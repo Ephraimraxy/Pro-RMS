@@ -1731,7 +1731,7 @@ app.get('/api/departments/:id/activation', authenticateToken, async (req, res) =
       select: { id: true, name: true, headName: true, headEmail: true }
     });
     if (!dept) return res.status(404).json({ error: 'Department not found' });
-    res.json({ activated: Boolean(dept.headEmail), headName: dept.headName, headEmail: dept.headEmail });
+    res.json({ activated: Boolean(dept.headEmail), departmentName: dept.name, headName: dept.headName, headEmail: dept.headEmail });
   } catch (error) { sendError(res, 500, error.message); }
 });
 
