@@ -7,7 +7,8 @@ import {
   CheckCircle2, RotateCcw, Info, User, Mail, Phone, MapPin, BadgeCheck, Download
 } from 'lucide-react';
 import { getDepartments, addDepartment, deleteDepartment } from '../lib/store';
-import { deptAPI } from '../lib/api';
+import { deptAPI, settingsAPI } from '../lib/api';
+import { ShieldCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Modal from './Modal';
 import ConfirmModal from './ConfirmModal';
@@ -397,13 +398,40 @@ const DepartmentManager = ({ onViewChange }) => {
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Chairman/CEO routing access control
+  const [chairmanAllowedIds, setChairmanAllowedIds] = useState([]); // dept IDs allowed to route to Chairman/CEO
+  const [savingChairman, setSavingChairman] = useState(false);
+
   const loadDepts = async () => {
     const data = await getDepartments();
     setDepartments(data);
     setLoading(false);
   };
 
-  useEffect(() => { loadDepts(); }, []);
+  const loadChairmanSetting = async () => {
+    try {
+      const res = await settingsAPI.get('chairman_ceo_allowed_depts');
+      if (res?.value) setChairmanAllowedIds(JSON.parse(res.value));
+    } catch { /* no setting yet — default empty */ }
+  };
+
+  const saveChairmanSetting = async () => {
+    setSavingChairman(true);
+    try {
+      await settingsAPI.set('chairman_ceo_allowed_depts', JSON.stringify(chairmanAllowedIds));
+      toast.success('Chairman/CEO routing access saved.');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to save setting.');
+    } finally { setSavingChairman(false); }
+  };
+
+  const toggleChairmanDept = (deptId) => {
+    setChairmanAllowedIds(prev =>
+      prev.includes(deptId) ? prev.filter(id => id !== deptId) : [...prev, deptId]
+    );
+  };
+
+  useEffect(() => { loadDepts(); loadChairmanSetting(); }, []);
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -655,6 +683,73 @@ const DepartmentManager = ({ onViewChange }) => {
             </table>
           </div>
         </div>
+
+        {/* ── Chairman/CEO Routing Access ── */}
+        <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                <ShieldCheck size={18} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground">Chairman / CEO Routing Access</h3>
+                <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                  Select which departments are allowed to send or forward requisitions directly to Chairman / CEO.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={saveChairmanSetting}
+              disabled={savingChairman}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50 shadow-md shadow-amber-200 active:scale-[0.98] shrink-0"
+            >
+              {savingChairman ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {savingChairman ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+
+          {/* Exclude Chairman/CEO dept itself from the list */}
+          {(() => {
+            const selectable = departments.filter(d => !/ceo|chairman/i.test(d.name));
+            return selectable.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic text-center py-4">No departments found.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {selectable.map(dept => {
+                  const allowed = chairmanAllowedIds.includes(dept.id);
+                  return (
+                    <button
+                      key={dept.id}
+                      onClick={() => toggleChairmanDept(dept.id)}
+                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                        allowed
+                          ? 'bg-amber-50 border-amber-300 text-amber-800'
+                          : 'bg-white border-border/50 text-muted-foreground hover:border-amber-200 hover:bg-amber-50/40'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                        allowed ? 'bg-amber-500 border-amber-500' : 'border-border'
+                      }`}>
+                        {allowed && <CheckCircle2 size={12} className="text-white" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold truncate">{dept.name}</p>
+                        <p className={`text-[9px] uppercase font-mono ${allowed ? 'text-amber-600' : 'text-muted-foreground/60'}`}>
+                          {dept.type}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          <p className="text-[10px] text-muted-foreground/60 mt-4 italic">
+            Departments not selected here will not see Chairman / CEO in their routing dropdown.
+          </p>
+        </div>
+
       </div>
 
       {/* Seal View Modal */}

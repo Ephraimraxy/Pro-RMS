@@ -7,7 +7,7 @@ import ConfirmModal from './ConfirmModal';
 import VoiceDictation from './VoiceDictation';
 import { useAuth } from '../context/AuthContext';
 import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments } from '../lib/store';
-import { forwardAPI, aiAPI } from '../lib/api';
+import { forwardAPI, aiAPI, settingsAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import {
   Search, Plus, Eye, FileText, X,
@@ -447,11 +447,19 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
   const [refining, setRefining] = useState(false);
 
   const { user: currentUser } = useAuth();
-  const senderIsGM = /general\s*manager|^\s*gm\s*$/i.test(currentUser?.deptName || '');
+  const [chairmanAllowedIds, setChairmanAllowedIds] = useState([]);
+
+  useEffect(() => {
+    settingsAPI.get('chairman_ceo_allowed_depts').then(res => {
+      if (res?.value) setChairmanAllowedIds(JSON.parse(res.value));
+    }).catch(() => {});
+  }, []);
+
+  const canRouteToChairman = chairmanAllowedIds.includes(currentUser?.deptId);
 
   const forwardDepts = departments.filter(d => {
     if (d.id === req.departmentId || d.id === detail?.targetDepartmentId) return false;
-    if (/ceo|chairman/i.test(d.name) && !senderIsGM) return false; // only GM can forward to Chairman/CEO
+    if (/ceo|chairman/i.test(d.name) && !canRouteToChairman) return false;
     return true;
   });
 

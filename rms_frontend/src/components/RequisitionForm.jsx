@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowLeft, MessageSquare } from 'lucide-react';
 import { addRequisition, getDepartments, getRequisitionTypes, uploadAttachments } from '../lib/store';
-import { deptAPI, aiAPI } from '../lib/api';
+import { deptAPI, aiAPI, settingsAPI } from '../lib/api';
 import { useNetwork } from '../App';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +26,9 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   const [activation, setActivation] = useState(null);   // null | { activated, headName }
   const [checkingActivation, setCheckingActivation] = useState(false);
 
+  // Chairman/CEO routing — IDs of departments allowed to route there
+  const [chairmanAllowedIds, setChairmanAllowedIds] = useState([]);
+
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
@@ -44,6 +47,10 @@ const RequisitionForm = ({ isOpen, onClose }) => {
       if (allTypes.length > 0) setSelectedType(allTypes[0]);
     };
     load();
+    // Load chairman/CEO routing access setting
+    settingsAPI.get('chairman_ceo_allowed_depts').then(res => {
+      if (res?.value) setChairmanAllowedIds(JSON.parse(res.value));
+    }).catch(() => {});
     // reset form when opened
     setFormData({ description: '', amount: '', urgency: 'normal', targetDepartmentId: '' });
     setFiles([]);
@@ -60,14 +67,14 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   const isPrivileged = SUPER_ADMIN_PRIVILEGED_CODES.includes(senderCode) || user?.role === 'global_admin';
 
   // Helpers for restricted departments
-  const isSuperAdmin   = (dept) => dept?.name?.toLowerCase() === 'super admin';
-  const isChairmanCEO  = (dept) => /ceo|chairman/i.test(dept?.name || '');
-  const senderIsGM     = /general\s*manager|^\s*gm\s*$/i.test(user?.deptName || '');
+  const isSuperAdmin  = (dept) => dept?.name?.toLowerCase() === 'super admin';
+  const isChairmanCEO = (dept) => /ceo|chairman/i.test(dept?.name || '');
+  const canRouteToChairman = chairmanAllowedIds.includes(user?.deptId);
 
-  // Filter: exclude sender's own dept; hide Chairman/CEO for non-GM departments
+  // Filter: exclude sender's own dept; hide Chairman/CEO unless this dept is whitelisted
   const targetableDepts = departments.filter(d => {
-    if (d.id === user?.deptId) return false;         // can't send to yourself
-    if (isChairmanCEO(d) && !senderIsGM) return false; // only GM can route to Chairman/CEO
+    if (d.id === user?.deptId) return false;
+    if (isChairmanCEO(d) && !canRouteToChairman) return false;
     return true;
   });
 

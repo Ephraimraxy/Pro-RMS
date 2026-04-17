@@ -54,8 +54,15 @@ let isSystemReady = false; // Flag for database/seed readiness
     await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "stageKey" TEXT`;
     await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "uploaderDept" TEXT`;
     await prisma.$executeRaw`ALTER TABLE "Department" ADD COLUMN IF NOT EXISTS "codeChangedByDept" BOOLEAN DEFAULT FALSE`;
+    // System settings key-value store (idempotent)
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "SystemSetting" (
+        "key"   TEXT PRIMARY KEY,
+        "value" TEXT NOT NULL DEFAULT ''
+      )
+    `;
   } catch (e) {
-    // Non-fatal — columns likely already exist or DB not ready yet
+    // Non-fatal — columns/tables likely already exist or DB not ready yet
   }
 })();
 
@@ -1723,6 +1730,31 @@ app.post('/api/requisitions/bulk-delete', authenticateToken, async (req, res) =>
   }
 });
 
+
+// ── System Settings ───────────────────────────────────────────────────────────
+// GET /api/system-settings/:key  — read one setting (public for dept-level reads like chairman access)
+app.get('/api/system-settings/:key', authenticateToken, async (req, res) => {
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT "value" FROM "SystemSetting" WHERE "key" = ${req.params.key} LIMIT 1
+    `;
+    res.json({ key: req.params.key, value: rows[0]?.value ?? null });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
+// PUT /api/system-settings/:key  — upsert one setting (Super Admin only)
+app.put('/api/system-settings/:key', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'global_admin') return res.status(403).json({ error: 'Super Admin only' });
+  try {
+    const { value } = req.body;
+    if (value === undefined) return res.status(400).json({ error: 'value is required' });
+    await prisma.$executeRaw`
+      INSERT INTO "SystemSetting" ("key", "value") VALUES (${req.params.key}, ${value})
+      ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value"
+    `;
+    res.json({ key: req.params.key, value });
+  } catch (error) { sendError(res, 500, error.message); }
+});
 
 app.get('/api/departments/:id/activation', authenticateToken, async (req, res) => {
   try {

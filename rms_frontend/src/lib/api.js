@@ -181,6 +181,15 @@ export const auditAPI = {
   }
 };
 
+export const settingsAPI = {
+  async get(key) {
+    return api.get(`/system-settings/${key}`);
+  },
+  async set(key, value) {
+    return api.put(`/system-settings/${key}`, { value });
+  }
+};
+
 export const reqAPI = {
   async getRequisitions() {
     return api.get('/requisitions');
