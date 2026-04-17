@@ -1,11 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Modern Geometric Background -->
-  <rect width="512" height="512" rx="100" fill="#6A3A22"/>
-  
-  <!-- Stylized 'R' - Professional Workflow Intersection -->
-  <!-- Using Aura Cream (#FAF9F6) -->
-  <path d="M160 140h120c50 0 80 30 80 75s-30 75-80 75h-40l60 100h-65l-60-100v-50h45c25 0 35-15 35-25s-10-25-35-25h-45v130h-55V140z" fill="#FAF9F6"/>
-  
-  <!-- Subtle 'Aura' node decorative element -->
-  <circle cx="390" cy="120" r="30" fill="#FAF9F6" fill-opacity="0.8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Crystal mountain peaks (drawn first, behind the C) -->
+
+  <!-- Teal peak (left) -->
+  <polygon points="26,70 39,44 33,70" fill="#0e7490"/>
+  <polygon points="33,70 39,44 52,70" fill="#0891b2"/>
+
+  <!-- Dark green peak (center, tallest) -->
+  <polygon points="34,70 50,24 43,70" fill="#1a5c1a"/>
+  <polygon points="43,70 50,24 66,70" fill="#2d8c2d"/>
+
+  <!-- Orange peak (right) -->
+  <polygon points="48,70 62,46 55,70" fill="#ea6d0a"/>
+  <polygon points="55,70 62,46 74,70" fill="#f97316"/>
+
+  <!-- Bold black C letter on top (outer R=44, inner R=28, opening ±52°) -->
+  <!--
+    Outer top gap : (77.1, 15.3)   Inner top gap : (67.2, 27.9)
+    Outer bot gap : (77.1, 84.7)   Inner bot gap : (67.2, 72.1)
+    Outer arc: large (1), CCW (0) → goes left around the circle
+    Inner arc: large (1), CW  (1) → traces back along the inner wall
+  -->
+  <path d="M 77.1 15.3
+           A 44 44 0 1 0 77.1 84.7
+           L 67.2 72.1
+           A 28 28 0 1 1 67.2 27.9
+           Z"
+        fill="#111827"/>
 </svg>
