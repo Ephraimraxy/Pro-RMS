@@ -7,7 +7,6 @@ import {
   ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw,
   Building2, ShieldAlert
 } from 'lucide-react';
-import UserProfilePanel from './UserProfilePanel';
 import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications } from '../lib/store';
 import { reqAPI } from '../lib/api';
 
@@ -37,7 +36,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange, currentView, onShowProfile }) => {
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange, currentView }) => {
   const { isOnline } = useNetwork();
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -219,9 +218,12 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
         </button>
 
         <button
-          onClick={onShowProfile}
+          onClick={() => onViewChange('dept_profile')}
           title="My Profile"
-          className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm overflow-hidden group hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all cursor-pointer font-black text-xs"
+          className={`w-8 h-8 rounded-xl border flex items-center justify-center shadow-sm overflow-hidden font-black text-xs transition-all cursor-pointer
+            ${currentView === 'dept_profile'
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-primary/10 border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground hover:border-primary'}`}
         >
           {user?.name ? user.name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') : <UserIcon size={16} />}
         </button>
@@ -243,7 +245,6 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
   const [syncPending, setSyncPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [showOversightMenu, setShowOversightMenu] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     const fetchNotifs = async () => {
@@ -311,7 +312,6 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         onLogout={logout}
         onViewChange={onViewChange}
         currentView={currentView}
-        onShowProfile={() => setShowProfile(true)}
       />
 
       {syncPending > 0 && (
@@ -448,11 +448,6 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         </nav>
       </div>
 
-      <UserProfilePanel
-        isOpen={showProfile}
-        onClose={() => setShowProfile(false)}
-        onViewChange={(view) => { onViewChange(view); setShowProfile(false); }}
-      />
     </div>
   );
 };
