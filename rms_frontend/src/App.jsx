@@ -58,6 +58,7 @@ const DepartmentProfile = React.lazy(() => import('./components/DepartmentProfil
 const MyActivity = React.lazy(() => import('./components/MyActivity'))
 
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { AIFeaturesProvider } from './context/AIFeaturesContext'
 import { Wifi, WifiOff } from 'lucide-react'
 import { Toaster, toast } from 'react-hot-toast'
 
@@ -289,7 +290,9 @@ function App() {
         }} 
       />
       <AuthProvider>
-        <AppContent />
+        <AIFeaturesProvider>
+          <AppContent />
+        </AIFeaturesProvider>
       </AuthProvider>
     </NetworkProvider>
   )

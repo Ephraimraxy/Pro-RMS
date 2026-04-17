@@ -29,16 +29,16 @@
     --card: 0 0% 100%;
     --card-foreground: 220 15% 12%;
 
-    --primary: 24 95% 53%;            /* CSS Farms Orange  #f97316 */
+    --primary: 142 47% 25%;           /* CSS Farms Dark Green  #1a5c1a */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 142 47% 25%;         /* CSS Farms Dark Green  #1a5c1a */
+    --secondary: 24 90% 52%;          /* CSS Farms Orange  #f97316 — accent only */
     --secondary-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --ring: 24 95% 53%;               /* Orange focus ring */
+    --ring: 142 47% 25%;              /* Green focus ring */
     --radius: 0.75rem;
   }
 

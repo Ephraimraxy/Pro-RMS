@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { CheckCircle2, XCircle, Share2, MessageSquare } from 'lucide-react';
 import VoiceDictation from './VoiceDictation';
+import { useAIFeatures } from '../context/AIFeaturesContext';
 
 const ApprovalActionPanel = ({ onApprove, onReject, onEscalate }) => {
   const [comment, setComment] = useState('');
+  const { aiEnabled } = useAIFeatures();
 
   return (
     <div className="glass bg-white/80 p-6 rounded-3xl border border-border/50 shadow-sm space-y-6">
@@ -20,9 +22,11 @@ const ApprovalActionPanel = ({ onApprove, onReject, onEscalate }) => {
           placeholder="State reason for approval or rejection..."
           className="w-full bg-white border border-border/50 rounded-2xl p-4 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[100px] transition-all text-sm shadow-sm"
         />
-        <div className="flex items-center justify-start pb-2 pt-1 border-b border-border/40 mb-2">
-           <VoiceDictation onTranscript={(text) => setComment(prev => prev + (prev ? ' ' : '') + text)} />
-        </div>
+        {aiEnabled && (
+          <div className="flex items-center justify-start pb-2 pt-1 border-b border-border/40 mb-2">
+            <VoiceDictation onTranscript={(text) => setComment(prev => prev + (prev ? ' ' : '') + text)} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">

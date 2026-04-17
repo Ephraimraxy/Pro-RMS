@@ -18,6 +18,8 @@ import {
 } from '../lib/store';
 import { aiAPI, deptAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
+import VoiceDictation from './VoiceDictation';
+import { useAIFeatures } from '../context/AIFeaturesContext';
 
 import { 
   FileText, Table, Download, Plus, Trash2, Save, 
@@ -146,6 +148,7 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
   const [title, setTitle] = useState(loadedDraft?.title || 'Untitled Document');
   const [saving, setSaving] = useState(false);
   const editorRef = useRef(null);
+  const { aiEnabled } = useAIFeatures();
 
   useEffect(() => {
     setTitle(loadedDraft?.title || 'Untitled Document');
@@ -221,14 +224,16 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
           <SaveIndicator saving={saving} />
         </div>
         <div className="flex items-center space-x-2 lg:space-x-4">
-          <div className="hidden lg:block">
-             <VoiceDictation onTranscript={(text) => {
-               if (editorRef.current) {
-                 editorRef.current.innerHTML += ' ' + text;
-                 handleInput();
-               }
-             }} />
-          </div>
+          {aiEnabled && (
+            <div className="hidden lg:block">
+              <VoiceDictation onTranscript={(text) => {
+                if (editorRef.current) {
+                  editorRef.current.innerHTML += ' ' + text;
+                  handleInput();
+                }
+              }} />
+            </div>
+          )}
           <button
             onClick={onSend}
             className="flex-1 lg:flex-none flex items-center justify-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs lg:text-sm px-6 py-3.5 rounded-2xl transition-all shadow-xl shadow-amber-600/20"
@@ -567,6 +572,7 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
   const [aiPreview, setAiPreview] = useState(null);
   const [activationMap, setActivationMap] = useState({});
   const [checkingActivation, setCheckingActivation] = useState({});
+  const { aiEnabled } = useAIFeatures();
 
   const isDeptUser = currentUser?.role === 'department';
   const baseDepartments = departments.filter(d => d.name !== 'Super Admin');
@@ -664,42 +670,44 @@ const SendToWorkflowModal = ({ isOpen, onClose, onSend, departments, initialTitl
           </div>
         
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          {/* AI Refinement Nudge */}
-          <div className={`p-4 rounded-2xl border transition-all ${
-            aiPreview ? 'bg-emerald-50 border-emerald-200' : 'bg-primary/5 border-primary/10'
-          }`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-xl ${aiPreview ? 'bg-emerald-500/10 text-emerald-600' : 'bg-primary/10 text-primary'}`}>
-                  <Zap size={18} />
+          {/* AI Refinement Nudge — hidden when AI features disabled */}
+          {aiEnabled && (
+            <div className={`p-4 rounded-2xl border transition-all ${
+              aiPreview ? 'bg-emerald-50 border-emerald-200' : 'bg-primary/5 border-primary/10'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl ${aiPreview ? 'bg-emerald-500/10 text-emerald-600' : 'bg-primary/10 text-primary'}`}>
+                    <Zap size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">AI Polish & Verify</h3>
+                    <p className="text-[10px] text-muted-foreground">Checks grammar and certifies document category.</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">AI Polish & Verify</h3>
-                  <p className="text-[10px] text-muted-foreground">Checks grammar and certifies document category.</p>
-                </div>
+                <button
+                  onClick={handleAiRefine}
+                  disabled={isRefining}
+                  className="px-4 py-2 bg-white border border-border rounded-xl text-xs font-bold shadow-sm hover:border-primary/30 transition-all flex items-center gap-2"
+                >
+                  {isRefining ? <Loader2 size={14} className="animate-spin" /> : aiPreview ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Zap size={14} />}
+                  {aiPreview ? 'Repolish' : 'Polish Content'}
+                </button>
               </div>
-              <button 
-                onClick={handleAiRefine}
-                disabled={isRefining}
-                className="px-4 py-2 bg-white border border-border rounded-xl text-xs font-bold shadow-sm hover:border-primary/30 transition-all flex items-center gap-2"
-              >
-                {isRefining ? <Loader2 size={14} className="animate-spin" /> : aiPreview ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Zap size={14} />}
-                {aiPreview ? 'Repolish' : 'Polish Content'}
-              </button>
-            </div>
-            {aiPreview && (
-              <div className="mt-3 pt-3 border-t border-emerald-100 grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                   <div className="text-[10px] font-black uppercase text-emerald-700 tracking-widest bg-emerald-100 px-2 py-0.5 rounded">Category: {aiPreview.type}</div>
-                </div>
-                {aiPreview.amount > 0 && (
-                   <div className="flex items-center gap-2 text-right justify-end">
+              {aiPreview && (
+                <div className="mt-3 pt-3 border-t border-emerald-100 grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="text-[10px] font-black uppercase text-emerald-700 tracking-widest bg-emerald-100 px-2 py-0.5 rounded">Category: {aiPreview.type}</div>
+                  </div>
+                  {aiPreview.amount > 0 && (
+                    <div className="flex items-center gap-2 text-right justify-end">
                       <div className="text-[10px] font-black uppercase text-primary tracking-widest bg-primary/10 px-2 py-0.5 rounded">₦{aiPreview.amount.toLocaleString()}</div>
-                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">

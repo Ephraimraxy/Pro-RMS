@@ -8,6 +8,7 @@ import VoiceDictation from './VoiceDictation';
 import { useAuth } from '../context/AuthContext';
 import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments } from '../lib/store';
 import { forwardAPI, aiAPI, settingsAPI, vettingAPI } from '../lib/api';
+import { useAIFeatures } from '../context/AIFeaturesContext';
 import { toast } from 'react-hot-toast';
 import {
   Search, Plus, Eye, FileText, X,
@@ -448,6 +449,7 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
   const [refining, setRefining] = useState(false);
 
   const { user: currentUser } = useAuth();
+  const { aiEnabled } = useAIFeatures();
   const [chairmanAllowedIds, setChairmanAllowedIds] = useState([]);
 
   useEffect(() => {
@@ -532,23 +534,25 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
         disabled={refining}
         className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 min-h-[80px] resize-none shadow-inner disabled:opacity-60"
       />
-      <div className="flex items-center justify-between pb-1 pt-1 border-b border-border/40">
-        <VoiceDictation
-          disabled={refining}
-          onTranscript={(text) => setNote(prev => prev + (prev ? ' ' : '') + text)}
-        />
-        {note.trim().length >= 5 && (
-          <button
-            type="button"
-            onClick={handleRefineNote}
+      {aiEnabled && (
+        <div className="flex items-center justify-between pb-1 pt-1 border-b border-border/40">
+          <VoiceDictation
             disabled={refining}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
-          >
-            {refining ? <Loader2 size={12} className="animate-spin" /> : <MessageSquare size={12} />}
-            {refining ? 'Refining…' : 'AI Refine'}
-          </button>
-        )}
-      </div>
+            onTranscript={(text) => setNote(prev => prev + (prev ? ' ' : '') + text)}
+          />
+          {note.trim().length >= 5 && (
+            <button
+              type="button"
+              onClick={handleRefineNote}
+              disabled={refining}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+            >
+              {refining ? <Loader2 size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+              {refining ? 'Refining…' : 'AI Refine'}
+            </button>
+          )}
+        </div>
+      )}
 
       {mode === 'forward' && (
         <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">

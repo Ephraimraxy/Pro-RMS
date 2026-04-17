@@ -6,6 +6,7 @@ import { useNetwork } from '../App';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import VoiceDictation from './VoiceDictation';
+import { useAIFeatures } from '../context/AIFeaturesContext';
 
 // Departments whose members may route to Super Admin
 const SUPER_ADMIN_PRIVILEGED_CODES = ['GMR', 'CEO', 'HRD'];
@@ -13,6 +14,7 @@ const SUPER_ADMIN_PRIVILEGED_CODES = ['GMR', 'CEO', 'HRD'];
 const RequisitionForm = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const { isOnline } = useNetwork();
+  const { aiEnabled } = useAIFeatures();
 
   const [types, setTypes] = useState([]);
   const [selectedType, setSelectedType] = useState(null);
@@ -243,18 +245,20 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                 <span className="text-[9px] text-muted-foreground/60 font-medium tracking-wide">Type or use voice ↓</span>
               </div>
 
-              {/* Voice Dictation */}
-              <VoiceDictation
-                disabled={submitting || refining}
-                onTranscript={(text) => {
-                  setFormData(p => ({
-                    ...p,
-                    description: p.description
-                      ? p.description.trimEnd() + ' ' + text
-                      : text
-                  }));
-                }}
-              />
+              {/* Voice Dictation — only when AI features enabled */}
+              {aiEnabled && (
+                <VoiceDictation
+                  disabled={submitting || refining}
+                  onTranscript={(text) => {
+                    setFormData(p => ({
+                      ...p,
+                      description: p.description
+                        ? p.description.trimEnd() + ' ' + text
+                        : text
+                    }));
+                  }}
+                />
+              )}
 
               <textarea
                 value={formData.description}
@@ -265,8 +269,8 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                 required
               />
 
-              {/* AI Refine inline button — appears after 5 chars, fully optional */}
-              {formData.description.trim().length >= 5 && (
+              {/* AI Refine inline button — only when AI features enabled */}
+              {aiEnabled && formData.description.trim().length >= 5 && (
                 <div className="flex justify-end">
                   <button
                     type="button"
