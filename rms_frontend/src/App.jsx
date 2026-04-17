@@ -257,15 +257,15 @@ function App() {
         <Toaster 
           position="top-center" 
           toastOptions={{ 
-            style: { 
-              background: 'hsl(var(--card))', 
-              color: 'hsl(var(--foreground))', 
-              border: '1px solid hsl(var(--border))', 
-              borderRadius: '12px', 
-              fontSize: '14px', 
+            style: {
+              background: '#ffffff',
+              color: '#1a1f2e',
+              border: '1px solid rgba(26, 92, 26, 0.15)',
+              borderRadius: '12px',
+              fontSize: '13px',
               fontWeight: '600',
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
-            } 
+              boxShadow: '0 10px 25px -5px rgba(249, 115, 22, 0.12), 0 4px 10px -3px rgba(0,0,0,0.06)'
+            }
           }} 
         />
         <PublicVerify />

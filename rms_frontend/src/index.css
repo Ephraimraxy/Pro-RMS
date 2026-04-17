@@ -10,35 +10,35 @@
 @layer base {
 
   :root {
-    /* Pristine White Background */
-    --background: 36 33% 98%; /* #FAF9F6 - Off white warm cream */
-    --foreground: 25 40% 15%; /* Dark Chocolate Text */
-    
-    --muted: 30 20% 92%; /* Very Light Mocha */
-    --muted-foreground: 25 20% 45%; 
-    
-    --accent: 25 35% 55%; /* Milk Chocolate Accent */
+    /* Clean White */
+    --background: 0 0% 99%;           /* Pure white */
+    --foreground: 220 15% 12%;        /* Near-black text */
+
+    --muted: 220 12% 94%;             /* Light cool grey */
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 142 47% 25%;            /* CSS Farms dark green */
     --accent-foreground: 0 0% 100%;
-    
+
     --popover: 0 0% 100%;
-    --popover-foreground: 25 40% 15%;
-    
-    --border: 30 20% 85%;
-    --input: 30 20% 85%;
-    
+    --popover-foreground: 220 15% 12%;
+
+    --border: 220 12% 88%;
+    --input: 220 12% 88%;
+
     --card: 0 0% 100%;
-    --card-foreground: 25 40% 15%;
-    
-    --primary: 22 50% 28%; /* CSS Deep Chocolate #6A3A22 */
+    --card-foreground: 220 15% 12%;
+
+    --primary: 24 95% 53%;            /* CSS Farms Orange  #f97316 */
     --primary-foreground: 0 0% 100%;
-    
-    --secondary: 30 30% 90%; 
-    --secondary-foreground: 22 50% 28%;
-    
+
+    --secondary: 142 47% 25%;         /* CSS Farms Dark Green  #1a5c1a */
+    --secondary-foreground: 0 0% 100%;
+
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    
-    --ring: 22 50% 28%;
+
+    --ring: 24 95% 53%;               /* Orange focus ring */
     --radius: 0.75rem;
   }
 
@@ -63,11 +63,11 @@
   
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    background-image: 
-      radial-gradient(at 0% 0%, hsla(30, 40%, 95%, 1) 0, transparent 50%), 
-      radial-gradient(at 100% 0%, hsla(25, 30%, 92%, 0.5) 0, transparent 50%);
+    background-image:
+      radial-gradient(at 0% 0%, hsla(24, 80%, 97%, 1) 0, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(142, 40%, 96%, 0.6) 0, transparent 50%);
     background-attachment: fixed;
-    overscroll-behavior-y: none; /* Stress-free PWA feel */
+    overscroll-behavior-y: none;
   }
 }
 
@@ -75,14 +75,14 @@
   background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(139, 90, 43, 0.08);
-  box-shadow: 0 8px 32px rgba(106, 58, 34, 0.04);
+  border: 1px solid rgba(26, 92, 26, 0.08);      /* subtle green border */
+  box-shadow: 0 8px 32px rgba(249, 115, 22, 0.05); /* subtle orange glow */
 }
 
 /* ── Custom Stress-Free Scrollbar ── */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(106, 58, 34, 0.1) transparent;
+  scrollbar-color: rgba(26, 92, 26, 0.1) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -95,20 +95,20 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(106, 58, 34, 0);
+  background: rgba(26, 92, 26, 0);
   border-radius: 10px;
   transition: background 0.3s;
 }
 
 .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(106, 58, 34, 0.15);
+  background: rgba(26, 92, 26, 0.15);
 }
 
 /* ── Quill Editor Perfection ── */
 .rms-quill-editor .ql-toolbar {
   border: none !important;
-  border-bottom: 1px solid rgba(106, 58, 34, 0.05) !important;
-  background: rgba(106, 58, 34, 0.01);
+  border-bottom: 1px solid rgba(26, 92, 26, 0.05) !important;
+  background: rgba(26, 92, 26, 0.01);
   border-radius: 16px 16px 0 0;
 }
 
