@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw,
   Building2, ShieldAlert
 } from 'lucide-react';
-import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications } from '../lib/store';
+import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications, getRequisitions } from '../lib/store';
 import { reqAPI } from '../lib/api';
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
@@ -36,7 +36,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
   </div>
 );
 
-const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange, currentView }) => {
+const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotifications, showBell, setShowBell, onLogout, onViewChange, currentView, actionAlert }) => {
   const { isOnline } = useNetwork();
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -115,17 +115,32 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
         </div>
       </div>
 
-      {/* Centered Status Badge */}
+      {/* Centered Status Badge / Action Alert */}
       <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center">
-        <div className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 transition-all duration-500 shadow-sm ${isOnline
-            ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600 shadow-emerald-500/5'
-            : 'bg-rose-500/5 border-rose-500/20 text-rose-500 shadow-rose-500/5'
+        {actionAlert ? (
+          <div 
+            onClick={() => onViewChange('requisitions')}
+            className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 cursor-pointer transition-all duration-500 shadow-lg group hover:scale-105 active:scale-95 ${
+            actionAlert.urgency === 'critical' ? 'bg-rose-500 text-white border-rose-600 shadow-rose-500/30 animate-pulse' :
+            actionAlert.urgency === 'urgent'   ? 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30' :
+            'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/30'
           }`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-          <span className="text-[9px] font-black uppercase tracking-[0.25em]">
-            {isOnline ? 'Neural Core: Online' : 'Neural Core: Offline'}
-          </span>
-        </div>
+            <ShieldAlert size={14} className={actionAlert.urgency === 'critical' ? 'animate-bounce' : ''} />
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
+              Action Needed: {actionAlert.count} Pending
+            </span>
+          </div>
+        ) : (
+          <div className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 transition-all duration-500 shadow-sm ${isOnline
+              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600 shadow-emerald-500/5'
+              : 'bg-rose-500/5 border-rose-500/20 text-rose-500 shadow-rose-500/5'
+            }`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+            <span className="text-[9px] font-black uppercase tracking-[0.25em]">
+              {isOnline ? 'Neural Core: Online' : 'Neural Core: Offline'}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center space-x-3 lg:space-x-5">
@@ -243,6 +258,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
   const [showBell, setShowBell] = useState(false);
   const [syncPending, setSyncPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [actionAlert, setActionAlert] = useState(null);
   const [showOversightMenu, setShowOversightMenu] = useState(false);
 
   useEffect(() => {
@@ -269,6 +285,37 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       checkStats();
     }
   }, [user]);
+
+  useEffect(() => {
+    const checkActions = async () => {
+      if (!user?.deptId) return;
+      try {
+        const all = await getRequisitions();
+        const pendingForMe = all.filter(r => r.status === 'pending' && r.targetDepartmentId === user.deptId);
+        
+        if (pendingForMe.length > 0) {
+          // Determine highest urgency: critical > urgent > normal
+          let highest = 'normal';
+          if (pendingForMe.some(r => (r.urgency || '').toLowerCase() === 'critical')) highest = 'critical';
+          else if (pendingForMe.some(r => (r.urgency || '').toLowerCase() === 'urgent')) highest = 'urgent';
+          
+          setActionAlert({ urgency: highest, count: pendingForMe.length });
+        } else {
+          setActionAlert(null);
+        }
+      } catch (err) {
+        console.warn("Action check failed:", err);
+      }
+    };
+    
+    checkActions();
+    const interval = setInterval(checkActions, 30000);
+    window.addEventListener('requisitionUpdated', checkActions);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('requisitionUpdated', checkActions);
+    };
+  }, [user?.deptId]);
 
   useEffect(() => {
     const loadSync = async () => {
@@ -311,6 +358,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         onLogout={logout}
         onViewChange={onViewChange}
         currentView={currentView}
+        actionAlert={actionAlert}
       />
 
       {syncPending > 0 && (

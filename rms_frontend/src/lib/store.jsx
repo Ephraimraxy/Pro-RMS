@@ -70,6 +70,7 @@ export async function addRequisition(data) {
   }));
   try {
     const result = await reqAPI.addRequisition(withClientIds);
+    window.dispatchEvent(new CustomEvent('requisitionUpdated'));
     return result;
   } catch (err) {
     const status = err?.response?.status;
@@ -181,6 +182,10 @@ export async function updateRequisitionStatus(id, newStatus, remarks = '') {
     await requisitionStore.setItem('all', all);
   }
   await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
+  
+  // Dispatch event for global listeners (like Action Alert)
+  window.dispatchEvent(new CustomEvent('requisitionUpdated'));
+
   toast.success(`${id} has been ${newStatus}`, {
     icon: <img src="/Group.png" className="w-8 h-5 object-cover rounded" alt="" />
   });

@@ -1,4 +1,4 @@
-# CSS-RMS: Enterprise Requisition Management System
+# RMS: Enterprise Requisition Management System
 
 A premium, "Zero-Hardcoding" internal workflow platform for CSS Group. This project features a high-fidelity React frontend (Aura Design System) that interfaces with a headless Odoo backend.
 
