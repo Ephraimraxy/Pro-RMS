@@ -71,7 +71,7 @@ const DepartmentSeal = ({ name, id = '' }) => {
       <text x={cx + arcR + 4} y={cy + 4} fontSize="8" fill={color} textAnchor="middle">◆</text>
 
       {/* CSS Farms logo centered */}
-      <image href="/logo.jpg" x={cx - 45} y={cy - 32} width="90" height="50"
+      <image href="/Group.png" x={cx - 45} y={cy - 32} width="90" height="50"
         preserveAspectRatio="xMidYMid meet" />
 
       {/* Thin divider below logo */}
@@ -90,10 +90,10 @@ const SealViewModal = ({ dept, onClose }) => {
     const svgEl = document.getElementById('seal-svg-export');
     if (!svgEl) return;
 
-    // Inline logo.jpg as base64 so the downloaded SVG is self-contained
+    // Inline Group.png as base64 so the downloaded SVG is self-contained
     let logoDataUrl = null;
     try {
-      const res = await fetch('/logo.jpg');
+      const res = await fetch('/Group.png');
       const blob = await res.blob();
       logoDataUrl = await new Promise((resolve) => {
         const reader = new FileReader();
@@ -171,9 +171,8 @@ const DeptItem = ({ dept, onDelete, onViewSeal, onEdit }) => {
   return (
     <div className="glass bg-white/80 p-3 lg:p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
       <div className="flex items-center space-x-4 min-w-0">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-          dept.type === 'Strategic' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted border border-border/50 text-muted-foreground'
-        }`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${dept.type === 'Strategic' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted border border-border/50 text-muted-foreground'
+          }`}>
           <Building2 size={18} />
         </div>
         <div className="min-w-0">
@@ -485,10 +484,10 @@ const DepartmentManager = ({ onViewChange }) => {
     setPendingDept(null);
   };
 
-  const strategic   = departments.filter(d => d.type === 'Strategic');
+  const strategic = departments.filter(d => d.type === 'Strategic');
   const operational = departments.filter(d => d.type === 'Operational');
-  const filteredS   = strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const filteredO   = operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredS = strategic.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredO = operational.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   if (loading) {
     return (
@@ -745,15 +744,13 @@ const DepartmentManager = ({ onViewChange }) => {
                     <button
                       key={dept.id}
                       onClick={() => toggleChairmanDept(dept.id)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                        allowed
+                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${allowed
                           ? 'bg-amber-50 border-amber-300 text-amber-800'
                           : 'bg-white border-border/50 text-muted-foreground hover:border-amber-200 hover:bg-amber-50/40'
-                      }`}
+                        }`}
                     >
-                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
-                        allowed ? 'bg-amber-500 border-amber-500' : 'border-border'
-                      }`}>
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${allowed ? 'bg-amber-500 border-amber-500' : 'border-border'
+                        }`}>
                         {allowed && <CheckCircle2 size={12} className="text-white" />}
                       </div>
                       <div className="min-w-0">
@@ -812,13 +809,11 @@ const DepartmentManager = ({ onViewChange }) => {
             </div>
             <button
               onClick={() => setAiToggle(v => !v)}
-              className={`relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none ${
-                aiToggle ? 'bg-purple-600' : 'bg-muted-foreground/30'
-              }`}
+              className={`relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none ${aiToggle ? 'bg-purple-600' : 'bg-muted-foreground/30'
+                }`}
             >
-              <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${
-                aiToggle ? 'translate-x-7' : 'translate-x-0'
-              }`} />
+              <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${aiToggle ? 'translate-x-7' : 'translate-x-0'
+                }`} />
             </button>
           </div>
 

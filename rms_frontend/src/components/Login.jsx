@@ -95,7 +95,7 @@ const Login = () => {
         <div className="relative z-10 border border-white/20 bg-white/5 backdrop-blur-sm rounded-[40px] p-10 py-12 flex flex-col justify-center my-auto">
           <div>
             <div className="w-32 h-20 rounded-2xl overflow-hidden bg-white/10 border border-white/20 shadow-inner">
-              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover object-center" />
+              <img src="/Group.png" alt="Logo" className="w-full h-full object-cover object-center" />
             </div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group of Companies</p>
           </div>
@@ -136,7 +136,7 @@ const Login = () => {
           {/* Mobile logo + app name */}
           <div className="lg:hidden flex items-center space-x-3 mb-8 pb-6 border-b border-border/40">
             <div className="w-20 h-11 rounded-xl overflow-hidden shrink-0">
-              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover object-center" />
+              <img src="/Group.png" alt="Logo" className="w-full h-full object-cover object-center" />
             </div>
             <div>
               <h1 className="text-sm font-bold text-foreground tracking-tight">CSS <span className="text-primary italic">RMS</span></h1>

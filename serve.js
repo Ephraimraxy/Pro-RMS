@@ -24,22 +24,22 @@ const logger = pino({
 });
 
 const multer = require('multer');
-const { 
-  putObject, 
-  getObjectStream, 
-  getObjectBuffer, 
-  generateStorageKey 
+const {
+  putObject,
+  getObjectStream,
+  getObjectBuffer,
+  generateStorageKey
 } = require('./lib/storage');
-const { 
+const {
   getKeyPair,
   getMasterKey,
   encryptPrivateKey,
   decryptPrivateKey,
   generateKeyPair,
-  sha256Hex, 
-  signHashHex, 
-  verifyHashHex, 
-  generateVerificationCode 
+  sha256Hex,
+  signHashHex,
+  verifyHashHex,
+  generateVerificationCode
 } = require('./lib/signing');
 const { sendEmail } = require('./lib/mailer');
 
@@ -48,7 +48,7 @@ const prisma = new PrismaClient();
 let isSystemReady = false; // Flag for database/seed readiness
 
 // Auto-migrate: add new columns if they don't exist yet (idempotent)
-;(async () => {
+; (async () => {
   try {
     await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "stageName" TEXT`;
     await prisma.$executeRaw`ALTER TABLE "Attachment" ADD COLUMN IF NOT EXISTS "stageKey" TEXT`;
@@ -95,12 +95,12 @@ const checkFinalApproveAuthority = (deptName, amount) => {
   const n = (deptName || '').toLowerCase();
   const amt = parseFloat(amount) || 0;
   const isChairman = /ceo|chairman/i.test(n);
-  const isGM       = /general\s*manager|\bgm\b/i.test(n);
-  const isHR       = /\bhr\b|human\s*resource/i.test(n);
+  const isGM = /general\s*manager|\bgm\b/i.test(n);
+  const isHR = /\bhr\b|human\s*resource/i.test(n);
 
   if (isChairman) return 'chairman'; // Chairman/CEO approves all amounts
   if (isGM && amt >= 50000) return 'gm';
-  if (isHR && amt < 50000)  return 'hr';
+  if (isHR && amt < 50000) return 'hr';
   return null; // Not authorised for this amount
 };
 
@@ -108,9 +108,9 @@ const checkFinalApproveAuthority = (deptName, amount) => {
 const VETTING_CHAIN = ['icc', 'audit', 'account'];
 const getVettingChainIndex = (deptName) => {
   const n = (deptName || '').toLowerCase();
-  if (/\bicc\b|integrity|compliance/i.test(n))  return 0;
-  if (/audit/i.test(n))                          return 1;
-  if (/account/i.test(n))                        return 2;
+  if (/\bicc\b|integrity|compliance/i.test(n)) return 0;
+  if (/audit/i.test(n)) return 1;
+  if (/account/i.test(n)) return 2;
   return -1;
 };
 
@@ -191,9 +191,9 @@ app.use(pinoHttp({ logger }));
 // ── BOOTING PROTECTOR MIDDLEWARE ───────────────────────────────────────────
 app.use((req, res, next) => {
   if (!isSystemReady && req.path.startsWith('/api') && !req.path.startsWith('/api/health')) {
-    return res.status(503).json({ 
-      error: 'System Initializing', 
-      message: 'The RMS core is currently synchronizing with the database and seeding authority records. Please wait 10 seconds.' 
+    return res.status(503).json({
+      error: 'System Initializing',
+      message: 'The RMS core is currently synchronizing with the database and seeding authority records. Please wait 10 seconds.'
     });
   }
   next();
@@ -781,7 +781,7 @@ app.post('/api/auth/refresh', authenticateToken, (req, res) => {
   try {
     const user = req.user;
     if (!user) return res.status(401).json({ error: 'Invalid session' });
-    
+
     // Revoke old token
     if (req.token) tokenBlacklist.add(req.token);
 
@@ -803,7 +803,7 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Login details are missing or invalid. Please check your credentials and try again.' });
     }
     const { departmentName, accessCode, mfaCode } = parsed.data;
-    
+
     const deptKey = `dept:${(departmentName || '').trim().toLowerCase()}`;
     logger.info(`[AUTH] Unified login attempt: "${departmentName?.trim()}"`);
 
@@ -811,13 +811,13 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
     if (checkLockout(deptKey)) {
       return res.status(429).json({ error: 'Department temporarily locked due to too many failed attempts. Try again in 15 minutes.' });
     }
-    
-    const dept = await prisma.department.findFirst({ 
-      where: { 
-        name: { equals: departmentName?.trim(), mode: 'insensitive' }, 
-      } 
+
+    const dept = await prisma.department.findFirst({
+      where: {
+        name: { equals: departmentName?.trim(), mode: 'insensitive' },
+      }
     });
-    
+
     if (!dept) {
       recordFailedLogin(deptKey);
       console.warn(`[AUTH] Failed: ${departmentName} / ${maskSecret(accessCode)}`);
@@ -850,19 +850,19 @@ app.post('/api/auth/dept-login', authLimiter, async (req, res) => {
         return res.status(401).json({ error: 'Invalid MFA PIN' });
       }
     }
-    
+
     // Unified Role Logic: "Super Admin" department gets 'global_admin' role
-    const adminUser = isSuperAdmin 
+    const adminUser = isSuperAdmin
       ? await prisma.user.findFirst({ where: { role: 'global_admin' } })
       : null;
-    const userData = { 
-      id: isSuperAdmin ? (adminUser?.id || 1) : `dept_${dept.id}`, 
-      name: dept.name, 
-      role: isSuperAdmin ? 'global_admin' : 'department', 
-      deptId: dept.id, 
-      email: `${dept.name.toLowerCase().replace(/\s/g, '')}@cssgroup.local` 
+    const userData = {
+      id: isSuperAdmin ? (adminUser?.id || 1) : `dept_${dept.id}`,
+      name: dept.name,
+      role: isSuperAdmin ? 'global_admin' : 'department',
+      deptId: dept.id,
+      email: `${dept.name.toLowerCase().replace(/\s/g, '')}@cssgroup.local`
     };
-    
+
     clearLoginAttempts(deptKey);
     const token = jwt.sign(userData, JWT_SECRET, { expiresIn: '12h' });
     await prisma.activityLog.create({ data: { action: 'Login', details: `${dept.name} authenticated via unified portal` } });
@@ -938,7 +938,7 @@ app.get('/api/departments', async (req, res) => {
     const token = authHeader && authHeader.split(' ')[1];
     let isAuthenticated = false;
     if (token) {
-      try { jwt.verify(token, JWT_SECRET); isAuthenticated = true; } catch (_) {}
+      try { jwt.verify(token, JWT_SECRET); isAuthenticated = true; } catch (_) { }
     }
 
     const departments = await prisma.department.findMany({
@@ -988,7 +988,7 @@ app.post('/api/workflow-stages', authenticateToken, requireRoles(['global_admin'
     })).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid workflow payload' });
     const stages = parsed.data; // Expects full array
-    
+
     await prisma.$transaction([
       prisma.workflowStage.deleteMany(),
       ...stages.map((stage, idx) => prisma.workflowStage.create({
@@ -1000,7 +1000,7 @@ app.post('/api/workflow-stages', authenticateToken, requireRoles(['global_admin'
         }
       }))
     ]);
-    
+
     res.json({ success: true });
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -1058,7 +1058,7 @@ const buildEmailContent = ({ title, lines = [], actionUrl, actionLabel }) => {
 async function notifyDepartmentHead({ departmentId, requisition, subject, lines }) {
   try {
     const dept = requisition?.department || await prisma.department.findUnique({ where: { id: departmentId } });
-    
+
     // 1. Create Platform Notification (for Dashboard bell icon)
     if (departmentId) {
       await prisma.notification.create({
@@ -1075,7 +1075,7 @@ async function notifyDepartmentHead({ departmentId, requisition, subject, lines 
       logger.info(`[MAIL] Skipping head notify for ${dept?.name || departmentId} - no email set.`);
       return;
     }
-    
+
     const actionUrl = APP_BASE_URL ? `${APP_BASE_URL.replace(/\/$/, '')}/requisitions/${requisition.id}` : '';
     const { text, html } = buildEmailContent({
       title: subject,
@@ -1083,7 +1083,7 @@ async function notifyDepartmentHead({ departmentId, requisition, subject, lines 
       actionUrl,
       actionLabel: 'Open Requisition'
     });
-    
+
     logger.info(`[MAIL] Attempting to send email to: ${dept.headEmail} | Subject: ${subject}`);
     const result = await sendEmail({ to: dept.headEmail, subject, text, html });
     if (result && result.skipped) {
@@ -1128,8 +1128,8 @@ async function notifyRole(roleName, message, requisitionId, departmentId = null)
     // Filter out fake placeholder emails (e.g. seeded @cssgroup.local)
     const emails = users.map(u => u.email).filter(e => e && !e.endsWith('@cssgroup.local'));
     if (emails.length > 0) {
-      const actionUrl = (APP_BASE_URL && requisitionId) 
-        ? `${APP_BASE_URL.replace(/\/$/, '')}/requisitions/${requisitionId}` 
+      const actionUrl = (APP_BASE_URL && requisitionId)
+        ? `${APP_BASE_URL.replace(/\/$/, '')}/requisitions/${requisitionId}`
         : (APP_BASE_URL ? APP_BASE_URL.replace(/\/$/, '') : '');
       const { text, html } = buildEmailContent({
         title: message,
@@ -1279,11 +1279,13 @@ app.put('/api/departments/:id', authenticateToken, requireRoles(['global_admin']
         address: address ?? null
       }
     });
-    await prisma.activityLog.create({ data: {
-      userId: getNumericUserId(req.user) || null,
-      action: 'Department Updated',
-      details: `Admin updated info for ${updated.name}`
-    }});
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: 'Department Updated',
+        details: `Admin updated info for ${updated.name}`
+      }
+    });
     res.json(updated);
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -1371,11 +1373,13 @@ app.put('/api/department/access-code', authenticateToken, async (req, res) => {
       where: { id: req.user.deptId },
       data: { accessCodeHash: newHash, codeChangedByDept: true }
     });
-    await prisma.activityLog.create({ data: {
-      userId: getNumericUserId(req.user) || null,
-      action: 'Access Code Changed',
-      details: `${dept.name} changed their own access code`
-    }});
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: 'Access Code Changed',
+        details: `${dept.name} changed their own access code`
+      }
+    });
     res.json({ ok: true });
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -1429,19 +1433,19 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
 
     for (const item of items) {
       const parsed = z.object({
-        clientId:          z.string().optional().nullable(),
-        title:             z.string().optional().nullable(),
-        description:       z.string().optional().nullable(),
-        type:              z.string().optional().nullable(),
-        amount:            z.union([z.string(), z.number()]).optional().nullable(),
-        departmentId:      z.union([z.string(), z.number()]).optional().nullable(),
-        urgency:           z.string().optional().nullable(),
-        content:           z.string().optional().nullable(),
-        isDraft:           z.union([z.boolean(), z.string()]).optional().nullable(),
+        clientId: z.string().optional().nullable(),
+        title: z.string().optional().nullable(),
+        description: z.string().optional().nullable(),
+        type: z.string().optional().nullable(),
+        amount: z.union([z.string(), z.number()]).optional().nullable(),
+        departmentId: z.union([z.string(), z.number()]).optional().nullable(),
+        urgency: z.string().optional().nullable(),
+        content: z.string().optional().nullable(),
+        isDraft: z.union([z.boolean(), z.string()]).optional().nullable(),
         targetDepartmentId: z.union([z.string(), z.number()]).optional().nullable(),
-        status:            z.string().optional().nullable(),
-        createdBy:         z.string().optional().nullable(),
-        createdAt:         z.string().optional().nullable(),
+        status: z.string().optional().nullable(),
+        createdBy: z.string().optional().nullable(),
+        createdAt: z.string().optional().nullable(),
       }).passthrough().safeParse(item);
       if (!parsed.success) {
         console.error('[REQS] Validation failed:', JSON.stringify(parsed.error.issues));
@@ -1487,11 +1491,11 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
 
       // GLOBAL GOVERNANCE CHECK (Bypassed for Global Admins)
       const isGlobalAdmin = normalizeRole(req.user.role) === 'global_admin';
-      
+
       if (!isGlobalAdmin) {
         const originReady = await checkDeptReadiness(originDeptId);
         if (!originReady.ready) return res.status(400).json({ error: originReady.reason });
-        
+
         if (targetDepartmentId) {
           const targetReady = await checkDeptReadiness(targetDepartmentId);
           if (!targetReady.ready) return res.status(400).json({ error: targetReady.reason });
@@ -1587,13 +1591,13 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
   try {
     const { id } = req.params;
     const parsed = z.object({
-      title:             z.string().optional(),
-      description:       z.string().optional(),
-      type:              z.string().optional(),
-      amount:            z.union([z.string(), z.number()]).optional(),
-      urgency:           z.string().optional(),
-      content:           z.string().optional(),
-      isDraft:           z.boolean().optional(),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      type: z.string().optional(),
+      amount: z.union([z.string(), z.number()]).optional(),
+      urgency: z.string().optional(),
+      content: z.string().optional(),
+      isDraft: z.boolean().optional(),
       targetDepartmentId: z.number().optional(),
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid payload' });
@@ -1634,9 +1638,9 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
       if (firstStage?.role) {
         await notifyRole(firstStage.role, `New Requisition: ${updated.title}`, updated.id);
       }
-      
+
       const originDeptId = userDeptId || updated.departmentId;
-      const originDept   = await prisma.department.findUnique({ where: { id: originDeptId } });
+      const originDept = await prisma.department.findUnique({ where: { id: originDeptId } });
       const currentRequisition = await prisma.requisition.findUnique({ where: { id: updated.id }, include: { department: true } });
 
       // Notify Target Department if specified
@@ -1824,7 +1828,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
 
     // Only the current target department or admin may forward/return
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
-    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
     if (!isAdmin && userDeptId !== requisition.targetDepartmentId) {
       return res.status(403).json({ error: 'Only the current target department may forward or return' });
     }
@@ -1930,7 +1934,7 @@ app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, r
     const { note } = parsed.data;
 
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
-    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
 
     // Load dept name to check authority
     let deptName = req.user.deptName || req.user.name || '';
@@ -1989,7 +1993,7 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
     const { vettingDeptId } = parsed.data;
 
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
-    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
 
     // Only the dept that final-approved (or admin) can send to vetting
     const rows = await prisma.$queryRaw`SELECT "finalApprovedByDeptId", "finalApprovalStatus", title FROM "Requisition" WHERE id = ${parseInt(id)} LIMIT 1`;
@@ -2027,7 +2031,7 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
         `A finally-approved requisition has been sent to your department for vetting.`,
         `Please log in to review, comment, and forward to the next department.`
       ]
-    }).catch(() => {});
+    }).catch(() => { });
 
     await prisma.activityLog.create({
       data: {
@@ -2047,7 +2051,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     const { id } = req.params;
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const parsed = z.object({
-      action:  z.enum(['forward', 'treated']),
+      action: z.enum(['forward', 'treated']),
       comment: z.string().optional(),
       nextDeptId: z.number().optional()  // required for 'forward', omitted for 'treated'
     }).safeParse(body || {});
@@ -2055,7 +2059,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     const { action, comment, nextDeptId } = parsed.data;
 
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
-    const isAdmin    = normalizeRole(req.user.role) === 'global_admin';
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
 
     const rows = await prisma.$queryRaw`
       SELECT r.id, r.title, r."currentVettingDeptId", r."finalApprovalStatus", r."finalApprovedByDeptId",
@@ -2071,8 +2075,8 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     const finalApprovedByDeptId = row.finalApprovedByDeptId ? parseInt(row.finalApprovedByDeptId) : null;
 
     // Allow: current vetting dept, final approving dept (chairman can treat), or admin
-    const isCurrentVetter    = userDeptId === currentVettingDeptId;
-    const isFinalApprover    = userDeptId === finalApprovedByDeptId;
+    const isCurrentVetter = userDeptId === currentVettingDeptId;
+    const isFinalApprover = userDeptId === finalApprovedByDeptId;
     const canAct = isAdmin || isCurrentVetter || (action === 'treated' && isFinalApprover);
     if (!canAct) {
       return res.status(403).json({ error: 'You are not the current vetting department for this requisition.' });
@@ -2082,7 +2086,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     let attachmentKey = null;
     let attachmentName = null;
     if (req.file) {
-      attachmentKey  = generateStorageKey(`vetting/${id}`, req.file.originalname);
+      attachmentKey = generateStorageKey(`vetting/${id}`, req.file.originalname);
       attachmentName = req.file.originalname;
       await putObject({ key: attachmentKey, body: req.file.buffer, contentType: req.file.mimetype });
       // Also save as standard attachment so it shows up in the file list
@@ -2135,7 +2139,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
             `Your requisition has been fully treated by ${actingDeptName}.`,
             `All vetting stages are complete.`
           ]
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } else {
       // Forward to next vetting dept
@@ -2159,7 +2163,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
           comment ? `Note: ${comment}` : null,
           `Please log in to review and process.`
         ].filter(Boolean)
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     await prisma.activityLog.create({
@@ -2189,22 +2193,24 @@ app.post('/api/requisitions/:id/publish-memo', authenticateToken, async (req, re
     const memo = await prisma.requisition.findUnique({ where: { id: reqId } });
     if (!memo) return res.status(404).json({ error: 'Memo not found' });
 
-    try { await prisma.$executeRaw`UPDATE "Requisition" SET "finalApprovalStatus"='published', "status"='approved' WHERE id=${reqId}`; } catch(_) {}
+    try { await prisma.$executeRaw`UPDATE "Requisition" SET "finalApprovalStatus"='published', "status"='approved' WHERE id=${reqId}`; } catch (_) { }
 
     const allDepts = await prisma.department.findMany({ where: { NOT: { name: 'Super Admin' } } });
     const memoTitle = memo.title || (memo.description || '').slice(0, 60) || 'Untitled Memo';
     await Promise.all(allDepts.map(async d => {
       try {
-        await prisma.notification.create({ data: {
-          departmentId: d.id,
-          message: `📋 Memo Published: "${memoTitle}" — by ${deptName || 'Administration'}`,
-          link: `/requisitions/${reqId}`,
-          type: 'info'
-        }});
-      } catch(_) {}
+        await prisma.notification.create({
+          data: {
+            departmentId: d.id,
+            message: `📋 Memo Published: "${memoTitle}" — by ${deptName || 'Administration'}`,
+            link: `/requisitions/${reqId}`,
+            type: 'info'
+          }
+        });
+      } catch (_) { }
     }));
 
-    try { await logAudit(req, 'Memo Published', `Memo #${reqId} published to all depts by ${deptName}`); } catch(_) {}
+    try { await logAudit(req, 'Memo Published', `Memo #${reqId} published to all depts by ${deptName}`); } catch (_) { }
     res.json({ ok: true, published: allDepts.length });
   } catch (err) { sendError(res, 500, err.message); }
 });
@@ -2403,15 +2409,15 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
     const requisition = await prisma.requisition.findUnique({
       where: { id: parseInt(id) },
       include: {
-        department:       { select: { name: true, code: true, headName: true, headEmail: true } },
+        department: { select: { name: true, code: true, headName: true, headEmail: true } },
         targetDepartment: { select: { name: true, code: true, headEmail: true, headName: true } },
-        creator:          { select: { name: true } },
-        currentStage:     true,
-        attachments:      true,
+        creator: { select: { name: true } },
+        currentStage: true,
+        attachments: true,
         approvals: {
           include: {
-            stage:     true,
-            user:      { select: { name: true, role: true } },
+            stage: true,
+            user: { select: { name: true, role: true } },
             signature: { select: { verificationCode: true, payloadHash: true } }
           },
           orderBy: { createdAt: 'asc' }
@@ -2419,7 +2425,7 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
         forwardEvents: {
           include: {
             fromDepartment: { select: { name: true, code: true } },
-            toDepartment:   { select: { name: true, code: true } }
+            toDepartment: { select: { name: true, code: true } }
           },
           orderBy: { createdAt: 'asc' }
         }
@@ -2440,12 +2446,12 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
     const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
     if (
       req.user.role === 'department' && userDeptId &&
-      requisition.departmentId       !== userDeptId &&
+      requisition.departmentId !== userDeptId &&
       requisition.targetDepartmentId !== userDeptId
     ) {
       const finalApprovedByDeptId = ext.finalApprovedByDeptId ? parseInt(ext.finalApprovedByDeptId) : null;
-      const currentVettingDeptId  = ext.currentVettingDeptId  ? parseInt(ext.currentVettingDeptId)  : null;
-      const treatedByDeptId       = ext.treatedByDeptId       ? parseInt(ext.treatedByDeptId)       : null;
+      const currentVettingDeptId = ext.currentVettingDeptId ? parseInt(ext.currentVettingDeptId) : null;
+      const treatedByDeptId = ext.treatedByDeptId ? parseInt(ext.treatedByDeptId) : null;
       let wasVetter = false;
       try {
         const vettingRows = await prisma.$queryRaw`
@@ -2488,7 +2494,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
         forwardEvents: {
           include: {
             fromDepartment: { include: { stamp: true } },
-            toDepartment:   { include: { stamp: true } }
+            toDepartment: { include: { stamp: true } }
           },
           orderBy: { createdAt: 'asc' }
         }
@@ -2499,7 +2505,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // ── Stage filtering ────────────────────────────────
     let filteredApprovals = requisition.approvals || [];
-    let filteredEvents    = requisition.forwardEvents || [];
+    let filteredEvents = requisition.forwardEvents || [];
 
     if (upToEventId) {
       if (upToEventId.startsWith('fwd-')) {
@@ -2515,8 +2521,8 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // ── PDF Setup ──────────────────────────────────────
     const pdfDoc = await PDFDocument.create();
-    const font       = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont   = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
     const A4_W = 595.28, A4_H = 841.89;
@@ -2554,7 +2560,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       const charsPerLine = Math.floor(maxWidth / (textFont.widthOfTextAtSize('M', fontSize) * 0.55));
       const words = text.split(/\s+/);
       let currentLine = '';
-      
+
       for (const word of words) {
         const testLine = currentLine ? currentLine + ' ' + word : word;
         if (testLine.length > charsPerLine && currentLine) {
@@ -2627,9 +2633,9 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     };
 
     // ── Load CSS Farms logo for seal ─────────────────────
-    const sealLogoPath = path.join(__dirname, 'samples', 'logo.jpg');
+    const sealLogoPath = path.join(__dirname, 'samples', 'Group.png');
     let sealLogoBytes = null;
-    try { if (fs.existsSync(sealLogoPath)) sealLogoBytes = fs.readFileSync(sealLogoPath); } catch {}
+    try { if (fs.existsSync(sealLogoPath)) sealLogoBytes = fs.readFileSync(sealLogoPath); } catch { }
     let sealLogoImg = null;
     if (sealLogoBytes) sealLogoImg = await embedSafe(sealLogoBytes);
 
@@ -2645,9 +2651,9 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       const headEmails = deptRows.filter(d => d.headEmail).map(d => d.headEmail);
       const headUserRows = headEmails.length > 0
         ? await prisma.user.findMany({
-            where: { email: { in: headEmails } },
-            select: { email: true, name: true, signature: { select: { imageKey: true } } }
-          })
+          where: { email: { in: headEmails } },
+          select: { email: true, name: true, signature: { select: { imageKey: true } } }
+        })
         : [];
       const headUserByEmail = new Map(headUserRows.map(u => [u.email, u]));
       for (const dept of deptRows) {
@@ -2667,16 +2673,16 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     // ── Helper: Draw auto-generated circular seal ─────────
     // Draws a CSS Farms-branded seal at (cx, cy) with dept name + date
     const drawSeal = async (pg, cx, cy, deptName, dateStr) => {
-      const r   = 38; // outer ring radius
-      const r2  = 31; // second outer ring (double-ring effect)
-      const ir  = 21; // inner ring radius
+      const r = 38; // outer ring radius
+      const r2 = 31; // second outer ring (double-ring effect)
+      const ir = 21; // inner ring radius
       const green = rgb(0.1, 0.36, 0.1);
       const nameUpper = sanitizeText((deptName || '').toUpperCase());
-      const nameDisp  = nameUpper.length > 20 ? nameUpper.substring(0, 18) + '..' : nameUpper;
+      const nameDisp = nameUpper.length > 20 ? nameUpper.substring(0, 18) + '..' : nameUpper;
       const nameFontSz = nameDisp.length > 14 ? 4.5 : 5.5;
 
       // Outer ring — white fill so content inside is on a clean background
-      pg.drawCircle({ x: cx, y: cy, size: r,  color: rgb(1, 1, 1), borderColor: green, borderWidth: 4 });
+      pg.drawCircle({ x: cx, y: cy, size: r, color: rgb(1, 1, 1), borderColor: green, borderWidth: 4 });
       // Second outer ring (thin) — gives the double-ring look from the reference
       pg.drawCircle({ x: cx, y: cy, size: r2, borderColor: green, borderWidth: 1.0 });
       // Inner ring
@@ -2697,7 +2703,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       pg.drawText(nameDisp, { x: cx - nw / 2, y: cy + r - 10, size: nameFontSz, font: boldFont, color: green });
 
       // "DEPARTMENT" label at bottom — shifted inward so chord is wide enough (~45pt)
-      const dl  = 'DEPARTMENT';
+      const dl = 'DEPARTMENT';
       const dlw = boldFont.widthOfTextAtSize(dl, 5);
       pg.drawText(dl, { x: cx - dlw / 2, y: cy - r + 9, size: 5, font: boldFont, color: green });
     };
@@ -2709,7 +2715,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // ── Logo ────────────────────────────────────────────
     try {
-      const logoPath = path.join(__dirname, 'samples', 'logo.jpg');
+      const logoPath = path.join(__dirname, 'samples', 'Group.png');
       if (fs.existsSync(logoPath)) {
         const logoBytes = fs.readFileSync(logoPath);
         const logoImage = await pdfDoc.embedJpg(logoBytes);
@@ -2851,23 +2857,23 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       // Layout: left column = event text (margin → margin+295)
       //         right column = signature + seal (margin+310 → A4_W-margin)
       //           sub-cols:  sig at sigColX (width 65), seal centred at sealCX
-      const leftColMax  = margin + 295;
-      const sigColX     = margin + 315;
-      const sigColW     = 65;
-      const sealCX      = sigColX + sigColW + 16 + 38; // after sig + gap + seal radius
-      const minRowH     = 95; // minimum pts per row so seal always fits
+      const leftColMax = margin + 295;
+      const sigColX = margin + 315;
+      const sigColW = 65;
+      const sealCX = sigColX + sigColW + 16 + 38; // after sig + gap + seal radius
+      const minRowH = 95; // minimum pts per row so seal always fits
 
       for (let i = 0; i < filteredEvents.length; i++) {
         const evt = filteredEvents[i];
         ensureSpace(minRowH);
 
-        const rowTopY    = y; // top of this row in pdf-lib coords (y up)
-        let   textY      = y; // cursor for left-column text
+        const rowTopY = y; // top of this row in pdf-lib coords (y up)
+        let textY = y; // cursor for left-column text
 
         const actionLabel = evt.action === 'created' ? 'CREATED'
-                          : evt.action === 'forwarded' ? 'FORWARDED' : 'RETURNED';
+          : evt.action === 'forwarded' ? 'FORWARDED' : 'RETURNED';
         const fromName = sanitizeText(evt.fromDepartment?.name || 'Department');
-        const toName   = sanitizeText(evt.toDepartment?.name   || 'Sender');
+        const toName = sanitizeText(evt.toDepartment?.name || 'Sender');
         const evtDateStr = new Date(evt.createdAt).toLocaleString();
 
         // ── LEFT COLUMN: event text ───────────────────────
@@ -2887,9 +2893,9 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
         if (evt.note) {
           const noteStr = sanitizeText(`Comment: "${evt.note}"`);
-          const maxNC   = Math.floor((leftColMax - margin - 30) / (italicFont.widthOfTextAtSize('M', 8) * 0.6));
-          const words   = noteStr.split(' ');
-          let   line    = '';
+          const maxNC = Math.floor((leftColMax - margin - 30) / (italicFont.widthOfTextAtSize('M', 8) * 0.6));
+          const words = noteStr.split(' ');
+          let line = '';
           for (const w of words) {
             const t = line ? `${line} ${w}` : w;
             if (t.length > maxNC && line) {
@@ -2901,7 +2907,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
         }
 
         // ── RIGHT COLUMN: signature + seal ───────────────
-        const sigData  = deptSigMap.get(evt.fromDeptId);
+        const sigData = deptSigMap.get(evt.fromDeptId);
         const sealDate = new Date(evt.createdAt).toLocaleDateString('en-GB', {
           day: 'numeric', month: 'long', year: 'numeric'
         }).toUpperCase();
@@ -2917,7 +2923,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
               page.drawImage(sigImg, { x: sigColX, y: sigBot - sh, width: sw, height: sh, opacity: 0.9 });
               sigBot -= sh;
             }
-          } catch {}
+          } catch { }
         }
 
         // Head name + title below signature
@@ -3005,9 +3011,9 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(Buffer.from(pdfBytes));
-  } catch (error) { 
+  } catch (error) {
     logger.error('Dynamic PDF Error:', error);
-    res.status(500).json({ error: error.message }); 
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -3036,19 +3042,19 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
       };
     }
 
-    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     const [records, total] = await Promise.all([
       prisma.requisition.findMany({
         where,
         include: {
-          department:       { select: { name: true } },
+          department: { select: { name: true } },
           targetDepartment: { select: { name: true, headEmail: true } },
-          creator:          { select: { name: true } },
-          currentStage:     true,
-          attachments:      { select: { id: true, filename: true, size: true, mimeType: true } }
+          creator: { select: { name: true } },
+          currentStage: true,
+          attachments: { select: { id: true, filename: true, size: true, mimeType: true } }
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -3084,12 +3090,12 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
   try {
     const { id } = req.params;
     const files = req.files;
-    
+
     if (!files || files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
 
     const userId = getNumericUserId(req.user);
-    const stageName   = req.body?.stageName   || null;
-    const stageKey    = req.body?.stageKey    || null;
+    const stageName = req.body?.stageName || null;
+    const stageKey = req.body?.stageKey || null;
     const uploaderDept = req.body?.uploaderDept || null;
     const attachments = [];
     for (const file of files) {
@@ -3113,11 +3119,11 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
 
     // Log Activity
     await prisma.activityLog.create({
-        data: {
-            userId: userId || null,
-            action: 'File Upload',
-            details: `Uploaded ${files.length} files to Requisition #${id}`
-        }
+      data: {
+        userId: userId || null,
+        action: 'File Upload',
+        details: `Uploaded ${files.length} files to Requisition #${id}`
+      }
     });
 
     res.json(attachments);
@@ -3127,7 +3133,7 @@ app.post('/api/requisitions/:id/attachments', authenticateToken, upload.array('f
 app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const attachment = await prisma.attachment.findUnique({ 
+    const attachment = await prisma.attachment.findUnique({
       where: { id: parseInt(id) },
       include: { requisition: true }
     });
@@ -3159,7 +3165,7 @@ app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => 
 app.get('/api/attachments/:id/preview', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const attachment = await prisma.attachment.findUnique({ 
+    const attachment = await prisma.attachment.findUnique({
       where: { id: parseInt(id) },
       include: { requisition: true }
     });
@@ -3234,10 +3240,10 @@ app.post('/api/ai/transcribe', authenticateToken, upload.single('audio'), async 
     }
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    
+
     // Convert buffer to a File-like object for OpenAI SDK
-    const audioFile = new File([req.file.buffer], 'recording.webm', { 
-      type: req.file.mimetype || 'audio/webm' 
+    const audioFile = new File([req.file.buffer], 'recording.webm', {
+      type: req.file.mimetype || 'audio/webm'
     });
 
     const transcription = await openai.audio.transcriptions.create({
@@ -3459,10 +3465,10 @@ const server = app.listen(PORT, async () => {
       logger.info('[BOOT] Synchronizing database schema...');
       // Note: --accept-data-loss is used for rapid UAT iteration; usually avoided in rigid production
       await runSetup('npx prisma db push --schema=rms_backend/prisma/schema.prisma --accept-data-loss');
-      
+
       logger.info('[BOOT] Seeding core authority records...');
       await runSetup('node rms_backend/prisma/seed.js');
-      
+
       // Secondary setup tasks already in serve.js logic
       try {
         await ensureActivePublicKey();
@@ -3483,7 +3489,7 @@ const server = app.listen(PORT, async () => {
 const gracefulShutdown = (signal) => {
   logger.info(`[SHUTDOWN] ${signal} received — closing server gracefully...`);
   server.close(async () => {
-    try { await prisma.$disconnect(); } catch (_) {}
+    try { await prisma.$disconnect(); } catch (_) { }
     logger.info('[SHUTDOWN] Database disconnected. Exiting.');
     process.exit(0);
   });
@@ -3492,4 +3498,4 @@ const gracefulShutdown = (signal) => {
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

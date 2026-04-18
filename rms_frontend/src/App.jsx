@@ -21,7 +21,7 @@ class ChunkErrorBoundary extends React.Component {
         <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8 text-center space-y-5">
           <div className="w-14 h-14 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center mx-auto">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-destructive">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           </div>
           <div className="space-y-1.5">
@@ -72,33 +72,33 @@ const NetworkProvider = ({ children }) => {
 
   useEffect(() => {
     let checkInterval;
-    
+
     const checkConnectivity = async () => {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
-        
-        const response = await fetch('/health', { 
+
+        const response = await fetch('/health', {
           method: 'GET',
           signal: controller.signal,
           cache: 'no-store'
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         if (response.ok && !isOnline) {
           setIsOnline(true);
-          toast.success('Connection Restored. Syncing drafts...', { 
-            icon: <img src="/logo.jpg" className="w-8 h-5 object-cover rounded" alt="" />
+          toast.success('Connection Restored. Syncing drafts...', {
+            icon: <img src="/Group.png" className="w-8 h-5 object-cover rounded" alt="" />
           });
           flushSyncQueue();
         }
       } catch (err) {
         if (isOnline) {
           setIsOnline(false);
-          toast.error('Offline Mode Active. Drafts will save locally.', { 
-            icon: <img src="/logo.jpg" className="w-8 h-5 object-cover rounded grayscale opacity-50" alt="" />,
-            duration: 4000 
+          toast.error('Offline Mode Active. Drafts will save locally.', {
+            icon: <img src="/Group.png" className="w-8 h-5 object-cover rounded grayscale opacity-50" alt="" />,
+            duration: 4000
           });
         }
       }
@@ -134,9 +134,9 @@ const NetworkProvider = ({ children }) => {
 
 // Valid view names — used to validate hash on load and popstate
 const VALID_VIEWS = [
-  'dashboard','requisitions','memos','activity',
-  'workflow_builder','department_manager','audit_logs',
-  'document_studio','dept_profile'
+  'dashboard', 'requisitions', 'memos', 'activity',
+  'workflow_builder', 'department_manager', 'audit_logs',
+  'document_studio', 'dept_profile'
 ];
 
 const getViewFromHash = () => {
@@ -196,7 +196,7 @@ const AppContent = () => {
         <div className="relative">
           <div className="w-20 h-20 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
           <div className="absolute inset-0 flex items-center justify-center">
-             <img src="/logo.jpg" className="w-24 h-14 object-cover rounded-xl animate-pulse" alt="Loading" />
+            <img src="/Group.png" className="w-24 h-14 object-cover rounded-xl animate-pulse" alt="Loading" />
           </div>
         </div>
         <div className="text-center space-y-2">
@@ -211,7 +211,7 @@ const AppContent = () => {
 
   // Security Guard: Prevent department users from accessing admin views
   const isAdminView = ['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView);
-  const activeView  = (user.role === 'department' && isAdminView) ? 'dashboard' : currentView;
+  const activeView = (user.role === 'department' && isAdminView) ? 'dashboard' : currentView;
 
   const views = {
     dashboard: <Dashboard onViewChange={navigate} />,
@@ -255,9 +255,9 @@ function App() {
   if (window.location.pathname.startsWith('/verify')) {
     return (
       <>
-        <Toaster 
-          position="top-center" 
-          toastOptions={{ 
+        <Toaster
+          position="top-center"
+          toastOptions={{
             style: {
               background: '#ffffff',
               color: '#1a1f2e',
@@ -267,7 +267,7 @@ function App() {
               fontWeight: '600',
               boxShadow: '0 10px 25px -5px rgba(249, 115, 22, 0.12), 0 4px 10px -3px rgba(0,0,0,0.06)'
             }
-          }} 
+          }}
         />
         <PublicVerify />
       </>
@@ -275,19 +275,19 @@ function App() {
   }
   return (
     <NetworkProvider>
-      <Toaster 
-        position="top-center" 
-        toastOptions={{ 
-          style: { 
-            background: 'hsl(var(--card))', 
-            color: 'hsl(var(--foreground))', 
-            border: '1px solid hsl(var(--border))', 
-            borderRadius: '12px', 
-            fontSize: '14px', 
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: 'hsl(var(--card))',
+            color: 'hsl(var(--foreground))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '12px',
+            fontSize: '14px',
             fontWeight: '600',
             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
-          } 
-        }} 
+          }
+        }}
       />
       <AuthProvider>
         <AIFeaturesProvider>

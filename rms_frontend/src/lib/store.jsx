@@ -141,8 +141,8 @@ export async function uploadAttachments(requisitionId, files, { stageName, stage
   }
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
-  if (stageName)    formData.append('stageName', stageName);
-  if (stageKey)     formData.append('stageKey', stageKey);
+  if (stageName) formData.append('stageName', stageName);
+  if (stageKey) formData.append('stageKey', stageKey);
   if (uploaderDept) formData.append('uploaderDept', uploaderDept);
 
   try {
@@ -182,7 +182,7 @@ export async function updateRequisitionStatus(id, newStatus, remarks = '') {
   }
   await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
   toast.success(`${id} has been ${newStatus}`, {
-    icon: <img src="/logo.jpg" className="w-8 h-5 object-cover rounded" alt="" />
+    icon: <img src="/Group.png" className="w-8 h-5 object-cover rounded" alt="" />
   });
 }
 
