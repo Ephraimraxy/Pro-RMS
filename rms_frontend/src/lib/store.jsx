@@ -225,12 +225,16 @@ export async function getDashboardStats(user) {
   if (!user || !user.deptId) return { pending: 0, approved: 0, rejected: 0, totalSpent: 0 };
 
   const userDeptId = Number(user.deptId);
+  const userDeptName = user.departmentName || '';
   const isAdmin = (user.role || '').toLowerCase().replace(/\s+/g, '_') === 'global_admin';
+  const isExecutive = isAdmin || 
+                    /ceo|chairman/i.test(userDeptName) || 
+                    /general\s*manager|\bgm\b/i.test(userDeptName);
 
   // "Pending" on dashboard now means "Personal Action Items"
   const pendingActions = all.filter(r => {
     const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
-    const needsFinal = isAdmin && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
+    const needsFinal = isExecutive && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
     const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
     return isTargeted || needsFinal || isVetting;
   });

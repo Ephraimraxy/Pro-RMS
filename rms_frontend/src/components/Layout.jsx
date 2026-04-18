@@ -295,13 +295,17 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         const all = await getRequisitions();
         const pendingForMe = all.filter(r => {
           const userDeptId = Number(user.deptId);
+          const userDeptName = user.departmentName || '';
           const isAdmin = normalizeRole(user.role) === 'global_admin';
+          const isExecutive = isAdmin || 
+                            /ceo|chairman/i.test(userDeptName) || 
+                            /general\s*manager|\bgm\b/i.test(userDeptName);
           
           // Case 1: Standard internal approval path
           const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
           
-          // Case 2: Final Approval path (for Chairman/GM)
-          const needsFinal = isAdmin && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
+          // Case 2: Final Approval path (for Chairman/GM/Admin)
+          const needsFinal = isExecutive && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
           
           // Case 3: Vetting path
           const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
