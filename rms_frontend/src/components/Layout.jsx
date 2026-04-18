@@ -120,16 +120,18 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
       {/* Centered Status Badge / Action Alert */}
       <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center">
         {actionAlert ? (
-          <div 
+          <div
             onClick={() => onViewChange('requisitions')}
             className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 cursor-pointer transition-all duration-500 shadow-lg group hover:scale-105 active:scale-95 ${
-            actionAlert.urgency === 'critical' ? 'bg-rose-500 text-white border-rose-600 shadow-rose-500/30 animate-pulse' :
-            actionAlert.urgency === 'urgent'   ? 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30' :
-            'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/30'
+            actionAlert.mode === 'desk'
+              ? 'bg-rose-500 text-white border-rose-600 shadow-rose-500/30 animate-pulse'
+              : 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30'
           }`}>
-            <ShieldAlert size={14} className={actionAlert.urgency === 'critical' ? 'animate-bounce' : ''} />
+            <ShieldAlert size={14} className={actionAlert.mode === 'desk' ? 'animate-bounce' : ''} />
             <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
-              Action Needed: {actionAlert.count} Pending
+              {actionAlert.mode === 'desk'
+                ? `${actionAlert.count} Awaiting Your Signature`
+                : `${actionAlert.count} Urgent In-Flight`}
             </span>
           </div>
         ) : (
@@ -293,36 +295,40 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       if (!user?.deptId) return;
       try {
         const all = await getRequisitions();
+        const userDeptId   = Number(user.deptId);
+        const userDeptName = user.departmentName || '';
+        const isAdmin      = normalizeRole(user.role) === 'global_admin';
+        const isExecutive  = isAdmin ||
+                             /ceo|chairman/i.test(userDeptName) ||
+                             /general\s*manager|\bgm\b/i.test(userDeptName);
+
+        // Items actively waiting for MY action (Red Pulse: folder is on your desk)
         const pendingForMe = all.filter(r => {
-          const userDeptId = Number(user.deptId);
-          const userDeptName = user.departmentName || '';
-          const isAdmin = normalizeRole(user.role) === 'global_admin';
-          const isExecutive = isAdmin || 
-                            /ceo|chairman/i.test(userDeptName) || 
-                            /general\s*manager|\bgm\b/i.test(userDeptName);
-          
-          // Case 1: Standard internal approval path
           const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
-          
-          // Case 2: Final Approval path (for Chairman/GM/Admin)
           const needsFinal = isExecutive && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
-          
-          // Case 3: Vetting path
-          const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
-          
+          const isVetting  = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
           return isTargeted || needsFinal || isVetting;
         });
-        
+
         if (pendingForMe.length > 0) {
-          // Determine highest urgency: critical > urgent > normal
-          let highest = 'normal';
-          const urgencies = pendingForMe.map(r => (r.urgency || 'normal').toLowerCase());
-          if (urgencies.includes('critical')) highest = 'critical';
-          else if (urgencies.includes('urgent')) highest = 'urgent';
-          
-          setActionAlert({ urgency: highest, count: pendingForMe.length });
+          // Red Pulse Alert: folder is on your desk for your signature
+          setActionAlert({ urgency: 'critical', count: pendingForMe.length, mode: 'desk' });
         } else {
-          setActionAlert(null);
+          // Amber Alert: check if you have urgent in-flight items pending someone else's input
+          const urgentElsewhere = all.filter(r => {
+            const submittedByMe = Number(r.departmentId) === userDeptId;
+            const isInFlight    = r.status === 'pending' ||
+                                  (r.finalApprovalStatus && !['treated', 'published', 'none'].includes(r.finalApprovalStatus));
+            const isUrgent      = ['urgent', 'critical'].includes((r.urgency || '').toLowerCase());
+            return submittedByMe && isInFlight && isUrgent;
+          });
+
+          if (urgentElsewhere.length > 0) {
+            // Amber Alert: urgent folder pending someone else's input
+            setActionAlert({ urgency: 'urgent', count: urgentElsewhere.length, mode: 'elsewhere' });
+          } else {
+            setActionAlert(null); // Neural Core Online: all clear
+          }
         }
       } catch (err) {
         console.warn("Action check failed:", err);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
-import { Plus, Trash2, Shield, ArrowDown, Settings2, Info, FileText } from 'lucide-react';
+import { Plus, Trash2, Shield, ArrowDown, Settings2, Info, FileText, Users, ChevronRight, Save, Loader2 } from 'lucide-react';
 
 const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
   return (
@@ -75,20 +75,27 @@ const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
 };
 
 import { getWorkflows, updateWorkflows, getRequisitionTypes, addRequisitionType, deleteRequisitionType } from '../lib/store';
+import { settingsAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import Modal from './Modal';
 import ConfirmModal from './ConfirmModal';
+
+const DEFAULT_THRESHOLDS = { hr_ceiling: 50000, chairman_min: 100000 };
 
 const WorkflowBuilder = ({ onViewChange }) => {
   const { user } = useAuth();
   const [stages, setStages] = useState([]);
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('stages'); // 'stages' or 'types'
+  const [activeTab, setActiveTab] = useState('stages'); // 'stages' | 'types' | 'authority'
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [pendingStage, setPendingStage] = useState(null);
   const [pendingType, setPendingType] = useState(null);
   const [newTypeName, setNewTypeName] = useState('');
+
+  // ── Authority threshold state ──────────────────────────────────────────────
+  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
+  const [savingThresholds, setSavingThresholds] = useState(false);
 
   const loadData = async () => {
     const [workflowData, typeData] = await Promise.all([
@@ -100,8 +107,33 @@ const WorkflowBuilder = ({ onViewChange }) => {
     setLoading(false);
   };
 
+  const loadThresholds = async () => {
+    try {
+      const res = await settingsAPI.get('approval_thresholds');
+      if (res?.value) {
+        try { setThresholds({ ...DEFAULT_THRESHOLDS, ...JSON.parse(res.value) }); } catch {}
+      }
+    } catch {}
+  };
+
+  const saveThresholds = async () => {
+    // Basic validation: hr_ceiling must be less than chairman_min
+    if (thresholds.hr_ceiling >= thresholds.chairman_min) {
+      toast.error('HR Ceiling must be less than the Chairman / CEO floor.');
+      return;
+    }
+    setSavingThresholds(true);
+    try {
+      await settingsAPI.set('approval_thresholds', JSON.stringify(thresholds));
+      toast.success('Authority thresholds saved successfully.');
+    } catch {
+      toast.error('Failed to save thresholds. Please try again.');
+    } finally { setSavingThresholds(false); }
+  };
+
   useEffect(() => {
     loadData();
+    loadThresholds();
   }, []);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -190,22 +222,136 @@ const WorkflowBuilder = ({ onViewChange }) => {
           </div>
           
           <div className="flex bg-muted/40 p-1.5 rounded-2xl border border-border/50 shadow-inner">
-            <button 
+            <button
               onClick={() => setActiveTab('stages')}
               className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${activeTab === 'stages' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80'}`}
             >
               Approval Workflow
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('types')}
               className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${activeTab === 'types' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80'}`}
             >
               Unit Types
             </button>
+            <button
+              onClick={() => setActiveTab('authority')}
+              className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${activeTab === 'authority' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Authority Bands
+            </button>
           </div>
         </div>
 
-        {activeTab === 'stages' ? (
+        {activeTab === 'authority' ? (
+          <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="glass bg-white/60 p-8 rounded-[2.5rem] border border-border/50 shadow-xl space-y-8">
+              <div>
+                <h3 className="text-lg font-black text-foreground tracking-tight">Approval Authority Bands</h3>
+                <p className="text-sm text-muted-foreground mt-1 font-medium leading-relaxed">
+                  Define the two amount boundaries that split requisitions across the three signatory tiers.
+                  Changes take effect immediately for all new approvals.
+                </p>
+              </div>
+
+              {/* Live band preview */}
+              <div className="space-y-2">
+                {/* Band 1 – HR */}
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-blue-50 border border-blue-200">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
+                    <Users size={18} className="text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-blue-800 uppercase tracking-widest">Band 1 — HR</p>
+                    <p className="text-[11px] text-blue-700 font-medium mt-0.5">
+                      ₦0 – ₦{Number(thresholds.hr_ceiling).toLocaleString()}
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-blue-400 shrink-0" />
+                </div>
+
+                {/* Band 2 – GM (derived) */}
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
+                    <Shield size={18} className="text-amber-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-amber-800 uppercase tracking-widest">Band 2 — General Manager</p>
+                    <p className="text-[11px] text-amber-700 font-medium mt-0.5">
+                      ₦{Number(thresholds.hr_ceiling + 1).toLocaleString()} – ₦{Number(thresholds.chairman_min - 1).toLocaleString()}
+                      <span className="ml-2 text-[10px] italic opacity-60">(auto-calculated)</span>
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-amber-400 shrink-0" />
+                </div>
+
+                {/* Band 3 – Chairman */}
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0">
+                    <Settings2 size={18} className="text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black text-emerald-800 uppercase tracking-widest">Band 3 — Chairman / CEO</p>
+                    <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                      ₦{Number(thresholds.chairman_min).toLocaleString()} and above
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Input controls */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-border/40">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    HR Ceiling (₦)
+                  </label>
+                  <p className="text-[10px] text-muted-foreground/60 italic -mt-1">
+                    HR can approve amounts up to and including this value
+                  </p>
+                  <input
+                    type="number"
+                    min="1"
+                    value={thresholds.hr_ceiling}
+                    onChange={e => setThresholds(prev => ({ ...prev, hr_ceiling: parseInt(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-border/50 rounded-xl px-4 py-3 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Chairman / CEO Floor (₦)
+                  </label>
+                  <p className="text-[10px] text-muted-foreground/60 italic -mt-1">
+                    Chairman must approve amounts from this value upwards
+                  </p>
+                  <input
+                    type="number"
+                    min="1"
+                    value={thresholds.chairman_min}
+                    onChange={e => setThresholds(prev => ({ ...prev, chairman_min: parseInt(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-border/50 rounded-xl px-4 py-3 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+                  />
+                </div>
+              </div>
+
+              {thresholds.hr_ceiling >= thresholds.chairman_min && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+                  <Info size={14} className="shrink-0" />
+                  HR Ceiling must be strictly less than the Chairman / CEO Floor.
+                </div>
+              )}
+
+              <button
+                onClick={saveThresholds}
+                disabled={savingThresholds || thresholds.hr_ceiling >= thresholds.chairman_min}
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black py-3.5 rounded-2xl transition-all shadow-lg shadow-primary/20 text-xs uppercase tracking-widest disabled:opacity-50 active:scale-[0.98]"
+              >
+                {savingThresholds ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {savingThresholds ? 'Saving…' : 'Save Thresholds'}
+              </button>
+            </div>
+          </div>
+        ) : activeTab === 'stages' ? (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="flex justify-end">
               <button 

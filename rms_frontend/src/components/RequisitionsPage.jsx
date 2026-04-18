@@ -770,24 +770,45 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
 };
 
 // ── Final Approve Panel ───────────────────────────────────────────────────────
+const DEFAULT_THRESHOLDS = { hr_ceiling: 50000, chairman_min: 100000 };
+
 const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
   const [note, setNote]         = useState('');
   const [acting, setActing]     = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
 
-  // Determine this dept's authority level
-  const deptName = user?.name || '';
-  const amount   = parseFloat(req.amount || 0);
+  // Load admin-configured thresholds; fall back to defaults if not set
+  useEffect(() => {
+    settingsAPI.get('approval_thresholds').then(res => {
+      if (res?.value) {
+        try { setThresholds({ ...DEFAULT_THRESHOLDS, ...JSON.parse(res.value) }); } catch {}
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Determine this dept's authority level against the live thresholds
+  const deptName   = user?.name || '';
+  const amount     = parseFloat(req.amount || 0);
   const isChairman = /ceo|chairman/i.test(deptName);
   const isGM       = /general\s*manager|\bgm\b/i.test(deptName);
   const isHR       = /\bhr\b|human\s*resource/i.test(deptName);
 
-  let authorityLabel = null;
-  if (isChairman)               authorityLabel = 'Chairman / CEO Authority';
-  else if (isGM && amount >= 50000)  authorityLabel = 'GM Authority (₦50k+)';
-  else if (isHR && amount < 50000)   authorityLabel = 'HR Authority (< ₦50k)';
+  const { hr_ceiling, chairman_min } = thresholds;
+  const fmt = (n) => `₦${Number(n).toLocaleString()}`;
 
-  if (!authorityLabel) return null; // Not authorised
+  let authorityLabel = null;
+  // Band 1 — HR: amount <= hr_ceiling
+  if (isHR && amount <= hr_ceiling)
+    authorityLabel = `HR Authority (≤ ${fmt(hr_ceiling)})`;
+  // Band 2 — GM: hr_ceiling < amount < chairman_min
+  else if (isGM && amount > hr_ceiling && amount < chairman_min)
+    authorityLabel = `GM Authority (${fmt(hr_ceiling + 1)} – ${fmt(chairman_min - 1)})`;
+  // Band 3 — Chairman / CEO: amount >= chairman_min
+  else if (isChairman && amount >= chairman_min)
+    authorityLabel = `Chairman / CEO (≥ ${fmt(chairman_min)})`;
+
+  if (!authorityLabel) return null; // Not authorised for this amount band
 
   // Don't show if already finally approved
   if (detail?.finalApprovalStatus && detail.finalApprovalStatus !== 'none') return null;
@@ -1198,6 +1219,11 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               {detail?.finalApprovalStatus === 'treated' && (
                 <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-teal-500 border border-teal-600 text-white shadow-lg shadow-teal-500/20 flex items-center gap-1">
                   <CheckCircle2 size={10} /> Treated
+                </span>
+              )}
+              {detail?.finalApprovalStatus === 'published' && (
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-emerald-600 border border-emerald-700 text-white shadow-lg shadow-emerald-500/20 flex items-center gap-1">
+                  <CheckCircle2 size={10} /> Published
                 </span>
               )}
             </div>
