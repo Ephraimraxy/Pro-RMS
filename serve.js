@@ -1429,18 +1429,22 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
 
     for (const item of items) {
       const parsed = z.object({
-        clientId:          z.string().optional(),
-        title:             z.string().optional(),
-        description:       z.string().optional(),
-        type:              z.string().optional(),
-        amount:            z.union([z.string(), z.number()]).optional(),
-        departmentId:      z.number().optional(),
-        urgency:           z.string().optional(),
-        content:           z.string().optional(),
-        isDraft:           z.boolean().optional(),
-        targetDepartmentId: z.number().optional(),
-      }).safeParse(item);
+        clientId:          z.string().optional().nullable(),
+        title:             z.string().optional().nullable(),
+        description:       z.string().optional().nullable(),
+        type:              z.string().optional().nullable(),
+        amount:            z.union([z.string(), z.number()]).optional().nullable(),
+        departmentId:      z.union([z.string(), z.number()]).optional().nullable(),
+        urgency:           z.string().optional().nullable(),
+        content:           z.string().optional().nullable(),
+        isDraft:           z.union([z.boolean(), z.string()]).optional().nullable(),
+        targetDepartmentId: z.union([z.string(), z.number()]).optional().nullable(),
+        status:            z.string().optional().nullable(),
+        createdBy:         z.string().optional().nullable(),
+        createdAt:         z.string().optional().nullable(),
+      }).passthrough().safeParse(item);
       if (!parsed.success) {
+        console.error('[REQS] Validation failed:', JSON.stringify(parsed.error.issues));
         return res.status(400).json({ error: 'Some required fields are missing or invalid. Please check your request and try again.' });
       }
       const data = parsed.data;
@@ -1455,14 +1459,14 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
       const amount = parseFloat(data.amount || 0) || 0;
       const eligibleStages = await getEligibleStages(amount);
       const firstStage = eligibleStages[0] || null;
-      const isDraft = Boolean(data.isDraft);
-      const originDeptId = data.departmentId || req.user.deptId || 1;
-      if (req.user.role === 'department' && req.user.deptId && originDeptId !== req.user.deptId) {
+      const isDraft = data.isDraft === true || data.isDraft === 'true';
+      const originDeptId = parseInt(data.departmentId || req.user.deptId || 1);
+      if (req.user.role === 'department' && req.user.deptId && originDeptId !== parseInt(req.user.deptId)) {
         return res.status(403).json({ error: 'Department users can only create for their own department' });
       }
 
       // Validate target department if supplied
-      let targetDepartmentId = data.targetDepartmentId || null;
+      let targetDepartmentId = data.targetDepartmentId ? parseInt(data.targetDepartmentId) : null;
       if (targetDepartmentId) {
         const targetDept = await prisma.department.findUnique({ where: { id: targetDepartmentId } });
         if (!targetDept) {

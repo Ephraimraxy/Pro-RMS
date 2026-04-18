@@ -169,11 +169,11 @@ const RequisitionForm = ({ isOpen, onClose }) => {
         description: finalDesc,
         title: finalDesc,
         type: selectedType.name,
-        amount: finalAmount,
-        departmentId: user?.deptId || undefined,
         urgency: formData.urgency,
         isDraft,
-        targetDepartmentId: formData.targetDepartmentId ? parseInt(formData.targetDepartmentId) : undefined
+        ...(finalAmount != null && { amount: finalAmount }),
+        ...(user?.deptId   != null && { departmentId: user.deptId }),
+        ...(formData.targetDepartmentId && { targetDepartmentId: parseInt(formData.targetDepartmentId) }),
       };
 
       const result = await addRequisition(payload);
