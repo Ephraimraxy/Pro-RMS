@@ -2632,12 +2632,12 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       }
     };
 
-    // ── Load CSS Farms logo for seal ─────────────────────
-    const sealLogoPath = path.join(__dirname, 'samples', 'Group.png');
-    let sealLogoBytes = null;
-    try { if (fs.existsSync(sealLogoPath)) sealLogoBytes = fs.readFileSync(sealLogoPath); } catch { }
-    let sealLogoImg = null;
-    if (sealLogoBytes) sealLogoImg = await embedSafe(sealLogoBytes);
+    // ── Load Custom Seal Stamp image for processing chain ───
+    const sealBgPath = path.join(__dirname, 'rms_frontend', 'public', 'SEAL STAMP.png');
+    let sealBgBytes = null;
+    try { if (fs.existsSync(sealBgPath)) sealBgBytes = fs.readFileSync(sealBgPath); } catch { }
+    let sealBgImg = null;
+    if (sealBgBytes) sealBgImg = await embedSafe(sealBgBytes);
 
     // ── Load dept head signatures for processing chain ───
     // Collect unique dept IDs referenced in forward events
@@ -2681,31 +2681,44 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       const nameDisp = nameUpper.length > 20 ? nameUpper.substring(0, 18) + '..' : nameUpper;
       const nameFontSz = nameDisp.length > 14 ? 4.5 : 5.5;
 
-      // Outer ring — white fill so content inside is on a clean background
-      pg.drawCircle({ x: cx, y: cy, size: r, color: rgb(1, 1, 1), borderColor: green, borderWidth: 4 });
-      // Second outer ring (thin) — gives the double-ring look from the reference
-      pg.drawCircle({ x: cx, y: cy, size: r2, borderColor: green, borderWidth: 1.0 });
-      // Inner ring
-      pg.drawCircle({ x: cx, y: cy, size: ir, borderColor: green, borderWidth: 1.0 });
+      // Draw the seal background image if available, else fallback to circles
+      if (sealBgImg) {
+        const sw = 76;
+        const sh = 76;
+        pg.drawImage(sealBgImg, { x: cx - sw / 2, y: cy - sh / 2, width: sw, height: sh });
+      } else {
+        // Outer ring — white fill so content inside is on a clean background
+        pg.drawCircle({ x: cx, y: cy, size: r, color: rgb(1, 1, 1), borderColor: green, borderWidth: 4 });
+        // Second outer ring (thin) — gives the double-ring look from the reference
+        pg.drawCircle({ x: cx, y: cy, size: r2, borderColor: green, borderWidth: 1.0 });
+        // Inner ring
+        pg.drawCircle({ x: cx, y: cy, size: ir, borderColor: green, borderWidth: 1.0 });
 
-      // CSS Farms logo centred inside inner ring
-      if (sealLogoImg) {
-        const lw = 32, lh = 18;
-        pg.drawImage(sealLogoImg, { x: cx - lw / 2, y: cy - lh / 2 + 4, width: lw, height: lh });
+        // CSS Farms logo centred inside inner ring
+        const logoPath = path.join(__dirname, 'samples', 'Group.png');
+        let logoBytes = null;
+        try { if (fs.existsSync(logoPath)) logoBytes = fs.readFileSync(logoPath); } catch { }
+        if (logoBytes) {
+           const lImg = await embedSafe(logoBytes);
+           if (lImg) {
+             const lw = 32, lh = 18;
+             pg.drawImage(lImg, { x: cx - lw / 2, y: cy - lh / 2 + 4, width: lw, height: lh });
+           }
+        }
       }
 
       // Date below logo (inside inner ring)
       const dw = boldFont.widthOfTextAtSize(dateStr, 3.8);
-      pg.drawText(dateStr, { x: cx - dw / 2, y: cy - 12, size: 3.8, font: boldFont, color: green });
+      pg.drawText(dateStr, { x: cx - dw / 2, y: cy - 12 - (sealBgImg ? 4 : 0), size: 3.8, font: boldFont, color: green });
 
       // Dept name at top — in the text band between r2 and r (chord ~45pt wide here)
       const nw = boldFont.widthOfTextAtSize(nameDisp, nameFontSz);
-      pg.drawText(nameDisp, { x: cx - nw / 2, y: cy + r - 10, size: nameFontSz, font: boldFont, color: green });
+      pg.drawText(nameDisp, { x: cx - nw / 2, y: cy + r - 10 + (sealBgImg ? 1 : 0), size: nameFontSz, font: boldFont, color: green });
 
-      // "DEPARTMENT" label at bottom — shifted inward so chord is wide enough (~45pt)
+      // "DEPARTMENT" label at bottom
       const dl = 'DEPARTMENT';
       const dlw = boldFont.widthOfTextAtSize(dl, 5);
-      pg.drawText(dl, { x: cx - dlw / 2, y: cy - r + 9, size: 5, font: boldFont, color: green });
+      pg.drawText(dl, { x: cx - dlw / 2, y: cy - r + 9 - (sealBgImg ? 1 : 0), size: 5, font: boldFont, color: green });
     };
 
     // ══════════════════════════════════════════════════════
