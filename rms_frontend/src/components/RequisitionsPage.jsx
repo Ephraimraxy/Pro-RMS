@@ -287,6 +287,7 @@ const FilePreviewModal = ({ attachment, onClose }) => {
 const PrintStageModal = ({ req, detail, onClose }) => {
   const [selectedStage, setSelectedStage] = useState('all');
   const [generating, setGenerating] = useState(false);
+  const [stagePreviewFile, setStagePreviewFile] = useState(null);
 
   const attachments = detail?.attachments || [];
 
@@ -366,6 +367,7 @@ const PrintStageModal = ({ req, detail, onClose }) => {
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
         <div className="p-5 border-b border-border/50">
@@ -418,6 +420,13 @@ const PrintStageModal = ({ req, detail, onClose }) => {
                   <FileText size={10} className="text-primary shrink-0" />
                   <span className="flex-1 truncate text-foreground font-medium">{a.filename}</span>
                   {a.uploaderDept && <span className="text-muted-foreground/60 shrink-0 font-bold">{a.uploaderDept}</span>}
+                  <button
+                    onClick={() => setStagePreviewFile(a)}
+                    title="Preview"
+                    className="p-0.5 text-muted-foreground hover:text-primary rounded transition-colors shrink-0"
+                  >
+                    <Eye size={10} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -437,6 +446,8 @@ const PrintStageModal = ({ req, detail, onClose }) => {
         </div>
       </div>
     </div>
+    {stagePreviewFile && <FilePreviewModal attachment={stagePreviewFile} onClose={() => setStagePreviewFile(null)} />}
+    </>
   );
 };
 
@@ -1271,6 +1282,17 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                             <FileText size={12} className="text-primary shrink-0" />
                             <span className="flex-1 truncate text-[11px] font-bold text-foreground">{f.name}</span>
                             <span className="text-[9px] font-mono text-muted-foreground shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                            <button
+                              title="Preview"
+                              onClick={() => {
+                                const url = URL.createObjectURL(f);
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                                setTimeout(() => URL.revokeObjectURL(url), 10000);
+                              }}
+                              className="p-0.5 text-muted-foreground hover:text-primary rounded transition-colors shrink-0"
+                            >
+                              <Eye size={12} />
+                            </button>
                             <button
                               onClick={() => setNewFiles(newFiles.filter((_, j) => j !== i))}
                               className="p-0.5 text-muted-foreground hover:text-destructive rounded transition-colors shrink-0"

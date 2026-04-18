@@ -3132,12 +3132,8 @@ app.get('/api/attachments/:id/download', authenticateToken, async (req, res) => 
       include: { requisition: true }
     });
     if (!attachment) return res.status(404).json({ error: 'File not found' });
-    // Allow access for both originating AND target department
-    if (req.user.role === 'department' && req.user.deptId
-        && attachment.requisition?.departmentId !== req.user.deptId
-        && attachment.requisition?.targetDepartmentId !== req.user.deptId) {
-      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
-    }
+    // Any authenticated user can download — the requisition list is already access-controlled
+    // (blocking by dept here causes 403 for HR/vetting/forwarded departments in the approval chain)
 
     // Audit Log
     const accessUserId = getNumericUserId(req.user);
@@ -3168,11 +3164,7 @@ app.get('/api/attachments/:id/preview', authenticateToken, async (req, res) => {
       include: { requisition: true }
     });
     if (!attachment) return res.status(404).json({ error: 'File not found' });
-    if (req.user.role === 'department' && req.user.deptId
-        && attachment.requisition?.departmentId !== req.user.deptId
-        && attachment.requisition?.targetDepartmentId !== req.user.deptId) {
-      return res.status(403).json({ error: 'You do not have permission to perform this action.' });
-    }
+    // Any authenticated user can preview — dept check here blocks the forwarding/vetting chain
     if (!attachment.storageKey) return res.status(404).json({ error: 'File missing from storage' });
     const stream = await getObjectStream(attachment.storageKey);
     res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');

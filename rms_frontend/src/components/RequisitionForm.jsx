@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowLeft, MessageSquare } from 'lucide-react';
+import { X, Upload, Send, Save, CreditCard, Package, FileText, AlertTriangle, CheckCircle2, Loader2, ArrowLeft, MessageSquare, Eye } from 'lucide-react';
 import { addRequisition, getDepartments, getRequisitionTypes, uploadAttachments } from '../lib/store';
 import { deptAPI, aiAPI, settingsAPI } from '../lib/api';
 import { useNetwork } from '../App';
@@ -458,6 +458,18 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                     <FileText size={12} className="text-primary shrink-0" />
                     <span className="font-medium truncate flex-1">{f.name}</span>
                     <span className="text-muted-foreground shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                    <button
+                      type="button"
+                      title="Preview"
+                      onClick={() => {
+                        const url = URL.createObjectURL(f);
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                        setTimeout(() => URL.revokeObjectURL(url), 10000);
+                      }}
+                      className="text-muted-foreground hover:text-primary p-0.5 transition-colors"
+                    >
+                      <Eye size={12} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
