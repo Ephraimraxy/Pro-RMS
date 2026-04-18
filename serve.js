@@ -168,7 +168,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:", "https://*.b-cdn.net"],
       connectSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      frameSrc: ["'self'", "blob:"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"]
     }
