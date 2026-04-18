@@ -8,7 +8,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
 const crypto = require('crypto');
-const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb, degrees, radians } = require('pdf-lib');
 const xss = require('xss');
 const pino = require('pino');
 const pinoHttp = require('pino-http');
@@ -2681,44 +2681,70 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
       const nameDisp = nameUpper.length > 20 ? nameUpper.substring(0, 18) + '..' : nameUpper;
       const nameFontSz = nameDisp.length > 14 ? 4.5 : 5.5;
 
-      // Draw the seal background image if available, else fallback to circles
-      if (sealBgImg) {
-        const sw = 76;
-        const sh = 76;
-        pg.drawImage(sealBgImg, { x: cx - sw / 2, y: cy - sh / 2, width: sw, height: sh });
-      } else {
-        // Outer ring — white fill so content inside is on a clean background
-        pg.drawCircle({ x: cx, y: cy, size: r, color: rgb(1, 1, 1), borderColor: green, borderWidth: 4 });
-        // Second outer ring (thin) — gives the double-ring look from the reference
-        pg.drawCircle({ x: cx, y: cy, size: r2, borderColor: green, borderWidth: 1.0 });
-        // Inner ring
-        pg.drawCircle({ x: cx, y: cy, size: ir, borderColor: green, borderWidth: 1.0 });
+      // Helper: Draw curved text along a radial path
+      const drawTextAlongArc = (text, arcRadius, centerAngleRad, isTop = true, fontSize = 5) => {
+        const textToDraw = sanitizeText(text).toUpperCase();
+        const chars = textToDraw.split('');
+        const charWidths = chars.map(c => boldFont.widthOfTextAtSize(c, fontSize));
+        const totalWidth = charWidths.reduce((a, b) => a + b, 0);
+        const totalAngleRad = totalWidth / arcRadius;
 
-        // CSS Farms logo centred inside inner ring
-        const logoPath = path.join(__dirname, 'samples', 'Group.png');
-        let logoBytes = null;
-        try { if (fs.existsSync(logoPath)) logoBytes = fs.readFileSync(logoPath); } catch { }
-        if (logoBytes) {
-           const lImg = await embedSafe(logoBytes);
-           if (lImg) {
-             const lw = 32, lh = 18;
-             pg.drawImage(lImg, { x: cx - lw / 2, y: cy - lh / 2 + 4, width: lw, height: lh });
-           }
-        }
+        // Current angle position
+        let currentAngle = isTop 
+          ? centerAngleRad + totalAngleRad / 2 
+          : centerAngleRad - totalAngleRad / 2;
+
+        chars.forEach((char, i) => {
+          const charAngle = charWidths[i] / arcRadius;
+          const angleAtChar = isTop 
+            ? currentAngle - charAngle / 2 
+            : currentAngle + charAngle / 2;
+          
+          const x = cx + arcRadius * Math.cos(angleAtChar);
+          const y = cy + arcRadius * Math.sin(angleAtChar);
+
+          const charRotation = isTop ? angleAtChar - Math.PI / 2 : angleAtChar + Math.PI / 2;
+
+          pg.drawText(char, {
+            x, y,
+            size: fontSize,
+            font: boldFont,
+            color: green,
+            rotate: radians(charRotation),
+          });
+
+          currentAngle = isTop ? currentAngle - charAngle : currentAngle + charAngle;
+        });
+      };
+
+      // Draw the seal background image if available
+      if (sealBgImg) {
+        const sw = 84, sh = 84; 
+        pg.drawImage(sealBgImg, { x: cx - sw / 2, y: cy - sh / 2, width: sw, height: sh });
+        
+        // ── White Mask ──
+        // The SEAL STAMP.png has 'Human Resource' baked in. We draw a thick white ring 
+        // over the text band to clear it before drawing the dynamic department name.
+        pg.drawCircle({
+          x: cx, y: cy,
+          size: 30, // Radius of the mask
+          borderColor: rgb(1, 1, 1),
+          borderWidth: 10, // Thick enough to cover the top and bottom text areas
+          opacity: 0.9 // Slight transparency to keep it looking 'stamped'
+        });
       }
 
-      // Date below logo (inside inner ring)
-      const dw = boldFont.widthOfTextAtSize(dateStr, 3.8);
-      pg.drawText(dateStr, { x: cx - dw / 2, y: cy - 12 - (sealBgImg ? 4 : 0), size: 3.8, font: boldFont, color: green });
+      // 1. Top Arc: Department Name (e.g., "ICT SOLUTIONS")
+      const topRadius = 31; 
+      drawTextAlongArc(nameUpper, topRadius, Math.PI / 2, true, nameFontSz);
 
-      // Dept name at top — in the text band between r2 and r (chord ~45pt wide here)
-      const nw = boldFont.widthOfTextAtSize(nameDisp, nameFontSz);
-      pg.drawText(nameDisp, { x: cx - nw / 2, y: cy + r - 10 + (sealBgImg ? 1 : 0), size: nameFontSz, font: boldFont, color: green });
+      // 2. Bottom Arc: "DEPARTMENT" Label
+      const bottomRadius = 31;
+      drawTextAlongArc('DEPARTMENT', bottomRadius, 3 * Math.PI / 2, false, 4.5);
 
-      // "DEPARTMENT" label at bottom
-      const dl = 'DEPARTMENT';
-      const dlw = boldFont.widthOfTextAtSize(dl, 5);
-      pg.drawText(dl, { x: cx - dlw / 2, y: cy - r + 9 - (sealBgImg ? 1 : 0), size: 5, font: boldFont, color: green });
+      // 3. Date in the middle
+      const dw = boldFont.widthOfTextAtSize(dateStr, 4);
+      pg.drawText(dateStr, { x: cx - dw / 2, y: cy - 11, size: 4, font: boldFont, color: green });
     };
 
     // ══════════════════════════════════════════════════════

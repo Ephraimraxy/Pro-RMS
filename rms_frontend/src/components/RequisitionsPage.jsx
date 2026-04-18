@@ -1364,7 +1364,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               )}
 
               {/* ── Post-Creation Attachment Upload ── */}
-              {(() => {
+              {(isIncoming || canApprove || user?.role === 'global_admin') && (() => {
                 // Compute stage context for tagging
                 const fwdEvents = detail?.forwardEvents || [];
                 const approvals = detail?.approvals || [];
@@ -1387,7 +1387,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                 const uploaderDept = user?.name || '';
 
                 return (
-                  <div className="space-y-3 pt-4 border-t border-dashed border-border/40">
+                  <div className="space-y-3 pt-4 border-t border-dashed border-border/40 animate-in fade-in duration-500">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <ArrowDownToLine size={13} className="text-primary" />

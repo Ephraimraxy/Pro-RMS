@@ -30,11 +30,11 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
 
   const handleSubmit = async (isDraft = false) => {
     if (!subject.trim()) { toast.error('Please enter a subject/purpose'); return; }
-    
+
     // Validation
     const validItems = items.filter(i => i.description.trim());
-    if (type === 'Cash' && !validItems.length) { 
-      toast.error('Please add at least one item'); return; 
+    if (type === 'Cash' && !validItems.length) {
+      toast.error('Please add at least one item'); return;
     }
     if (type === 'Material' && !comment.trim()) {
       toast.error('Please describe material needs in the description box'); return;
@@ -42,32 +42,32 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
 
     setSubmitting(true);
     try {
-      const content = type === 'Cash' 
+      const content = type === 'Cash'
         ? JSON.stringify({
-            itemized: true,
-            comment: comment.trim(), // small comment
-            items: validItems.map(i => ({
-              qty: parseFloat(i.qty) || 1,
-              description: i.description.trim(),
-              amount: parseFloat(i.amount) || 0,
-              lineTotal: (parseFloat(i.qty) || 1) * (parseFloat(i.amount) || 0)
-            })),
-            total
-          })
+          itemized: true,
+          comment: comment.trim(), // small comment
+          items: validItems.map(i => ({
+            qty: parseFloat(i.qty) || 1,
+            description: i.description.trim(),
+            amount: parseFloat(i.amount) || 0,
+            lineTotal: (parseFloat(i.qty) || 1) * (parseFloat(i.amount) || 0)
+          })),
+          total
+        })
         : JSON.stringify({
-            itemized: false,
-            description: comment.trim()
-          });
+          itemized: false,
+          description: comment.trim()
+        });
 
       // For payload description field, combine subject + comment loosely or just use subject
       const reqDescription = type === 'Material' ? comment.trim() : subject;
 
       await addRequisition({
-        title: subject, 
-        description: reqDescription, 
-        type, 
-        urgency, 
-        isDraft, 
+        title: subject,
+        description: reqDescription,
+        type,
+        urgency,
+        isDraft,
         content,
         ...(type === 'Cash' && total > 0 && { amount: total }),
         ...(user?.deptId != null && { departmentId: user.deptId }),
@@ -82,11 +82,11 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
 
   return (
     <div className="animate-in slide-in-from-right-4 duration-300 w-full min-h-full flex flex-col space-y-6 max-w-7xl mx-auto pb-10">
-      
+
       {/* Header with Back Button */}
       <div className="flex items-center justify-between">
-        <button 
-          onClick={onClose} 
+        <button
+          onClick={onClose}
           className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
         >
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
@@ -112,13 +112,13 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
         </div>
 
         <div className="flex-1 p-6 lg:p-10 space-y-8 bg-zinc-50/50">
-          
+
           {/* Total at top — only for Cash */}
           {type === 'Cash' && (
             <div className="p-6 rounded-3xl bg-primary/5 border border-primary/20 flex items-center justify-between shadow-sm">
               <div>
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest">Grand Total</p>
-                <p className="text-xs text-muted-foreground mt-0.5 font-medium">{items.filter(i=>i.description).length} item(s)</p>
+                <p className="text-xs text-muted-foreground mt-0.5 font-medium">{items.filter(i => i.description).length} item(s)</p>
               </div>
               <span className="text-4xl font-black font-mono text-foreground tracking-tighter">
                 ₦{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -153,7 +153,7 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
             <>
               {/* Cash small comment */}
               <div className="space-y-2.5">
-                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Additional Comments (Optional)</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Additional Comments </label>
                 <textarea
                   value={comment}
                   onChange={e => setComment(e.target.value)}
@@ -221,7 +221,7 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
                       <div key={i} className="flex justify-between text-xs text-muted-foreground font-medium">
                         <span className="truncate max-w-[250px]">{item.description} × {item.qty}</span>
                         <span className="font-mono font-bold text-foreground">
-                          ₦{((parseFloat(item.qty)||1) * (parseFloat(item.amount)||0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          ₦{((parseFloat(item.qty) || 1) * (parseFloat(item.amount) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     ))}
@@ -234,7 +234,7 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
           {/* Target dept + Urgency */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-border/40">
             <div className="space-y-2.5">
-              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Send To (Optional)</label>
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Send To</label>
               <div className="relative group">
                 <select
                   value={targetDeptId}
