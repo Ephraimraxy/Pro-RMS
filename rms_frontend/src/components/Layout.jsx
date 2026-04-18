@@ -291,13 +291,28 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       if (!user?.deptId) return;
       try {
         const all = await getRequisitions();
-        const pendingForMe = all.filter(r => r.status === 'pending' && r.targetDepartmentId === user.deptId);
+        const pendingForMe = all.filter(r => {
+          const userDeptId = Number(user.deptId);
+          const isAdmin = normalizeRole(user.role) === 'global_admin';
+          
+          // Case 1: Standard internal approval path
+          const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
+          
+          // Case 2: Final Approval path (for Chairman/GM)
+          const needsFinal = isAdmin && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
+          
+          // Case 3: Vetting path
+          const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
+          
+          return isTargeted || needsFinal || isVetting;
+        });
         
         if (pendingForMe.length > 0) {
           // Determine highest urgency: critical > urgent > normal
           let highest = 'normal';
-          if (pendingForMe.some(r => (r.urgency || '').toLowerCase() === 'critical')) highest = 'critical';
-          else if (pendingForMe.some(r => (r.urgency || '').toLowerCase() === 'urgent')) highest = 'urgent';
+          const urgencies = pendingForMe.map(r => (r.urgency || 'normal').toLowerCase());
+          if (urgencies.includes('critical')) highest = 'critical';
+          else if (urgencies.includes('urgent')) highest = 'urgent';
           
           setActionAlert({ urgency: highest, count: pendingForMe.length });
         } else {
