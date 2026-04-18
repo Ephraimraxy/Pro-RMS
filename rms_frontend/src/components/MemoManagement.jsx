@@ -79,100 +79,118 @@ const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[95dvh] overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="p-5 border-b border-border/50 flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-base font-black text-foreground">New Memo</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Official administrative communication</p>
+    <div className="animate-in slide-in-from-right-4 duration-300 w-full min-h-full flex flex-col space-y-6 max-w-7xl mx-auto pb-10">
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={onClose} 
+          className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
+        >
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+          Back to Memos
+        </button>
+      </div>
+
+      <div className="glass bg-white/70 backdrop-blur-xl rounded-[2.5rem] border border-border/40 shadow-xl overflow-hidden flex flex-col">
+        <div className="p-6 lg:p-10 border-b border-border/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 bg-white/50">
+          <div className="space-y-2">
+            <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tighter leading-tight flex items-center space-x-3">
+              <Send size={28} className="text-primary" />
+              <span>New Memo</span>
+            </h2>
+            <div className="flex items-center space-x-2 pt-1">
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-primary/80">Official Administrative Communication</span>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl"><X size={18} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Subject *</label>
+        <div className="flex-1 p-6 lg:p-10 space-y-8 bg-zinc-50/50">
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Subject *</label>
             <input
               value={subject} onChange={e => setSubject(e.target.value)}
               placeholder="Memo subject..."
-              className="w-full border border-border/60 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+              className="w-full bg-white border border-border/60 rounded-2xl p-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm transition-all"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Message *</label>
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Message *</label>
             <textarea
               value={message} onChange={e => setMessage(e.target.value)}
               placeholder="Write the memo content here..."
-              rows={7}
-              className="w-full border border-border/60 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white resize-none"
+              rows={10}
+              className="w-full bg-white border border-border/60 rounded-2xl p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm resize-none transition-all"
             />
           </div>
 
           {/* Routing */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Send To</label>
+          <div className="space-y-4 pt-4 border-t border-border/40">
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Send To</label>
 
             {isPublisher && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setTargetMode('dept')}
-                  className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${targetMode === 'dept' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground hover:bg-muted'}`}
+                  className={`py-4 rounded-xl border-2 text-xs font-black uppercase tracking-wider transition-all ${targetMode === 'dept' ? 'border-primary bg-primary/10 text-primary' : 'border-border/60 text-muted-foreground hover:bg-muted'}`}
                 >
                   Specific Department
                 </button>
                 <button
                   onClick={() => setTargetMode('publish')}
-                  className={`py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${targetMode === 'publish' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-border/60 text-muted-foreground hover:bg-muted'}`}
+                  className={`py-4 rounded-xl border-2 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${targetMode === 'publish' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-border/60 text-muted-foreground hover:bg-muted'}`}
                 >
-                  <Globe size={13} /> Publish to All
+                  <Globe size={16} /> Broadcast to All
                 </button>
               </div>
             )}
 
             {(targetMode === 'dept' || !isPublisher) && (
-              <div>
+              <div className="animate-in fade-in duration-300">
                 {!isPublisher ? (
-                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-800">
-                    This memo will be sent to <strong>HR Department</strong> for review and publishing.
+                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-xs font-bold text-blue-800 shadow-sm">
+                    This memo will be routed to the <strong>HR Department</strong> for review and executive publishing.
                   </div>
                 ) : targetOptions.length > 0 ? (
-                  <select
-                    value={targetDeptId}
-                    onChange={e => setTargetDeptId(e.target.value)}
-                    className="w-full border border-border/60 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-white"
-                  >
-                    <option value="">— Select department —</option>
-                    {targetOptions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                  <div className="relative group">
+                    <select
+                      value={targetDeptId}
+                      onChange={e => setTargetDeptId(e.target.value)}
+                      className="w-full bg-white border border-border/60 rounded-2xl p-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none pr-10 shadow-sm transition-all cursor-pointer group-hover:border-primary/40"
+                    >
+                      <option value="">— Select Target Department —</option>
+                      {targetOptions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                    <ChevronRight size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none transition-transform group-hover:rotate-45" />
+                  </div>
                 ) : (
-                  <div className="p-3 rounded-xl bg-muted/50 border border-border/30 text-xs text-muted-foreground">
-                    No specific departments available. Use "Publish to All" instead.
+                  <div className="p-4 rounded-2xl bg-muted/30 border border-border/30 text-xs text-muted-foreground italic">
+                    No individual departments available for direct routing. Use "Broadcast to All" to reach the entire group.
                   </div>
                 )}
               </div>
             )}
 
             {targetMode === 'publish' && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2.5 text-xs font-semibold text-emerald-800">
-                <Globe size={14} className="shrink-0 text-emerald-600" />
-                This memo will be broadcast to ALL departments immediately.
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3 text-xs font-bold text-emerald-800 animate-in slide-in-from-top-2 duration-200">
+                <Globe size={18} className="shrink-0 text-emerald-600" />
+                This communication will be broadcast to ALL departments instantly across the RMS neural network.
               </div>
             )}
           </div>
         </div>
 
-        <div className="p-5 border-t border-border/50 flex gap-3 shrink-0">
-          <button onClick={onClose} className="py-3 px-5 rounded-xl border border-border/60 text-sm font-bold text-muted-foreground hover:bg-muted transition-all">
+        <div className="p-6 lg:p-8 border-t border-border/50 flex flex-col-reverse sm:flex-row gap-4 shrink-0 bg-white">
+          <button onClick={onClose} className="py-4 px-8 rounded-2xl border-2 border-border/60 text-sm font-black text-muted-foreground hover:bg-muted hover:text-foreground transition-all active:scale-95">
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white text-sm font-black disabled:opacity-50 shadow-md shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-white text-sm font-black disabled:opacity-50 shadow-xl shadow-primary/30 hover:bg-primary/90 hover:shadow-primary/40 active:scale-95 transition-all"
           >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : (targetMode === 'publish' ? <Globe size={16} /> : <Send size={16} />)}
-            {targetMode === 'publish' ? 'Publish to All Departments' : 'Send Memo'}
+            {submitting ? <Loader2 size={20} className="animate-spin" /> : (targetMode === 'publish' ? <Globe size={20} /> : <Send size={20} />)}
+            {targetMode === 'publish' ? 'Broadcast Memo to All' : 'Submit for Review'}
           </button>
         </div>
       </div>
@@ -235,82 +253,90 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh }) => {
   });
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300 w-full max-w-7xl mx-auto pb-10">
       <button
         onClick={onBack}
-        className="flex items-center gap-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-xl hover:bg-muted"
+        className="flex items-center gap-2 text-xs font-black text-muted-foreground hover:text-foreground transition-all px-4 py-2 rounded-xl bg-white border border-border/50 shadow-sm uppercase tracking-wider group"
       >
-        <ArrowLeft size={14} /> Back to Memos
+        <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+        Back to Memos
       </button>
 
-      <div className="glass bg-white/95 rounded-3xl border border-border/40 shadow-sm overflow-hidden">
+      <div className="glass bg-white/95 rounded-[2.5rem] border border-border/40 shadow-xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-5 border-b border-border/40 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase border ${statusColors[memo.status] || statusColors.pending}`}>
+        <div className="p-6 lg:p-10 border-b border-border/40 space-y-4 bg-white/50">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase border tracking-widest ${statusColors[memo.status] || statusColors.pending}`}>
               {alreadyPublished ? 'Published' : memo.status}
             </span>
             {alreadyPublished && (
-              <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-emerald-500 text-white flex items-center gap-1">
-                <Globe size={9} /> Broadcast to All
+              <span className="px-3 py-1 rounded-xl text-[10px] font-black uppercase bg-emerald-500 text-white flex items-center gap-1.5 shadow-md shadow-emerald-500/20">
+                <Globe size={12} /> Broadcast
               </span>
             )}
           </div>
-          <h2 className="text-xl font-black text-foreground">{memo.title}</h2>
-          <p className="text-[11px] text-muted-foreground font-mono">
-            From: <strong>{memo.department}</strong> · #{memo.id} · {new Date(memo.createdAt).toLocaleString()}
-          </p>
+          <h2 className="text-3xl font-black text-foreground tracking-tighter leading-tight">{memo.title}</h2>
+          <div className="flex items-center gap-4 text-[11px] text-muted-foreground font-black uppercase tracking-widest opacity-80">
+            <span>From: <strong className="text-foreground">{memo.department}</strong></span>
+            <span>·</span>
+            <span>Ref: <strong className="text-foreground font-mono">#{memo.id}</strong></span>
+            <span>·</span>
+            <span>{new Date(memo.createdAt).toLocaleString()}</span>
+          </div>
         </div>
 
         {/* Body */}
-        <div className="p-5">
-          <div className="bg-muted/20 rounded-2xl p-4 text-sm text-foreground leading-relaxed whitespace-pre-wrap border border-border/30">
+        <div className="p-6 lg:p-10 bg-zinc-50/50">
+          <div className="bg-white rounded-[2rem] p-8 text-base font-medium text-foreground leading-relaxed whitespace-pre-wrap border border-border/30 shadow-inner min-h-[300px]">
             {memo.description}
           </div>
         </div>
 
         {/* Actions */}
         {!loading && isIncoming && !alreadyPublished && (
-          <div className="p-5 border-t border-border/40 space-y-4">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Actions</p>
+          <div className="p-6 lg:p-10 border-t border-border/40 space-y-6 bg-white">
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] pl-2">Executive Review & Route</p>
 
             <textarea
               value={note} onChange={e => setNote(e.target.value)}
-              placeholder="Add a note or remarks (optional)..."
-              rows={3}
-              className="w-full border border-border/60 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none bg-white"
+              placeholder="Add internal observations or remarks..."
+              rows={4}
+              className="w-full bg-zinc-50 border border-border/60 rounded-2xl p-5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none transition-all shadow-inner"
             />
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-4">
               {/* Publish to All */}
               {isPublisher && (
                 <button
                   onClick={handlePublish}
                   disabled={publishing}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black disabled:opacity-50 shadow-md transition-all"
+                  className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50 shadow-xl shadow-emerald-600/20 active:scale-95 transition-all"
                 >
-                  {publishing ? <Loader2 size={14} className="animate-spin" /> : <Globe size={14} />}
-                  Publish to All Departments
+                  {publishing ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
+                  Broadcast to all Units
                 </button>
               )}
 
               {/* Forward */}
               {fwdOptions.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={fwdDeptId}
-                    onChange={e => setFwdDeptId(e.target.value)}
-                    className="border border-border/60 rounded-xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-white"
-                  >
-                    <option value="">Forward to...</option>
-                    {fwdOptions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <select
+                      value={fwdDeptId}
+                      onChange={e => setFwdDeptId(e.target.value)}
+                      className="border border-border/60 rounded-xl p-4 text-[11px] font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-white pr-10 min-w-[200px]"
+                    >
+                      <option value="">Route to...</option>
+                      {fwdOptions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                    <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  </div>
                   <button
                     onClick={handleForward}
                     disabled={forwarding || !fwdDeptId}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-black disabled:opacity-50 transition-all"
+                    className="flex items-center gap-2 px-6 py-4 rounded-xl bg-primary hover:bg-primary/90 text-white text-[11px] font-black uppercase tracking-widest disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-primary/20"
                   >
-                    {forwarding ? <Loader2 size={13} className="animate-spin" /> : <ArrowRightCircle size={13} />}
+                    {forwarding ? <Loader2 size={16} className="animate-spin" /> : <ArrowRightCircle size={16} />}
                     Forward
                   </button>
                 </div>
@@ -356,10 +382,17 @@ const MemoManagement = ({ onViewChange }) => {
     draft:    <FileText size={13} className="text-muted-foreground" />,
   };
 
-  if (selectedMemo) {
-    return (
-      <Layout user={user} currentView="memos" onViewChange={onViewChange}>
-        <div className="max-w-3xl mx-auto pb-20 px-2">
+  return (
+    <Layout user={user} currentView="memos" onViewChange={onViewChange}>
+      <div className="w-full mx-auto pb-20 px-1 animate-slide-up">
+        {showCreate ? (
+          <MemoCreateForm
+            user={user}
+            departments={departments}
+            onClose={() => setShowCreate(false)}
+            onCreated={() => { setShowCreate(false); loadMemos(); }}
+          />
+        ) : selectedMemo ? (
           <MemoDetailView
             memo={selectedMemo}
             user={user}
@@ -367,119 +400,120 @@ const MemoManagement = ({ onViewChange }) => {
             onBack={() => setSelectedMemo(null)}
             onRefresh={loadMemos}
           />
-        </div>
-      </Layout>
-    );
-  }
-
-  return (
-    <Layout user={user} currentView="memos" onViewChange={onViewChange}>
-      {showCreate && (
-        <MemoCreateForm
-          user={user}
-          departments={departments}
-          onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); loadMemos(); }}
-        />
-      )}
-
-      <div className="max-w-4xl mx-auto space-y-6 pb-20 animate-slide-up px-2">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[9px] font-black text-primary uppercase tracking-widest w-fit flex items-center gap-1">
-              <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
-              Internal Communications
-            </div>
-            <h1 className="text-3xl font-black text-foreground tracking-tighter">
-              Memo <span className="text-primary italic font-serif">Centre</span>
-            </h1>
-            <p className="text-[12px] text-muted-foreground font-medium">
-              Create and track official memos across departments.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="group bg-primary hover:bg-primary/90 text-white font-black py-3 px-7 rounded-2xl transition-all shadow-lg shadow-primary/20 flex items-center gap-3 w-fit active:scale-95"
-          >
-            <Plus size={18} className="group-hover:rotate-90 transition-transform" />
-            <span className="text-[11px] uppercase tracking-widest">New Memo</span>
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-2xl w-fit">
-          {[
-            { key: 'all', label: 'All Memos' },
-            { key: 'incoming', label: 'Incoming' },
-            { key: 'published', label: 'Published' },
-          ].map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-5 py-2 rounded-xl text-[11px] font-black transition-all ${tab === t.key ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Memo List */}
-        {loading ? (
-          <div className="text-center py-16 text-muted-foreground animate-pulse text-xs font-mono">Loading memos...</div>
-        ) : filteredMemos.length === 0 ? (
-          <div className="glass bg-white/60 rounded-3xl border border-border/50 p-12 text-center">
-            <FileText size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-            <h3 className="text-base font-bold text-foreground">No memos found</h3>
-            <p className="text-sm text-muted-foreground mt-2">
-              {tab === 'incoming' ? 'No memos have been sent to your department.' :
-               tab === 'published' ? 'No memos have been published yet.' :
-               'Create your first memo using the button above.'}
-            </p>
-          </div>
         ) : (
-          <div className="space-y-3">
-            {filteredMemos.map(memo => {
-              const isIncoming = user?.deptId && memo.targetDepartmentId === user.deptId;
-              const isPublished = memo.finalApprovalStatus === 'published';
-              return (
-                <div
-                  key={memo.id}
-                  onClick={() => setSelectedMemo(memo)}
-                  className="glass bg-white/70 rounded-2xl border border-border/50 p-5 hover:border-primary/30 hover:shadow-md transition-all cursor-pointer group"
+          <div className="space-y-8">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="px-3 py-1 rounded-xl bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-widest w-fit flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                  Internal Registry
+                </div>
+                <h1 className="text-4xl font-black text-foreground tracking-tighter leading-tight">
+                  Memo <span className="text-primary italic font-serif">Exchange</span>
+                </h1>
+                <p className="text-sm text-muted-foreground font-medium max-w-lg">
+                  Orchestrate and monitor official communications across the CSS Group modular network.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCreate(true)}
+                className="group bg-primary hover:bg-primary/90 text-white font-black py-4 px-8 rounded-2xl transition-all shadow-xl shadow-primary/20 flex items-center gap-3 w-fit active:scale-95"
+              >
+                <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+                <span className="text-xs uppercase tracking-widest font-black">Generate Memo</span>
+              </button>
+            </div>
+
+            {/* Unified Search & Filters Row */}
+            <div className="flex items-center gap-1.5 p-1.5 bg-muted/40 rounded-[1.25rem] w-fit">
+              {[
+                { key: 'all', label: 'All Comm' },
+                { key: 'incoming', label: 'Incoming' },
+                { key: 'published', label: 'Broadcasts' },
+              ].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === t.key ? 'bg-white text-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'}`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className="text-[9px] font-black text-primary tracking-widest">#{memo.id}</span>
-                        <div className="flex items-center gap-1">
-                          {statusIcon[memo.status]}
-                          <span className="text-[9px] font-bold uppercase text-muted-foreground">
-                            {isPublished ? 'Published' : memo.status}
-                          </span>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Memo List Cards */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 space-y-4 opacity-50">
+                <Loader2 size={32} className="text-primary animate-spin" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Synchronizing Records...</p>
+              </div>
+            ) : filteredMemos.length === 0 ? (
+              <div className="glass bg-white/60 rounded-[3rem] border border-border/50 p-20 text-center animate-in zoom-in-95 duration-500">
+                <div className="w-20 h-20 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <FileText size={32} className="text-muted-foreground/30" />
+                </div>
+                <h3 className="text-xl font-black text-foreground tracking-tight">Registry Empty</h3>
+                <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto font-medium">
+                  {tab === 'incoming' ? 'No incoming communications detected for your unit.' :
+                   tab === 'published' ? 'No official broadcasts have been released yet.' :
+                   'Start an official communication thread above.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredMemos.map(memo => {
+                  const isIncoming = user?.deptId && memo.targetDepartmentId === user.deptId;
+                  const isPublished = memo.finalApprovalStatus === 'published';
+                  return (
+                    <div
+                      key={memo.id}
+                      onClick={() => setSelectedMemo(memo)}
+                      className="glass bg-white/70 rounded-[2.5rem] border border-border/40 p-6 hover:border-primary/40 hover:shadow-2xl hover:shadow-primary/5 transition-all cursor-pointer group relative overflow-hidden flex flex-col h-full"
+                    >
+                      <div className="flex-1 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-primary tracking-[0.2em]">#{memo.id}</span>
+                          <div className="flex items-center gap-2">
+                             {isIncoming && !isPublished && (
+                              <span className="px-2 py-0.5 rounded-lg bg-blue-500 text-white text-[8px] font-black uppercase shadow-sm">Incoming</span>
+                            )}
+                            {isPublished && (
+                              <span className="px-2 py-0.5 rounded-lg bg-emerald-500 text-white text-[8px] font-black uppercase flex items-center gap-1 shadow-sm">
+                                <Globe size={8} /> Broadcast
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1">
+                              {statusIcon[memo.status]}
+                            </div>
+                          </div>
                         </div>
-                        {isIncoming && !isPublished && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-blue-500 text-white text-[8px] font-black uppercase">Incoming</span>
-                        )}
-                        {isPublished && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black uppercase flex items-center gap-1">
-                            <Globe size={8} /> All Depts
-                          </span>
-                        )}
+                        
+                        <div>
+                          <h3 className="text-lg font-black text-foreground tracking-tight line-clamp-2 leading-tight group-hover:text-primary transition-colors">{memo.title}</h3>
+                          <p className="text-xs text-muted-foreground mt-2 line-clamp-2 font-medium leading-relaxed">{memo.description}</p>
+                        </div>
                       </div>
-                      <h3 className="text-sm font-bold text-foreground truncate">{memo.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{memo.description}</p>
-                      <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground font-mono uppercase">
-                        <span>{memo.department}</span>
-                        <span>·</span>
-                        <span>{new Date(memo.createdAt).toLocaleDateString()}</span>
+
+                      <div className="mt-6 pt-5 border-t border-border/30 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-[10px]">
+                              {memo.department.charAt(0)}
+                           </div>
+                           <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-foreground uppercase tracking-wider leading-none">{memo.department}</span>
+                              <span className="text-[9px] text-muted-foreground font-medium mt-1 uppercase tracking-tighter">{new Date(memo.createdAt).toLocaleDateString()}</span>
+                           </div>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-white border border-border/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-white transition-all transform group-hover:scale-110 shadow-sm">
+                           <ChevronRight size={16} />
+                        </div>
                       </div>
                     </div>
-                    <ChevronRight size={16} className="text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0 mt-1" />
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

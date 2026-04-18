@@ -1141,7 +1141,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
   const verCode     = detail?.approvals?.slice(-1)[0]?.signature?.verificationCode;
 
   return (
-    <div className="w-full flex flex-col gap-5 animate-in fade-in duration-500 pb-10">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 animate-in fade-in duration-500 pb-10">
       
       {/* Top Header / Back Button Navigation */}
       <div className="flex items-center justify-between">
