@@ -336,7 +336,10 @@ const RichTextEditor = ({ loadedDraft, onAutosave, onSend }) => {
 const SpreadsheetEditor = ({ loadedDraft, onAutosave }) => {
   const [title, setTitle] = useState(loadedDraft?.title || 'Untitled Spreadsheet');
   const [saving, setSaving] = useState(false);
-  const sheetData = useRef(loadedDraft?.data || [{ name: "Sheet1", celldata: [] }]);
+  const rawSheetData = loadedDraft?.data;
+  const sheetData = useRef(Array.isArray(rawSheetData) && rawSheetData.length > 0
+    ? rawSheetData
+    : [{ name: "Sheet1", celldata: [] }]);
 
   const handleSheetChange = (data) => {
     sheetData.current = data;

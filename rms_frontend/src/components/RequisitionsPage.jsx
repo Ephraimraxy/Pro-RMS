@@ -1467,15 +1467,22 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletePendingAction, setDeletePendingAction] = useState(null);
 
+  // Normalize a requisition so department/creator are always strings, not nested objects.
+  const normalizeReq = (r) => ({
+    ...r,
+    department: r.department?.name ?? r.department ?? r.departmentName ?? '',
+    creator:    r.creator?.name    ?? r.creator    ?? r.creatorName    ?? '',
+  });
+
   const openReqById = async (id, allReqs) => {
     const list = allReqs || requisitions;
     const cached = list.find(r => r.id === parseInt(id));
     if (cached) {
-      setSelectedReq(cached);
+      setSelectedReq(normalizeReq(cached));
     } else {
       try {
         const fetched = await reqAPI.getRequisition(id);
-        setSelectedReq(fetched);
+        setSelectedReq(normalizeReq(fetched));
       } catch(err) {}
     }
   };
@@ -1694,7 +1701,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                       return (
                       <tr
                         key={r.id}
-                        onClick={() => setSelectedReq(r)}
+                        onClick={() => setSelectedReq(normalizeReq(r))}
                         className="group cursor-pointer transition-all"
                       >
                         <td className="py-3 px-4 bg-white/50 border-y border-l border-border/30 rounded-l-xl group-hover:bg-white transition-colors" onClick={e => e.stopPropagation()}>
