@@ -54,7 +54,7 @@ const Dashboard = ({ onViewChange }) => {
   const [recentPending, setRecentPending] = useState([]);
 
   const loadDashboard = async () => {
-    const s = await getDashboardStats();
+    const s = await getDashboardStats(user);
     setStats(s);
     const all = await getRequisitions();
     const userDeptId = Number(user.deptId);

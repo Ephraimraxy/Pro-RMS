@@ -220,16 +220,28 @@ export async function downloadDynamicPdf(id, upToEventId = null) {
 }
 
 // ── Stats Computation ──
-export async function getDashboardStats() {
+export async function getDashboardStats(user) {
   const all = await getRequisitions();
-  const pending = all.filter(r => r.status === 'pending').length;
-  const approved = all.filter(r => r.status === 'approved').length;
+  if (!user || !user.deptId) return { pending: 0, approved: 0, rejected: 0, totalSpent: 0 };
+
+  const userDeptId = Number(user.deptId);
+  const isAdmin = (user.role || '').toLowerCase().replace(/\s+/g, '_') === 'global_admin';
+
+  // "Pending" on dashboard now means "Personal Action Items"
+  const pendingActions = all.filter(r => {
+    const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
+    const needsFinal = isAdmin && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
+    const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
+    return isTargeted || needsFinal || isVetting;
+  });
+
+  const approved = all.filter(r => r.status === 'approved' || r.finalApprovalStatus === 'treated' || r.finalApprovalStatus === 'published').length;
   const rejected = all.filter(r => r.status === 'rejected').length;
   const totalSpent = all
-    .filter(r => r.status === 'approved' && r.amount)
+    .filter(r => (r.status === 'approved' || r.finalApprovalStatus === 'treated') && r.amount)
     .reduce((sum, r) => sum + r.amount, 0);
 
-  return { pending, approved, rejected, totalSpent };
+  return { pending: pendingActions.length, approved, rejected, totalSpent };
 }
 
 // ── Activity Log ──
