@@ -59,6 +59,7 @@ model Department {
   targetedRequisitions Requisition[]    @relation("RequisitionTarget")
   forwardEventsFrom    ForwardEvent[]   @relation("ForwardFrom")
   forwardEventsTo      ForwardEvent[]   @relation("ForwardTo")
+  finalApprovedRequisitions Requisition[] @relation("FinalApprover")
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 }
@@ -92,8 +93,34 @@ model Requisition {
   targetDepartmentId Int?
   targetDepartment   Department? @relation("RequisitionTarget", fields: [targetDepartmentId], references: [id])
   forwardNote        String?
+  
+  // Final Approval & Vetting Workflow
+  finalApprovalStatus   String?        @default("none")
+  finalApprovedByDeptId  Int?
+  finalApprovedByDept   Department? @relation("FinalApprover", fields: [finalApprovedByDeptId], references: [id])
+  finalApprovedAt       DateTime?
+  finalApprovedNote     String?
+  currentVettingDeptId  Int?
+  treatedByDeptId       Int?
+  treatedAt             DateTime?
+  vettingEvents         VettingEvent[]
+
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
+}
+
+model VettingEvent {
+  id              Int         @id @default(autoincrement())
+  requisitionId   Int
+  requisition     Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  deptId          Int
+  deptName        String?
+  action          String
+  comment         String?     @db.Text
+  attachmentKey   String?
+  attachmentName  String?
+  actorName       String?
+  createdAt       DateTime    @default(now())
 }
 
 model ForwardEvent {
