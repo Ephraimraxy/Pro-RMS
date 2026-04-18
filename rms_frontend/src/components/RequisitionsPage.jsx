@@ -21,10 +21,14 @@ import {
 import { reqAPI } from '../lib/api';
 
 const statusColors = {
-  pending:  'bg-amber-50 border-amber-200 text-amber-700',
-  approved: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-  rejected: 'bg-red-50 border-red-200 text-red-700',
-  draft:    'bg-muted border-border text-muted-foreground',
+  pending:    'bg-amber-50 border-amber-200 text-amber-700',
+  approved:   'bg-emerald-50 border-emerald-200 text-emerald-700',
+  rejected:   'bg-red-50 border-red-200 text-red-700',
+  draft:      'bg-muted border-border text-muted-foreground',
+  // Final states
+  vetting:    'bg-blue-50 border-blue-200 text-blue-700',
+  treated:    'bg-indigo-50 border-indigo-200 text-indigo-700',
+  published:  'bg-emerald-50 border-emerald-200 text-emerald-700',
 };
 
 const urgencyColors = {
@@ -1641,8 +1645,10 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
   // Normalize a requisition so department/creator are always strings, not nested objects.
   const normalizeReq = (r) => ({
     ...r,
-    department: r.department?.name ?? r.department ?? r.departmentName ?? '',
-    creator:    r.creator?.name    ?? r.creator    ?? r.creatorName    ?? '',
+    department:       r.department?.name ?? r.department ?? r.departmentName ?? '',
+    creator:          r.creator?.name    ?? r.creator    ?? r.creatorName    ?? '',
+    currentStageName: r.currentStage?.name ?? '',
+    finalState:       r.finalApprovalStatus ?? 'none',
   });
 
   const openReqById = async (id, allReqs) => {
@@ -1932,12 +1938,43 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                         </td>
                         <td className="py-3 px-4 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
                           <div className="flex flex-col gap-1">
-                            <span className={`w-fit px-2 py-0.5 rounded-lg text-[9px] font-black uppercase border tracking-widest ${statusColors[r.status]}`}>
-                              {r.status}
-                            </span>
-                            {r.status === 'pending' && r.currentStageName && (
-                              <span className="text-[8px] font-bold text-muted-foreground/60 uppercase tracking-tighter truncate max-w-[100px]">At: {r.currentStageName}</span>
-                            )}
+                            {(() => {
+                              const norm = normalizeReq(r);
+                              const details = (() => {
+                                if (norm.status === 'draft') return { label: 'Draft', color: statusColors.draft };
+                                if (norm.status === 'rejected') return { label: 'Rejected', color: statusColors.rejected };
+                                
+                                // Sub-workflow Statuses
+                                if (norm.finalState === 'published') return { label: 'Published', color: statusColors.published };
+                                if (norm.finalState === 'treated')   return { label: 'Treated', color: statusColors.treated };
+                                if (norm.finalState === 'vetting')   return { label: 'Vetting', color: statusColors.vetting };
+                                if (norm.finalState === 'approved' && norm.status === 'approved') return { label: 'Final Approved', color: statusColors.approved };
+                                
+                                if (norm.status === 'approved') return { label: 'Approved (Internal)', color: statusColors.approved };
+                                
+                                if (norm.status === 'pending') {
+                                  return { 
+                                    label:  norm.currentStageName ? `At: ${norm.currentStageName}` : 'Pending', 
+                                    color:  statusColors.pending,
+                                    sub:    norm.currentStageName ? 'Review Pending' : null
+                                  };
+                                }
+                                return { label: norm.status, color: statusColors.pending };
+                              })();
+
+                              return (
+                                <>
+                                  <span className={`w-fit px-2 py-0.5 rounded-lg text-[9px] font-black uppercase border tracking-widest ${details.color}`}>
+                                    {details.label}
+                                  </span>
+                                  {details.sub && (
+                                    <span className="text-[8px] font-bold text-muted-foreground/60 uppercase tracking-tighter truncate max-w-[100px]">
+                                      {details.sub}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="py-3 px-4 bg-white/50 border-y border-r border-border/30 rounded-r-xl group-hover:bg-white transition-colors text-right">
