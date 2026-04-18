@@ -106,52 +106,171 @@ const ProcessingChain = ({ events = [] }) => {
 };
 
 
-// ── File Preview Modal ────────────────────────────────────────────────────
+// ── File Preview Modal (3-stage pipeline) ────────────────────────────────
+// Stage 1: detect type from extension
+// Stage 2: fetch with auth → Blob → blobUrl (uniform regardless of source)
+// Stage 3: route to purpose-built renderer; always has a download fallback
 const FilePreviewModal = ({ attachment, onClose }) => {
-  const [textContent, setTextContent] = useState(null);
-  const [textLoading, setTextLoading] = useState(false);
+  const [status,      setStatus]      = useState('loading'); // 'loading'|'ready'|'error'
+  const [errorMsg,    setErrorMsg]    = useState('');
+  const [blobUrl,     setBlobUrl]     = useState(null);   // pdf / image / video / audio
+  const [textContent, setTextContent] = useState(null);   // text / pptx fallback
+  const [sheetData,   setSheetData]   = useState(null);   // xlsx / csv: [[cell,...],...]
+  const [sheetNames,  setSheetNames]  = useState([]);
+  const [activeSheet, setActiveSheet] = useState(0);
+  const [docxBlob,    setDocxBlob]    = useState(null);   // docx: raw Blob for renderAsync
+  const docxRef = React.useRef(null);
 
   if (!attachment) return null;
 
-  const token = localStorage.getItem('rms_token');
-  const previewUrl = `/api/attachments/${attachment.id}/preview?token=${token}`;
+  const token       = localStorage.getItem('rms_token');
+  const serverUrl   = `/api/attachments/${attachment.id}/preview`;
   const downloadUrl = `/api/attachments/${attachment.id}/download?token=${token}`;
+  const name        = attachment.filename || '';
+  const ext         = name.split('.').pop().toLowerCase();
+  const isMobile    = window.innerWidth < 768;
 
-  const mime = attachment.mimeType || '';
-  const name = attachment.filename || '';
+  // ── Stage 1: classify by extension ──────────────────────────────────────
+  const fileType = (() => {
+    if (ext === 'pdf')                                                      return 'pdf';
+    if (['docx', 'doc'].includes(ext))                                      return 'docx';
+    if (['xlsx', 'xls'].includes(ext))                                      return 'xlsx';
+    if (ext === 'csv')                                                      return 'csv';
+    if (['pptx', 'ppt'].includes(ext))                                      return 'pptx';
+    if (['jpg','jpeg','png','gif','webp','svg','bmp','ico'].includes(ext))   return 'image';
+    if (['mp4','mov','webm','mkv','avi','flv'].includes(ext))               return 'video';
+    if (['mp3','wav','m4a','aac','ogg','flac','wma'].includes(ext))         return 'audio';
+    if (['txt','log','md','json','xml','html','htm','css','js','ts','yaml','yml','ini','env'].includes(ext)) return 'text';
+    return 'unknown';
+  })();
 
-  const isImage     = /^image\/(png|jpe?g|gif|webp|svg)/.test(mime) || /\.(png|jpe?g|gif|webp|svg)$/i.test(name);
-  const isPdf       = mime === 'application/pdf' || /\.pdf$/i.test(name);
-  const isText      = /^text\//.test(mime) || /\.(txt|csv|log|md|json|xml|html?)$/i.test(name);
-  const isOfficeDoc = /\.(docx?|xlsx?|pptx?)$/i.test(name) ||
-    ['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-     'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(mime);
-
-  // Fetch plain text for text files
+  // ── Stage 2: fetch → Blob + Stage 3 setup ───────────────────────────────
   React.useEffect(() => {
-    if (!isText) return;
-    setTextLoading(true);
-    fetch(previewUrl)
-      .then(r => r.text())
-      .then(t => setTextContent(t))
-      .catch(() => setTextContent('Unable to load file content.'))
-      .finally(() => setTextLoading(false));
+    let activeBlobUrl = null;
+    setStatus('loading');
+    setBlobUrl(null); setTextContent(null); setSheetData(null); setDocxBlob(null);
+
+    const processFile = async () => {
+      try {
+        // Fetch with Authorization header (never redirects to R2 — server proxies)
+        const res = await fetch(serverUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+        const blob = await res.blob();
+
+        if (fileType === 'docx') {
+          // docx-preview needs the raw Blob; renderAsync is called in a separate effect
+          setDocxBlob(blob);
+          setStatus('ready');
+          return;
+        }
+
+        if (fileType === 'xlsx' || fileType === 'csv') {
+          const { read, utils } = await import('xlsx');
+          const buf = await blob.arrayBuffer();
+          const wb  = read(new Uint8Array(buf), { type: 'array' });
+          const allSheets = wb.SheetNames.map(sName => ({
+            name: sName,
+            rows: utils.sheet_to_json(wb.Sheets[sName], { header: 1, defval: '' })
+          }));
+          setSheetNames(allSheets.map(s => s.name));
+          setSheetData(allSheets.map(s => s.rows));
+          setActiveSheet(0);
+          setStatus('ready');
+          return;
+        }
+
+        if (fileType === 'text') {
+          const text = await blob.text();
+          setTextContent(text);
+          setStatus('ready');
+          return;
+        }
+
+        if (fileType === 'pptx') {
+          // No client-side PPTX renderer — offer download; show size info
+          setStatus('ready');
+          return;
+        }
+
+        // pdf / image / video / audio: create a blob:// URL
+        const url = URL.createObjectURL(blob);
+        activeBlobUrl = url;
+        setBlobUrl(url);
+        setStatus('ready');
+
+      } catch (err) {
+        setErrorMsg(err.message || 'Failed to load file');
+        setStatus('error');
+      }
+    };
+
+    processFile();
+
+    return () => { if (activeBlobUrl) URL.revokeObjectURL(activeBlobUrl); };
   }, [attachment.id]);
 
-  // Detect mobile
-  const isMobile = window.innerWidth < 768;
+  // ── DOCX renderer: fires after docxBlob is set and the div ref is mounted ──
+  React.useEffect(() => {
+    if (!docxBlob || !docxRef.current) return;
+    import('docx-preview').then(({ renderAsync }) => {
+      renderAsync(docxBlob, docxRef.current, null, {
+        className: 'docx-preview-content',
+        inWrapper: false,
+        ignoreWidth: true,
+        ignoreHeight: true,
+        breakPages: true,
+        useBase64URL: true,
+      }).catch(err => {
+        setErrorMsg(err.message || 'DOCX render failed');
+        setStatus('error');
+      });
+    });
+  }, [docxBlob]);
 
-  const openInNewTab = () => window.open(previewUrl, '_blank', 'noopener,noreferrer');
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  const openInNewTab = () => {
+    const url = blobUrl || `${serverUrl}?token=${token}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // ── Shared loading spinner ───────────────────────────────────────────────
+  const LoadingView = () => (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground">
+      <Loader2 size={32} className="animate-spin text-primary" />
+      <p className="text-sm font-medium">Loading preview…</p>
+    </div>
+  );
+
+  // ── Error / download fallback ────────────────────────────────────────────
+  const FallbackView = ({ label = 'No preview available', hint = 'Download the file to open it.' }) => (
+    <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
+      <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center">
+        <FileText size={36} className="text-muted-foreground/40" />
+      </div>
+      <div className="space-y-1 max-w-xs">
+        <p className="text-sm font-bold text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{hint}</p>
+        {status === 'error' && errorMsg && (
+          <p className="text-[10px] text-destructive font-mono mt-1 break-all">{errorMsg}</p>
+        )}
+      </div>
+      <a href={downloadUrl} download
+        className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md">
+        <ArrowDownToLine size={16} /> Download File
+      </a>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      {/* Full screen on mobile, modal on desktop */}
       <div
         className="bg-white w-full sm:rounded-2xl sm:max-w-4xl sm:mx-4 shadow-2xl flex flex-col overflow-hidden"
         style={{ height: isMobile ? '95dvh' : '90vh' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="p-3 sm:p-4 border-b border-border/50 flex items-center justify-between shrink-0 bg-white">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <FileText size={15} className="text-primary shrink-0" />
@@ -161,17 +280,15 @@ const FilePreviewModal = ({ attachment, onClose }) => {
                 {(attachment.size / 1024).toFixed(0)} KB
               </span>
             )}
+            <span className="text-[9px] font-mono uppercase text-primary/60 bg-primary/5 px-1.5 py-0.5 rounded shrink-0">{ext}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0 ml-2">
-            {/* Open in new tab — works for all types, especially useful on mobile */}
-            <button
-              onClick={openInNewTab}
-              title="Open in new tab"
-              className="p-2 hover:bg-muted rounded-lg text-primary transition-colors"
-            >
+            <button onClick={openInNewTab} title="Open in new tab"
+              className="p-2 hover:bg-muted rounded-lg text-primary transition-colors">
               <ExternalLink size={15} />
             </button>
-            <a href={downloadUrl} download title="Download" className="p-2 hover:bg-muted rounded-lg text-primary transition-colors">
+            <a href={downloadUrl} download title="Download"
+              className="p-2 hover:bg-muted rounded-lg text-primary transition-colors">
               <ArrowDownToLine size={15} />
             </a>
             <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg text-muted-foreground">
@@ -180,103 +297,135 @@ const FilePreviewModal = ({ attachment, onClose }) => {
           </div>
         </div>
 
-        {/* Preview area */}
-        <div className="flex-1 overflow-auto bg-muted/10 flex flex-col">
-          {isImage && (
-            <div className="flex-1 flex items-center justify-center p-4">
-              <img
-                src={previewUrl}
-                alt={name}
-                className="max-w-full max-h-full rounded-lg shadow-md object-contain"
-                style={{ maxHeight: 'calc(90vh - 80px)' }}
-              />
-            </div>
-          )}
+        {/* ── Stage 3: Renderer ── */}
+        <div className="flex-1 overflow-auto bg-muted/10 flex flex-col min-h-0">
 
-          {isPdf && (
+          {/* Loading */}
+          {status === 'loading' && <LoadingView />}
+
+          {/* Error */}
+          {status === 'error' && <FallbackView label="Preview failed" hint="Something went wrong while loading this file." />}
+
+          {/* ── PDF ── */}
+          {status === 'ready' && fileType === 'pdf' && blobUrl && (
             isMobile ? (
-              /* On mobile: iframe PDFs often fail — show a prominent open button instead */
               <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
                 <div className="w-20 h-20 rounded-3xl bg-red-50 border border-red-200 flex items-center justify-center">
                   <FileText size={36} className="text-red-500" />
                 </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-bold text-foreground">PDF Document</p>
-                  <p className="text-xs text-muted-foreground">Tap below to view the PDF in your browser or download it.</p>
-                </div>
+                <p className="text-sm font-bold text-foreground">PDF Document</p>
+                <p className="text-xs text-muted-foreground">Tap below to view or download.</p>
                 <div className="flex flex-col gap-3 w-full max-w-xs">
-                  <button
-                    onClick={openInNewTab}
-                    className="flex items-center justify-center gap-2 px-5 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md"
-                  >
+                  <button onClick={openInNewTab}
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 shadow-md">
                     <ExternalLink size={16} /> Open PDF
                   </button>
-                  <a href={downloadUrl} download className="flex items-center justify-center gap-2 px-5 py-3 bg-white border border-border text-foreground rounded-xl font-bold text-sm hover:bg-muted transition-all">
+                  <a href={downloadUrl} download
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-white border border-border text-foreground rounded-xl font-bold text-sm hover:bg-muted">
                     <ArrowDownToLine size={16} /> Download
                   </a>
                 </div>
               </div>
             ) : (
-              <iframe
-                src={previewUrl}
-                className="w-full flex-1 border-0"
-                title={name}
-                style={{ minHeight: '500px' }}
-              />
+              <iframe src={blobUrl} className="w-full flex-1 border-0" title={name} style={{ minHeight: '500px' }} />
             )
           )}
 
-          {isOfficeDoc && (
-            /* Office docs can't be embedded in iframe behind auth — show clear message */
-            <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
-              <div className="w-20 h-20 rounded-3xl bg-blue-50 border border-blue-200 flex items-center justify-center">
-                <FileText size={36} className="text-blue-500" />
-              </div>
-              <div className="space-y-2 max-w-sm">
-                <p className="text-sm font-bold text-foreground">Office Document</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Word/Excel files must be downloaded to view. Tap Download to open in your Office app.
-                </p>
-              </div>
-              <a
-                href={downloadUrl}
-                download
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md"
-              >
-                <ArrowDownToLine size={16} /> Download &amp; Open
-              </a>
+          {/* ── Image ── */}
+          {status === 'ready' && fileType === 'image' && blobUrl && (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <img src={blobUrl} alt={name}
+                className="max-w-full max-h-full rounded-lg shadow-md object-contain"
+                style={{ maxHeight: 'calc(90vh - 80px)' }} />
             </div>
           )}
 
-          {isText && (
-            <div className="flex-1 overflow-auto p-4">
-              {textLoading ? (
-                <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
-                  <Loader2 size={20} className="animate-spin" />
-                  <span className="text-sm">Loading…</span>
+          {/* ── Video ── */}
+          {status === 'ready' && fileType === 'video' && blobUrl && (
+            <div className="flex-1 flex items-center justify-center p-4 bg-black">
+              <video src={blobUrl} controls className="max-w-full max-h-full rounded-lg shadow-xl"
+                style={{ maxHeight: 'calc(90vh - 80px)' }}
+                onLoadedMetadata={() => {}} />
+            </div>
+          )}
+
+          {/* ── Audio ── */}
+          {status === 'ready' && fileType === 'audio' && blobUrl && (
+            <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
+              <div className="w-24 h-24 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <FileText size={40} className="text-primary" />
+              </div>
+              <p className="text-sm font-bold text-foreground">{name}</p>
+              <audio src={blobUrl} controls className="w-full max-w-md rounded-xl shadow-md"
+                onLoadedMetadata={() => {}} />
+            </div>
+          )}
+
+          {/* ── DOCX ── */}
+          {status === 'ready' && fileType === 'docx' && (
+            <div className="flex-1 overflow-auto p-4 sm:p-6 bg-white">
+              <div
+                ref={docxRef}
+                className="mx-auto max-w-3xl bg-white shadow-sm border border-border/20 rounded-xl p-6 min-h-32"
+                style={{ fontFamily: 'serif' }}
+              />
+              {!docxBlob && <LoadingView />}
+            </div>
+          )}
+
+          {/* ── XLSX / CSV ── */}
+          {status === 'ready' && (fileType === 'xlsx' || fileType === 'csv') && sheetData && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {sheetNames.length > 1 && (
+                <div className="flex gap-1 px-3 pt-3 shrink-0 overflow-x-auto">
+                  {sheetNames.map((sn, i) => (
+                    <button key={i} onClick={() => setActiveSheet(i)}
+                      className={`px-3 py-1.5 rounded-t-lg text-[11px] font-bold border-b-2 transition-all whitespace-nowrap ${
+                        activeSheet === i ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-muted-foreground hover:text-foreground'
+                      }`}>{sn}</button>
+                  ))}
                 </div>
-              ) : (
-                <pre className="text-xs font-mono text-foreground leading-relaxed whitespace-pre-wrap break-words bg-white border border-border/30 rounded-xl p-4 shadow-inner">
-                  {textContent}
-                </pre>
               )}
+              <div className="flex-1 overflow-auto p-3">
+                <table className="w-full text-[11px] border-collapse bg-white rounded-xl overflow-hidden shadow-sm">
+                  <tbody>
+                    {(sheetData[activeSheet] || []).map((row, ri) => (
+                      <tr key={ri} className={ri === 0 ? 'bg-primary/5 font-bold' : ri % 2 === 0 ? 'bg-muted/20' : 'bg-white'}>
+                        {(Array.isArray(row) ? row : []).map((cell, ci) => (
+                          ri === 0
+                            ? <th key={ci} className="px-2 py-1.5 text-left border border-border/30 text-foreground font-black">{String(cell ?? '')}</th>
+                            : <td key={ci} className="px-2 py-1.5 border border-border/20 text-foreground/80 max-w-[200px] truncate">{String(cell ?? '')}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {(!sheetData[activeSheet] || sheetData[activeSheet].length === 0) && (
+                  <p className="text-center text-xs text-muted-foreground py-8">No data in this sheet</p>
+                )}
+              </div>
             </div>
           )}
 
-          {!isImage && !isPdf && !isOfficeDoc && !isText && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8 text-center">
-              <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center">
-                <FileText size={36} className="text-muted-foreground/40" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-foreground">No preview available</p>
-                <p className="text-xs text-muted-foreground">This file type cannot be previewed. Download it to open.</p>
-              </div>
-              <a href={downloadUrl} download className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary/90 transition-all shadow-md">
-                <ArrowDownToLine size={16} /> Download File
-              </a>
+          {/* ── Plain text / JSON / XML / code ── */}
+          {status === 'ready' && fileType === 'text' && textContent !== null && (
+            <div className="flex-1 overflow-auto p-4">
+              <pre className="text-xs font-mono text-foreground leading-relaxed whitespace-pre-wrap break-words bg-white border border-border/30 rounded-xl p-4 shadow-inner min-h-full">
+                {textContent}
+              </pre>
             </div>
           )}
+
+          {/* ── PPTX / unknown — download fallback ── */}
+          {status === 'ready' && (fileType === 'pptx' || fileType === 'unknown') && (
+            <FallbackView
+              label={fileType === 'pptx' ? 'PowerPoint Presentation' : 'Preview not available'}
+              hint={fileType === 'pptx'
+                ? 'PPTX files cannot be rendered in the browser. Download to open in PowerPoint.'
+                : 'This file type cannot be previewed. Download it to open.'}
+            />
+          )}
+
         </div>
       </div>
     </div>

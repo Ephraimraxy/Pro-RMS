@@ -97,7 +97,7 @@ const Login = () => {
             <div className="w-32 h-20 rounded-2xl overflow-hidden bg-white/10 border border-white/20 shadow-inner">
               <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover object-center" />
             </div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group of Company</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-white/60 mt-4">CSS Group of Companies</p>
           </div>
 
           <div className="mt-12">
@@ -250,7 +250,7 @@ const Login = () => {
           </div>
 
           <div className="mt-8 text-center">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">© 2026 CSS Group of Company</p>
+            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">© 2026 CSS Group of Companies</p>
           </div>
         </div>
       </div>
