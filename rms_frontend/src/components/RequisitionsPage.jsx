@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from './Layout';
-import RequisitionForm from './RequisitionForm';
+import CashRequestForm from './CashRequestForm';
 import ApprovalTimeline from './ApprovalTimeline';
 import ApprovalActionPanel from './ApprovalActionPanel';
 import ConfirmModal from './ConfirmModal';
@@ -1460,7 +1460,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
   const [loading, setLoading]           = useState(true);
   const [search, setSearch]             = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [isFormOpen, setIsFormOpen]     = useState(false);
+  const [isFormOpen, setIsFormOpen]     = useState(null);
   const [selectedReq, setSelectedReq]   = useState(null);
   const [selectedIds, setSelectedIds]   = useState([]);
   const [deleting, setDeleting]         = useState(false);
@@ -1595,7 +1595,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
         }
       />
       {isFormOpen ? (
-        <RequisitionForm isOpen={isFormOpen} onClose={() => { setIsFormOpen(false); loadData(); }} />
+        <CashRequestForm type={isFormOpen} isOpen={!!isFormOpen} onClose={() => { setIsFormOpen(null); loadData(); }} />
       ) : selectedReq ? (
         <RequisitionDetailModal
           req={selectedReq}
@@ -1631,13 +1631,20 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                 <span className="uppercase tracking-widest text-[10px]">Purge {selectedIds.length} Units</span>
               </button>
             )}
-            <button
-              onClick={() => setIsFormOpen(true)}
-              className="bg-foreground hover:bg-foreground/90 text-background font-black py-3 px-6 rounded-2xl transition-all shadow-2xl shadow-black/10 flex items-center gap-2 w-fit active:scale-95"
-            >
-              <Plus size={18} />
-              <span className="uppercase tracking-widest text-[10px]">Raise New Requisition</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsFormOpen('Cash')}
+                className="bg-primary hover:bg-primary/90 text-white font-black py-3 px-5 rounded-2xl transition-all shadow-lg shadow-primary/20 flex items-center gap-2 active:scale-95 text-[10px] uppercase tracking-widest"
+              >
+                <Plus size={16} /> Cash Request
+              </button>
+              <button
+                onClick={() => setIsFormOpen('Material')}
+                className="bg-foreground hover:bg-foreground/90 text-background font-black py-3 px-5 rounded-2xl transition-all shadow-lg flex items-center gap-2 active:scale-95 text-[10px] uppercase tracking-widest"
+              >
+                <Plus size={16} /> Material
+              </button>
+            </div>
           </div>
         </div>
 

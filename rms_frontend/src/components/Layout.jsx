@@ -89,8 +89,8 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
       <button onClick={toggleSidebar} className="hidden lg:flex p-1.5 hover:bg-muted rounded-lg text-muted-foreground transition-colors mr-1">
         <Menu size={18} />
       </button>
-      <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-inner">
-         <img src="/favicon.svg" alt="Logo" className="w-5 h-5 object-contain" />
+      <div className="w-20 h-11 rounded-xl overflow-hidden shrink-0 shadow-sm border border-primary/10">
+        <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover object-center" />
       </div>
       <div className="flex flex-col">
         <h1 className="text-[10px] font-black text-foreground tracking-[0.2em] uppercase flex items-center leading-none">

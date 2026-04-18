@@ -266,6 +266,10 @@ export const vettingAPI = {
   }
 };
 
+export const memoAPI = {
+  publish: (reqId) => api.post(`/requisitions/${reqId}/publish-memo`),
+};
+
 export const aiAPI = {
   async refineDraft(rawDescription, mode = 'auto') {
     try {

@@ -2174,6 +2174,41 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
   } catch (error) { sendError(res, 500, error.message); }
 });
 
+// ── PUBLISH MEMO TO ALL DEPARTMENTS ──────────────────────────────────────────
+app.post('/api/requisitions/:id/publish-memo', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reqId = parseInt(id);
+    const deptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const dept = deptId ? await prisma.department.findUnique({ where: { id: deptId } }) : null;
+    const deptName = dept?.name || req.user.name || '';
+    const canPublish = /\bhr\b|human\s*resource|general\s*manager|\bgm\b|ceo|chairman/i.test(deptName)
+      || req.user.role === 'global_admin';
+    if (!canPublish) return res.status(403).json({ error: 'Only HR, GM, or Chairman/CEO can publish memos' });
+
+    const memo = await prisma.requisition.findUnique({ where: { id: reqId } });
+    if (!memo) return res.status(404).json({ error: 'Memo not found' });
+
+    try { await prisma.$executeRaw`UPDATE "Requisition" SET "finalApprovalStatus"='published', "status"='approved' WHERE id=${reqId}`; } catch(_) {}
+
+    const allDepts = await prisma.department.findMany({ where: { NOT: { name: 'Super Admin' } } });
+    const memoTitle = memo.title || (memo.description || '').slice(0, 60) || 'Untitled Memo';
+    await Promise.all(allDepts.map(async d => {
+      try {
+        await prisma.notification.create({ data: {
+          departmentId: d.id,
+          message: `📋 Memo Published: "${memoTitle}" — by ${deptName || 'Administration'}`,
+          link: `/requisitions/${reqId}`,
+          type: 'info'
+        }});
+      } catch(_) {}
+    }));
+
+    try { await logAudit(req, 'Memo Published', `Memo #${reqId} published to all depts by ${deptName}`); } catch(_) {}
+    res.json({ ok: true, published: allDepts.length });
+  } catch (err) { sendError(res, 500, err.message); }
+});
+
 app.post('/api/requisitions/:id/approve', authenticateToken, approvalLimiter, async (req, res) => {
   try {
     const { id } = req.params;

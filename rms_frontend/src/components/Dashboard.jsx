@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Layout from './Layout';
-import RequisitionForm from './RequisitionForm';
 import { useAuth } from '../context/AuthContext';
-import { CORPORATE_HIERARCHY } from '../constants/departments';
-import { getDashboardStats, getRequisitions, getDepartments } from '../lib/store';
+import { getDashboardStats, getRequisitions } from '../lib/store';
 import { reqAPI } from '../lib/api';
-import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, ShieldAlert, Boxes, Eye, AlertTriangle, Plus, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, Eye, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
   <div onClick={onClick} className="glass p-5 rounded-[2rem] border border-border/40 relative overflow-hidden group hover:border-primary/40 transition-all cursor-pointer bg-white/70 shadow-sm hover:shadow-xl hover:shadow-primary/5 active:scale-[0.98]">
@@ -22,39 +20,16 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
   </div>
 );
 
-const DepartmentCard = ({ name, type }) => (
-  <div className="glass bg-white/60 p-3 lg:p-5 rounded-2xl border border-border/50 hover:border-primary/20 transition-all cursor-pointer group flex items-center justify-between shadow-sm hover:shadow-md">
-    <div className="flex items-center space-x-4">
-      <div className="w-10 h-10 rounded-xl bg-muted border border-border/50 flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 group-hover:border-primary/20 transition-all font-bold">
-        {name[0]}
-      </div>
-      <div>
-        <h4 className="text-sm font-semibold text-foreground transition-colors">{name}</h4>
-        <p className="text-[10px] text-muted-foreground uppercase font-bold">{type}</p>
-      </div>
-    </div>
-    <ArrowUpRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-  </div>
-);
-
 const Dashboard = ({ onViewChange }) => {
   const { user } = useAuth();
-  const [isFormOpen, setIsFormOpen] = useState(false);
   const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0, totalSpent: 0 });
   const [recentPending, setRecentPending] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [loadingDepts, setLoadingDepts] = useState(true);
 
   const loadDashboard = async () => {
     const s = await getDashboardStats();
     setStats(s);
     const all = await getRequisitions();
     setRecentPending(all.filter(r => r.status === 'pending').slice(0, 5));
-    
-    setLoadingDepts(true);
-    const depts = await getDepartments();
-    setDepartments(depts);
-    setLoadingDepts(false);
   };
 
   const [isDeptReady, setIsDeptReady] = useState(true);
@@ -76,17 +51,8 @@ const Dashboard = ({ onViewChange }) => {
     return `₦${val.toLocaleString()}`;
   };
 
-  const strategicDepts = departments.filter(d => d.type === 'Strategic');
-  const operationalDepts = departments.filter(d => d.type === 'Operational');
-
   return (
     <Layout user={user} currentView="dashboard" onViewChange={onViewChange}>
-      <RequisitionForm 
-        isOpen={isFormOpen} 
-        onClose={() => { setIsFormOpen(false); loadDashboard(); }} 
-        user={user}
-      />
-      
       <div className="max-w-full mx-auto space-y-5 pb-20 animate-slide-up px-1">
         {user?.role === 'department' && !isDeptReady && (
           <div className="glass bg-amber-500/10 border border-amber-500/30 rounded-[2rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-amber-500/10">
@@ -111,29 +77,19 @@ const Dashboard = ({ onViewChange }) => {
           </div>
         )}
 
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1">
-            <h1 className="text-4xl font-black text-foreground tracking-tighter leading-tight">
-              {user?.role === 'department' ? (
-                <span>{user.name} <span className="text-primary italic font-serif">Unit Portal</span></span>
-              ) : (
-                <span>Oversight <span className="text-primary italic font-serif">Command</span></span>
-              )}
-            </h1>
-            <p className="text-muted-foreground text-[13px] font-medium tracking-tight">
-              {user?.role === 'department' 
-                ? `Operational control for the ${user.name} unit.` 
-                : `Monitoring CSS Group strategic operations.`}
-            </p>
-          </div>
-          <button 
-            onClick={() => setIsFormOpen(true)}
-            disabled={user?.role === 'department' && !isDeptReady}
-            className="group bg-foreground hover:bg-foreground/90 text-background font-black py-4 px-10 rounded-2xl transition-all shadow-2xl shadow-black/10 flex items-center gap-4 w-fit active:scale-95 disabled:opacity-50 disabled:grayscale"
-          >
-            <Plus size={20} className="group-hover:rotate-90 transition-transform" />
-            <span className="uppercase tracking-widest text-[10px]">Raise New Requisition</span>
-          </button>
+        <div className="space-y-1">
+          <h1 className="text-4xl font-black text-foreground tracking-tighter leading-tight">
+            {user?.role === 'department' ? (
+              <span>{user.name} <span className="text-primary italic font-serif">Unit Portal</span></span>
+            ) : (
+              <span>Oversight <span className="text-primary italic font-serif">Command</span></span>
+            )}
+          </h1>
+          <p className="text-muted-foreground text-[13px] font-medium tracking-tight">
+            {user?.role === 'department'
+              ? `Operational control for the ${user.name} unit.`
+              : `Monitoring CSS Group strategic operations.`}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
