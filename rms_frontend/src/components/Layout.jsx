@@ -10,6 +10,8 @@ import {
 import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications, getRequisitions } from '../lib/store';
 import { reqAPI } from '../lib/api';
 
+const normalizeRole = (r) => (r || '').toLowerCase().replace(/\s+/g, '_');
+
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = false, isCollapsed = false }) => (
   <div
     onClick={onClick}
