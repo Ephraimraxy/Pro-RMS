@@ -2593,7 +2593,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
         .replace(/—/g, '-')
         .replace(/…/g, '...')
         .replace(/•/g, '-')
-        .replace(/[^\x20-\xFF]/g, '?'); // replace any remaining non-WinAnsi
+        .replace(/[^\x20-\xFF\n\r]/g, '?'); // replace any remaining non-WinAnsi, allowing newlines/returns
     };
 
     // ── Helper: Strip HTML tags to plain text ────────────
@@ -2723,14 +2723,21 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
         pg.drawImage(sealBgImg, { x: cx - sw / 2, y: cy - sh / 2, width: sw, height: sh });
         
         // ── White Mask ──
-        // The SEAL STAMP.png has 'Human Resource' baked in. We draw a thick white ring 
-        // over the text band to clear it before drawing the dynamic department name.
+        // 1. Ring Mask: cover the top/bottom text bands
         pg.drawCircle({
           x: cx, y: cy,
           size: 30, // Radius of the mask
           borderColor: rgb(1, 1, 1),
-          borderWidth: 10, // Thick enough to cover the top and bottom text areas
-          opacity: 0.9 // Slight transparency to keep it looking 'stamped'
+          borderWidth: 10,
+          opacity: 0.9
+        });
+
+        // 2. Date Mask: cover the hardcoded template date in the center-bottom
+        pg.drawRectangle({
+          x: cx - 25, y: cy - 18,
+          width: 50, height: 12,
+          color: rgb(1, 1, 1),
+          opacity: 0.95
         });
       }
 
@@ -2754,17 +2761,20 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // ── Logo ────────────────────────────────────────────
     try {
-      const logoPath = path.join(__dirname, 'samples', 'Group.png');
+      const logoPath = path.join(__dirname, 'rms_frontend', 'public', 'Group.png');
       if (fs.existsSync(logoPath)) {
         const logoBytes = fs.readFileSync(logoPath);
-        const logoImage = await pdfDoc.embedJpg(logoBytes);
-        const logoDims = logoImage.scale(0.2);
-        page.drawImage(logoImage, { x: margin, y: y - logoDims.height + 10, width: logoDims.width, height: logoDims.height });
+        const logoImage = await embedSafe(logoBytes);
+        if (logoImage) {
+          const logoDims = logoImage.scale(0.2);
+          // Far top left
+          page.drawImage(logoImage, { x: margin, y: y - logoDims.height + 14, width: logoDims.width, height: logoDims.height });
+        }
       }
     } catch (e) { /* logo skip */ }
 
     // ── Company Header ──────────────────────────────────
-    page.drawText('CSS GLOBAL INTEGRATED FARMS LTD', { x: 150, y: y - 5, size: 14, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+    page.drawText('CSS GROUP OF COMPANIES', { x: 150, y: y - 5, size: 14, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
     page.drawText('Km 10, Abuja-Keffi Expressway, Salamu Road, Gora, Nasarawa State.', { x: 150, y: y - 20, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
     page.drawText('www.cssgroup.com.ng  |  info@cssgroup.com.ng  |  +234 702 603 3333', { x: 150, y: y - 32, size: 8, font, color: rgb(0.3, 0.3, 0.3) });
 
@@ -2861,7 +2871,18 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     y -= 18;
 
     // Prefer rich HTML content (from Document Studio), fallback to plain description
-    const rawContent = requisition.content || requisition.description || 'No content provided.';
+    let rawContent = requisition.content || requisition.description || 'No content provided.';
+    
+    // Smart Parsing for JSON content (Cash/Material separation)
+    if (rawContent.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(rawContent);
+        // If it's a Material Requisition, extract description
+        // If it's a Cash Request, extract project comment
+        rawContent = parsed.description || parsed.comment || rawContent;
+      } catch (e) { /* fallback to raw */ }
+    }
+
     const plainContent = sanitizeText(stripHtml(rawContent));
     const paragraphs = plainContent.split(/\n+/).filter(Boolean);
 
@@ -2913,6 +2934,16 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
           : evt.action === 'forwarded' ? 'FORWARDED' : 'RETURNED';
         const fromName = sanitizeText(evt.fromDepartment?.name || 'Department');
         const toName = sanitizeText(evt.toDepartment?.name || 'Sender');
+        
+        // Format comment — if JSON (like in CashRequests), extract the plain note
+        let rawNote = evt.note || '';
+        if (rawNote.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(rawNote);
+            rawNote = parsed.description || parsed.comment || rawNote;
+          } catch { }
+        }
+        const evtComment = sanitizeText(rawNote);
         const evtDateStr = new Date(evt.createdAt).toLocaleString();
 
         // ── LEFT COLUMN: event text ───────────────────────

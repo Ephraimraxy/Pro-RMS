@@ -102,7 +102,7 @@ export const templates = {
                 <img src="/Group.png" style="width: 70px; height: auto; border-radius: 8px;" />
                 <div>
                   <div style="font-size: 24px; font-weight: 900; color: #1a3a6e; letter-spacing: 1px; line-height: 1;">CSS</div>
-                  <div style="font-size: 10px; font-weight: 700; color: #1a3a6e; letter-spacing: 0.5px;">Global Integrated Farms Ltd</div>
+                  <div style="font-size: 10px; font-weight: 700; color: #1a3a6e; letter-spacing: 0.5px;">Group of Companies</div>
                 </div>
               </div>
             </td>

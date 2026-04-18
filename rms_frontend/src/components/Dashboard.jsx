@@ -3,7 +3,7 @@ import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardStats, getRequisitions } from '../lib/store';
 import { reqAPI } from '../lib/api';
-import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, Eye, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, Eye, AlertTriangle, ShieldCheck, ArrowRight } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
   <div onClick={onClick} className="glass p-5 rounded-[2rem] border border-border/40 relative overflow-hidden group hover:border-primary/40 transition-all cursor-pointer bg-white/70 shadow-sm hover:shadow-xl hover:shadow-primary/5 active:scale-[0.98]">
@@ -19,6 +19,19 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
     </div>
   </div>
 );
+
+const statusColors = {
+  pending:  'bg-amber-50 border-amber-200 text-amber-700',
+  approved: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+  rejected: 'bg-red-50 border-red-200 text-red-700',
+  draft:    'bg-muted border-border text-muted-foreground',
+};
+
+const urgencyColors = {
+  normal:   'text-muted-foreground',
+  urgent:   'text-amber-600 font-bold',
+  critical: 'text-red-600 font-bold',
+};
 
 const Dashboard = ({ onViewChange }) => {
   const { user } = useAuth();
@@ -134,15 +147,18 @@ const Dashboard = ({ onViewChange }) => {
                     <thead>
                       <tr className="text-muted-foreground text-[10px] font-black uppercase tracking-[0.2em]">
                         <th className="pb-4 px-6">Reference</th>
-                        <th className="pb-4 px-6">Module</th>
-                        <th className="pb-4 px-6">Brief Description</th>
+                        <th className="pb-4 px-6">Module Type</th>
+                        <th className="pb-4 px-6">Registry Item</th>
                         <th className="pb-4 px-6">Payload</th>
-                        <th className="pb-4 px-6">Source</th>
-                        <th className="pb-4 px-6">Action</th>
+                        <th className="pb-4 px-6">Authorization Trail</th>
+                        <th className="pb-4 px-6">State</th>
+                        <th className="pb-4 px-6 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {recentPending.map(r => (
+                      {recentPending.map(r => {
+                        const isMoneyReq = r.type === 'Cash' || (r.amount && r.amount > 0);
+                        return (
                         <tr key={r.id} className="group transition-all">
                           <td className="py-4 px-6 bg-white/50 border-y border-l border-border/30 rounded-l-2xl group-hover:bg-white transition-colors">
                             <div className="flex flex-col">
@@ -157,13 +173,43 @@ const Dashboard = ({ onViewChange }) => {
                             </div>
                           </td>
                           <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
-                            <p className="text-sm font-bold text-foreground max-w-xs truncate">{r.title}</p>
+                            <div className="space-y-0.5">
+                              <p className="text-[12px] font-bold text-foreground max-w-xs truncate">{r.title}</p>
+                              {r.urgency && r.urgency !== 'normal' && (
+                                <div className={`flex items-center gap-1 text-[9px] font-black uppercase ${urgencyColors[r.urgency]}`}>
+                                  <div className={`w-1 h-1 rounded-full ${r.urgency === 'critical' ? 'bg-red-500' : 'bg-amber-500'} animate-pulse`} />
+                                  {r.urgency} Priority
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
-                             <span className="text-sm font-black text-foreground font-mono">₦{Number(r.amount || 0).toLocaleString()}</span>
+                             {isMoneyReq ? (
+                               <span className="text-sm font-black text-foreground font-mono">₦{Number(r.amount || 0).toLocaleString()}</span>
+                             ) : (
+                               <span className="text-[10px] text-muted-foreground/50 italic">Non-financial</span>
+                             )}
                           </td>
                           <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
-                            <span className="text-[9px] font-black text-muted-foreground uppercase opacity-60">{r.department}</span>
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              <span className="font-bold text-muted-foreground opacity-60 uppercase">{r.department}</span>
+                              {r.targetDepartment?.name && (
+                                <>
+                                  <ArrowRight size={9} className="text-muted-foreground/30" />
+                                  <span className="font-black text-primary uppercase tracking-tight">{r.targetDepartment.name}</span>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
+                            <div className="flex flex-col gap-1">
+                              <span className={`w-fit px-2 py-0.5 rounded-lg text-[9px] font-black uppercase border tracking-widest ${statusColors[r.status]}`}>
+                                {r.status}
+                              </span>
+                              {r.status === 'pending' && r.currentStageName && (
+                                <span className="text-[8px] font-bold text-muted-foreground/60 uppercase tracking-tighter truncate max-w-[100px]">At: {r.currentStageName}</span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-4 px-6 bg-white/50 border-y border-r border-border/30 rounded-r-2xl group-hover:bg-white transition-colors text-right">
                             <button onClick={() => onViewChange('requisitions', { reqId: r.id })} className="p-2.5 bg-background hover:bg-primary hover:text-white rounded-xl text-primary transition-all border border-primary/10 shadow-sm active:scale-90">
@@ -171,7 +217,7 @@ const Dashboard = ({ onViewChange }) => {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>
