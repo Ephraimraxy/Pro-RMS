@@ -14,9 +14,37 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
   const [items, setItems] = useState([{ qty: 1, description: '', amount: '' }]);
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Creator role ──────────────────────────────────────────────────────────
+  const creatorName = user?.name || '';
+  const isChairmanCreator = /ceo|chairman/i.test(creatorName);
+  const isGMCreator       = /general\s*manager|\bgm\b/i.test(creatorName);
+  const isHRCreator       = /\bhr\b|human\s*resource/i.test(creatorName);
+  const isExecutiveCreator = isChairmanCreator || isGMCreator || isHRCreator;
+
+  // Privileged depts that regular creators cannot address directly at creation time.
+  // They are only reachable after the request has passed through HR.
+  const isPrivilegedDept = (name = '') =>
+    /general\s*manager|\bgm\b|ceo|chairman|\bicc\b|integrity|compliance|audit|account/i.test(name);
+
+  // Allowed targets when creating:
+  // • Chairman → anywhere
+  // • HR/GM    → any dept except ICC/Audit/Account (those come via vetting chain, not routing)
+  // • Regular dept → any dept EXCEPT GM, Chairman, ICC, Audit, Account
+  //                  (must reach those via HR first; can freely route among peer depts)
+  const allowedTargets = departments.filter(d => {
+    if (d.id === user?.deptId) return false;
+    const isVettingOrAccount = /\bicc\b|integrity|compliance|audit|account/i.test(d.name);
+    if (isChairmanCreator) return !isVettingOrAccount;        // Chairman: not vetting at creation
+    if (isGMCreator || isHRCreator) return !isVettingOrAccount; // HR/GM: not vetting at creation
+    return !isPrivilegedDept(d.name);                         // Regular: exclude privileged depts
+  });
+
   useEffect(() => {
     if (!isOpen) return;
-    getDepartments().then(d => setDepartments(d.filter(dept => dept.id !== user?.deptId)));
+    getDepartments().then(d => {
+      const all = d.filter(dept => dept.id !== user?.deptId);
+      setDepartments(all);
+    });
     setSubject(''); setComment(''); setItems([{ qty: 1, description: '', amount: '' }]); setTargetDeptId(''); setUrgency('normal');
   }, [isOpen]);
 
@@ -242,10 +270,15 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
                   className="w-full bg-white border border-border/60 rounded-2xl p-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none pr-10 shadow-sm transition-all cursor-pointer group-hover:border-primary/40"
                 >
                   <option value="">— Internal Processing —</option>
-                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  {allowedTargets.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
-                <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none transition-transform group-hover:translate-y-0" />
+                <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               </div>
+              {!isExecutiveCreator && (
+                <p className="text-[10px] text-muted-foreground/70 italic pl-1 mt-1">
+                  GM, Chairman, Audit, ICC, and Account are not available here — this request must reach them through HR.
+                </p>
+              )}
             </div>
             <div className="space-y-2.5">
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-2">Priority</label>

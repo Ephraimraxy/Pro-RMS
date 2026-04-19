@@ -614,20 +614,24 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
 
   const { user: currentUser } = useAuth();
   const { aiEnabled } = useAIFeatures();
-  const [chairmanAllowedIds, setChairmanAllowedIds] = useState([]);
 
-  useEffect(() => {
-    settingsAPI.get('chairman_ceo_allowed_depts').then(res => {
-      if (res?.value) setChairmanAllowedIds(JSON.parse(res.value));
-    }).catch(() => {});
-  }, []);
-
-  const canRouteToChairman = chairmanAllowedIds.includes(currentUser?.deptId);
+  // ── Hierarchy-based forward targets ─────────────────────────────────────────
+  const currentDeptName = currentUser?.name || '';
+  const currentIsChairman = /ceo|chairman/i.test(currentDeptName);
+  const currentIsGM       = /general\s*manager|\bgm\b/i.test(currentDeptName);
+  const currentIsHR       = /\bhr\b|human\s*resource/i.test(currentDeptName);
 
   const forwardDepts = departments.filter(d => {
-    if (d.id === req.departmentId || d.id === detail?.targetDepartmentId) return false;
-    if (/ceo|chairman/i.test(d.name) && !canRouteToChairman) return false;
-    return true;
+    if (d.id === detail?.targetDepartmentId) return false; // Not back to current holder
+    const n = d.name || '';
+    // Chairman can forward anywhere (they're the top authority in pre-vetting chain)
+    if (currentIsChairman) return !/\bicc\b|integrity|compliance|audit|account/i.test(n);
+    // GM can only forward up to Chairman or return down to HR
+    if (currentIsGM) return /ceo|chairman|\bhr\b|human\s*resource/i.test(n);
+    // HR can forward up to GM or Chairman
+    if (currentIsHR) return /general\s*manager|\bgm\b|ceo|chairman/i.test(n);
+    // All other depts (ICC, Audit, Account, regular): can only route to HR
+    return /\bhr\b|human\s*resource/i.test(n);
   });
 
   // Work out who "Return to Sender" will actually send to by reading the
@@ -794,21 +798,34 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
   const isGM       = /general\s*manager|\bgm\b/i.test(deptName);
   const isHR       = /\bhr\b|human\s*resource/i.test(deptName);
 
+  // MEMO is handled separately in MemoManagement — never show here
+  if (/^memo/i.test(req.type || '')) return null;
+
+  // Only show approval panel when the request is currently sitting at this dept's desk
+  const isAtMyDesk = detail?.targetDepartmentId === user?.deptId;
+  if (!isAtMyDesk) return null;
+
   const { hr_ceiling, chairman_min } = thresholds;
   const fmt = (n) => `₦${Number(n).toLocaleString()}`;
+  const isMaterial = /^material/i.test(req.type || '');
 
   let authorityLabel = null;
-  // Band 1 — HR: amount <= hr_ceiling
-  if (isHR && amount <= hr_ceiling)
-    authorityLabel = `HR Authority (≤ ${fmt(hr_ceiling)})`;
-  // Band 2 — GM: hr_ceiling < amount < chairman_min
-  else if (isGM && amount > hr_ceiling && amount < chairman_min)
-    authorityLabel = `GM Authority (${fmt(hr_ceiling + 1)} – ${fmt(chairman_min - 1)})`;
-  // Band 3 — Chairman / CEO: amount >= chairman_min
-  else if (isChairman && amount >= chairman_min)
-    authorityLabel = `Chairman / CEO (≥ ${fmt(chairman_min)})`;
+  // Material: no amount threshold — show for whichever tier currently holds the request
+  if (isMaterial) {
+    if (isHR)       authorityLabel = 'HR Authority';
+    else if (isGM)  authorityLabel = 'GM Authority';
+    else if (isChairman) authorityLabel = 'Chairman / CEO Authority';
+  } else {
+    // Cash (threshold-based)
+    if (isHR && amount <= hr_ceiling)
+      authorityLabel = `HR Authority (≤ ${fmt(hr_ceiling)})`;
+    else if (isGM && amount > hr_ceiling && amount < chairman_min)
+      authorityLabel = `GM Authority (${fmt(hr_ceiling + 1)} – ${fmt(chairman_min - 1)})`;
+    else if (isChairman && amount >= chairman_min)
+      authorityLabel = `Chairman / CEO (≥ ${fmt(chairman_min)})`;
+  }
 
-  if (!authorityLabel) return null; // Not authorised for this amount band
+  if (!authorityLabel) return null; // Not authorised for this amount band / type
 
   // Don't show if already finally approved
   if (detail?.finalApprovalStatus && detail.finalApprovalStatus !== 'none') return null;
@@ -941,13 +958,14 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
   );
 };
 
-// ── Vetting Panel (for ICC / Audit / Account) ─────────────────────────────────
+// ── Vetting Panel (for ICC / Audit / Account + Chairman treat) ───────────────
 const VettingPanel = ({ req, detail, user, departments, onDone }) => {
-  const [comment, setComment]   = useState('');
-  const [file, setFile]         = useState(null);
-  const [acting, setActing]     = useState(false);
-  const [mode, setMode]         = useState(null); // 'forward' | 'treated'
+  const [comment, setComment]     = useState('');
+  const [file, setFile]           = useState(null);
+  const [acting, setActing]       = useState(false);
+  const [mode, setMode]           = useState(null); // 'forward' | 'return'
   const [nextDeptId, setNextDeptId] = useState('');
+  const [returnDeptId, setReturnDeptId] = useState('');
   const fileRef = React.useRef(null);
 
   const deptName = user?.name || '';
@@ -956,20 +974,19 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
   const isCurrentVetter = user?.deptId && currentVettingDeptId === user.deptId;
   const finalApprovalStatus = detail?.finalApprovalStatus;
 
-  // Chairman can always treat; vetting dept can forward or treat
-  const canTreat = isChairman || isCurrentVetter;
+  const canTreat   = isChairman || isCurrentVetter;
   const canForward = isCurrentVetter;
+  const canReturn  = isCurrentVetter;
 
   if (!canTreat && !canForward) return null;
   if (!finalApprovalStatus || finalApprovalStatus === 'none') return null;
   if (finalApprovalStatus === 'treated') return null;
 
-  // Filter next vetting depts: ICC → Audit → Account
+  // Next in chain: ICC(0) → Audit(1) → Account(2)
   const getChainIndex = (name) => {
-    const n = (name || '').toLowerCase();
-    if (/\bicc\b|integrity|compliance/i.test(n)) return 0;
-    if (/audit/i.test(n)) return 1;
-    if (/account/i.test(n)) return 2;
+    if (/\bicc\b|integrity|compliance/i.test(name)) return 0;
+    if (/audit/i.test(name)) return 1;
+    if (/account/i.test(name)) return 2;
     return -1;
   };
   const myChainIdx = getChainIndex(deptName);
@@ -978,20 +995,33 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
     return idx > myChainIdx && idx >= 0;
   });
 
+  // Return targets: HR, GM, Chairman (authority chain only)
+  const returnDepts = departments.filter(d =>
+    /\bhr\b|human\s*resource|general\s*manager|\bgm\b|ceo|chairman/i.test(d.name) &&
+    d.id !== user?.deptId
+  );
+
   const submit = async (action) => {
-    if (action === 'forward' && !nextDeptId) {
-      setMode('forward');
-      return;
-    }
+    if (action === 'forward' && !nextDeptId) { setMode('forward'); return; }
+    if (action === 'return'  && !returnDeptId) { setMode('return');  return; }
     setActing(true);
     try {
-      await vettingAPI.vettingAction(req.id, {
-        action,
-        comment: comment || undefined,
-        nextDeptId: action === 'forward' ? parseInt(nextDeptId) : undefined,
-        file: file || undefined
-      });
-      toast.success(action === 'treated' ? 'Requisition marked as treated!' : 'Forwarded to next vetting department.');
+      if (action === 'return') {
+        await forwardAPI.forward(req.id, {
+          targetDepartmentId: parseInt(returnDeptId),
+          note: comment || 'Returned for correction or review.',
+          returnToSender: false
+        });
+        toast.success('Document returned to authority chain for review.');
+      } else {
+        await vettingAPI.vettingAction(req.id, {
+          action,
+          comment: comment || undefined,
+          nextDeptId: action === 'forward' ? parseInt(nextDeptId) : undefined,
+          file: file || undefined
+        });
+        toast.success(action === 'treated' ? 'Requisition marked as treated!' : 'Forwarded to next vetting department.');
+      }
       onDone();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Action failed. Please try again.');
@@ -1012,7 +1042,7 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
       <textarea
         value={comment}
         onChange={e => setComment(e.target.value)}
-        placeholder="Your vetting comment or observations (optional)..."
+        placeholder="Vetting comment, observations, or return reason..."
         className="w-full bg-white border border-blue-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-300 min-h-[72px] resize-none shadow-inner"
       />
 
@@ -1026,10 +1056,8 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
             <button onClick={() => setFile(null)} className="p-0.5 text-muted-foreground hover:text-destructive rounded shrink-0"><X size={12} /></button>
           </div>
         ) : (
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-2 text-[11px] font-bold text-blue-700 hover:text-blue-900 transition-colors px-2 py-1 rounded-lg hover:bg-blue-100"
-          >
+          <button onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-2 text-[11px] font-bold text-blue-700 hover:text-blue-900 transition-colors px-2 py-1 rounded-lg hover:bg-blue-100">
             <Paperclip size={13} /> Attach supporting document
           </button>
         )}
@@ -1040,47 +1068,61 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
         <div className="p-3 bg-white border border-blue-200 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
           <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest flex items-center justify-between">
             <span>Forward to next vetting dept</span>
-            <button onClick={() => setMode(null)} className="text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-black/5 text-[10px] normal-case font-normal">Cancel</button>
+            <button onClick={() => setMode(null)} className="text-muted-foreground text-[10px] normal-case font-normal hover:text-foreground px-2 py-0.5 rounded hover:bg-black/5">Cancel</button>
           </label>
-          <select
-            value={nextDeptId}
-            onChange={e => setNextDeptId(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none shadow-sm"
-          >
+          <select value={nextDeptId} onChange={e => setNextDeptId(e.target.value)}
+            className="w-full bg-white border border-border rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none shadow-sm">
             <option value="">— Select next department —</option>
             {nextDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             {nextDepts.length === 0 && <option disabled>No further departments in chain</option>}
           </select>
-          <button
-            onClick={() => submit('forward')}
-            disabled={!nextDeptId || acting}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm"
-          >
-            {acting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            Confirm Forward
+          <button onClick={() => submit('forward')} disabled={!nextDeptId || acting}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm">
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} Confirm Forward
           </button>
         </div>
       )}
 
-      {mode !== 'forward' && (
-        <div className={`grid gap-2 pt-1 ${canForward && nextDepts.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {/* Return dept selector */}
+      {mode === 'return' && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
+          <label className="text-[10px] font-black text-amber-800 uppercase tracking-widest flex items-center justify-between">
+            <span>Return to authority chain</span>
+            <button onClick={() => setMode(null)} className="text-muted-foreground text-[10px] normal-case font-normal hover:text-foreground px-2 py-0.5 rounded hover:bg-black/5">Cancel</button>
+          </label>
+          <select value={returnDeptId} onChange={e => setReturnDeptId(e.target.value)}
+            className="w-full bg-white border border-border rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 appearance-none shadow-sm">
+            <option value="">— Select department —</option>
+            {returnDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <button onClick={() => submit('return')} disabled={!returnDeptId || acting}
+            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm">
+            {acting ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />} Confirm Return
+          </button>
+        </div>
+      )}
+
+      {mode === null && (
+        <div className={`grid gap-2 pt-1 ${[canForward && nextDepts.length > 0, canReturn, canTreat].filter(Boolean).length > 1 ? 'grid-cols-3' : 'grid-cols-1'}`}>
           {canForward && nextDepts.length > 0 && (
-            <button
-              onClick={() => submit('forward')}
-              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-sm transition-all shadow-sm"
-            >
+            <button onClick={() => submit('forward')}
+              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-sm transition-all shadow-sm">
               <ArrowRightCircle size={18} />
-              <span>Forward to Next</span>
+              <span className="text-[10px]">Forward to Next</span>
+            </button>
+          )}
+          {canReturn && (
+            <button onClick={() => submit('return')}
+              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-sm transition-all shadow-sm">
+              <RotateCcw size={18} />
+              <span className="text-[10px]">Return...</span>
             </button>
           )}
           {canTreat && (
-            <button
-              onClick={() => submit('treated')}
-              disabled={acting}
-              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm transition-all disabled:opacity-50 shadow-sm"
-            >
+            <button onClick={() => submit('treated')} disabled={acting}
+              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm transition-all disabled:opacity-50 shadow-sm">
               {acting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-              <span>Mark Treated</span>
+              <span className="text-[10px]">Mark Treated</span>
             </button>
           )}
         </div>

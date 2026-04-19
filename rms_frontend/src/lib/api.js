@@ -267,7 +267,18 @@ export const vettingAPI = {
 };
 
 export const memoAPI = {
-  publish: (reqId) => api.post(`/requisitions/${reqId}/publish-memo`),
+  publish:   (reqId, { startAt, endAt } = {}) =>
+    api.post(`/requisitions/${reqId}/publish-memo`, {
+      publishStartAt: startAt || null,
+      publishEndAt:   endAt   || null,
+    }),
+  unpublish: (reqId) => api.post(`/requisitions/${reqId}/unpublish-memo`),
+  returnToCreator: (reqId, note = '') =>
+    api.post(`/requisitions/${reqId}/forward`, {
+      targetDepartmentId: null,
+      note,
+      returnToSender: true,
+    }),
 };
 
 export const aiAPI = {

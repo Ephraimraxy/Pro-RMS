@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import {
   FileText, Send, Clock, CheckCircle2, Plus, X,
   ArrowRightCircle, Globe, ChevronRight, Loader2,
-  ArrowLeft
+  ArrowLeft, RotateCcw, EyeOff, Calendar
 } from 'lucide-react';
 
 const statusColors = {
@@ -200,64 +200,104 @@ const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
 
 // ── Memo Detail View ──────────────────────────────────────────────────────────
 const MemoDetailView = ({ memo, user, departments, onBack, onRefresh }) => {
-  const [detail, setDetail]   = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [publishing, setPublishing] = useState(false);
-  const [note, setNote]       = useState('');
-  const [forwarding, setForwarding] = useState(false);
-  const [fwdDeptId, setFwdDeptId]   = useState('');
+  const [detail, setDetail]     = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [acting, setActing]     = useState(false);
+  const [note, setNote]         = useState('');
+  const [fwdDeptId, setFwdDeptId] = useState('');
+  // Publish scheduling
+  const [publishStartAt, setPublishStartAt] = useState('');
+  const [publishEndAt,   setPublishEndAt]   = useState('');
 
   const deptName  = user?.name || '';
   const isHR      = /\bhr\b|human\s*resource/i.test(deptName);
   const isGM      = /general\s*manager|\bgm\b/i.test(deptName);
   const isCEO     = /ceo|chairman/i.test(deptName);
-  const isPublisher = isHR || isGM || isCEO || user?.role === 'global_admin';
+  const isAdmin   = user?.role === 'global_admin';
+  const isPublisher = isHR || isAdmin;
 
   const isIncoming = user?.deptId && detail?.targetDepartmentId === user.deptId;
-  const alreadyPublished = detail?.finalApprovalStatus === 'published';
+
+  // Compute display status from finalApprovalStatus + publish dates
+  const fas = detail?.finalApprovalStatus || memo.finalApprovalStatus;
+  const publishEnd = detail?.publishEndAt || null;
+  const isExpired = fas === 'published' && publishEnd && new Date(publishEnd) < new Date();
+  const isUnpublished = fas === 'unpublished';
+  const isPublished   = fas === 'published' && !isExpired;
 
   useEffect(() => {
     getRequisitionDetail(memo.id).then(d => { setDetail(d); setLoading(false); });
   }, [memo.id]);
 
   const handlePublish = async () => {
-    setPublishing(true);
+    setActing(true);
     try {
-      await memoAPI.publish(memo.id);
+      await memoAPI.publish(memo.id, {
+        startAt: publishStartAt || undefined,
+        endAt:   publishEndAt   || undefined,
+      });
       toast.success('Memo published to all departments!');
-      onRefresh();
-      onBack();
+      onRefresh(); onBack();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to publish memo');
-    } finally { setPublishing(false); }
+    } finally { setActing(false); }
+  };
+
+  const handleUnpublish = async () => {
+    setActing(true);
+    try {
+      await memoAPI.unpublish(memo.id);
+      toast.success('Memo unpublished.');
+      onRefresh(); onBack();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to unpublish memo');
+    } finally { setActing(false); }
+  };
+
+  const handleReturn = async () => {
+    if (!note.trim()) { toast.error('Please add a note explaining the return reason.'); return; }
+    setActing(true);
+    try {
+      await memoAPI.returnToCreator(memo.id, note);
+      toast.success('Memo returned to creator.');
+      onRefresh(); onBack();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Return failed');
+    } finally { setActing(false); }
   };
 
   const handleForward = async () => {
     if (!fwdDeptId) { toast.error('Select a department to forward to'); return; }
-    setForwarding(true);
+    setActing(true);
     try {
       await forwardAPI.forward(memo.id, { targetDepartmentId: parseInt(fwdDeptId), note });
-      toast.success('Memo forwarded successfully.');
+      toast.success('Memo forwarded for comment.');
       onRefresh(); onBack();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Forward failed');
-    } finally { setForwarding(false); }
+    } finally { setActing(false); }
   };
 
-  // Forward options based on role
+  // HR can forward to GM or Chairman for comment before publishing
   const fwdOptions = departments.filter(d => {
     if (d.id === user?.deptId) return false;
-    if (isHR)  return /general\s*manager|\bgm\b|ceo|chairman/i.test(d.name);
-    if (isGM)  return /ceo|chairman/i.test(d.name);
+    if (isHR) return /general\s*manager|\bgm\b|ceo|chairman/i.test(d.name);
     return false;
   });
 
+  // Status badge config
+  const statusBadge = (() => {
+    if (isPublished)   return { label: 'Published', cls: 'bg-emerald-500 text-white' };
+    if (isExpired)     return { label: 'Expired',   cls: 'bg-gray-400 text-white' };
+    if (isUnpublished) return { label: 'Unpublished', cls: 'bg-red-400 text-white' };
+    if (memo.status === 'pending') return { label: 'Pending HR', cls: 'bg-amber-100 border border-amber-300 text-amber-800' };
+    return { label: memo.status, cls: statusColors[memo.status] || statusColors.pending };
+  })();
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300 w-full max-w-7xl mx-auto pb-10">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-xs font-black text-muted-foreground hover:text-foreground transition-all px-4 py-2 rounded-xl bg-white border border-border/50 shadow-sm uppercase tracking-wider group"
-      >
+      <button onClick={onBack}
+        className="flex items-center gap-2 text-xs font-black text-muted-foreground hover:text-foreground transition-all px-4 py-2 rounded-xl bg-white border border-border/50 shadow-sm uppercase tracking-wider group">
         <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
         Back to Memos
       </button>
@@ -266,12 +306,17 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh }) => {
         {/* Header */}
         <div className="p-6 lg:p-10 border-b border-border/40 space-y-4 bg-white/50">
           <div className="flex items-center gap-3 flex-wrap">
-            <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase border tracking-widest ${statusColors[memo.status] || statusColors.pending}`}>
-              {alreadyPublished ? 'Published' : memo.status}
+            <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase border tracking-widest ${statusBadge.cls}`}>
+              {statusBadge.label}
             </span>
-            {alreadyPublished && (
+            {isPublished && (
               <span className="px-3 py-1 rounded-xl text-[10px] font-black uppercase bg-emerald-500 text-white flex items-center gap-1.5 shadow-md shadow-emerald-500/20">
-                <Globe size={12} /> Broadcast
+                <Globe size={12} /> Broadcast Active
+              </span>
+            )}
+            {detail?.publishStartAt && (
+              <span className="px-2 py-1 rounded-lg text-[9px] font-mono text-muted-foreground bg-muted border border-border/50 flex items-center gap-1">
+                <Calendar size={10} /> {new Date(detail.publishStartAt).toLocaleString()} — {detail.publishEndAt ? new Date(detail.publishEndAt).toLocaleString() : '∞'}
               </span>
             )}
           </div>
@@ -285,61 +330,105 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh }) => {
           </div>
         </div>
 
-        {/* Body */}
+        {/* Body — read-only once published */}
         <div className="p-6 lg:p-10 bg-zinc-50/50">
           <div className="bg-white rounded-[2rem] p-8 text-base font-medium text-foreground leading-relaxed whitespace-pre-wrap border border-border/30 shadow-inner min-h-[300px]">
             {memo.description}
           </div>
+          {isPublished && (
+            <p className="mt-4 text-[10px] text-center text-muted-foreground font-bold uppercase tracking-widest italic">
+              This memo is published and read-only. No routing or approval actions are available.
+            </p>
+          )}
         </div>
 
-        {/* Actions */}
-        {!loading && isIncoming && !alreadyPublished && (
-          <div className="p-6 lg:p-10 border-t border-border/40 space-y-6 bg-white">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] pl-2">Executive Review & Route</p>
+        {/* ── HR Unpublish (when already published) ── */}
+        {!loading && isPublisher && isPublished && (
+          <div className="p-6 lg:p-8 border-t border-border/40 bg-white flex items-center justify-between">
+            <div className="space-y-0.5">
+              <p className="text-xs font-black text-foreground uppercase tracking-wide">Memo is Live</p>
+              <p className="text-[11px] text-muted-foreground">You can unpublish at any time — even before the scheduled end date.</p>
+            </div>
+            <button onClick={handleUnpublish} disabled={acting}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-red-50 border border-red-200 hover:bg-red-100 text-red-700 text-xs font-black uppercase tracking-widest disabled:opacity-50 transition-all active:scale-95">
+              {acting ? <Loader2 size={14} className="animate-spin" /> : <EyeOff size={14} />}
+              Unpublish
+            </button>
+          </div>
+        )}
 
-            <textarea
-              value={note} onChange={e => setNote(e.target.value)}
-              placeholder="Add internal observations or remarks..."
-              rows={4}
+        {/* ── HR/Incoming Actions (when at HR's desk, not yet published) ── */}
+        {!loading && isIncoming && !isPublished && !isUnpublished && (
+          <div className="p-6 lg:p-10 border-t border-border/40 space-y-6 bg-white">
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] pl-2">
+              {isPublisher ? 'HR Review & Publish Controls' : 'Executive Review & Comment'}
+            </p>
+
+            <textarea value={note} onChange={e => setNote(e.target.value)}
+              placeholder="Add remarks, observations, or reason for return..."
+              rows={3}
               className="w-full bg-zinc-50 border border-border/60 rounded-2xl p-5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none transition-all shadow-inner"
             />
 
-            <div className="flex flex-wrap items-center gap-4">
-              {/* Publish to All */}
+            {/* Publish scheduling — HR only */}
+            {isPublisher && (
+              <div className="space-y-3 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
+                  <Calendar size={12} /> Publish Schedule <span className="font-normal normal-case text-emerald-600 ml-1">(optional — leave blank to publish immediately)</span>
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Start Date & Time</label>
+                    <input type="datetime-local" value={publishStartAt} onChange={e => setPublishStartAt(e.target.value)}
+                      className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 shadow-sm font-mono text-foreground"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">End Date & Time</label>
+                    <input type="datetime-local" value={publishEndAt} onChange={e => setPublishEndAt(e.target.value)}
+                      className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 shadow-sm font-mono text-foreground"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Publish */}
               {isPublisher && (
-                <button
-                  onClick={handlePublish}
-                  disabled={publishing}
-                  className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50 shadow-xl shadow-emerald-600/20 active:scale-95 transition-all"
-                >
-                  {publishing ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
-                  Broadcast to all Units
+                <button onClick={handlePublish} disabled={acting}
+                  className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50 shadow-xl shadow-emerald-600/20 active:scale-95 transition-all">
+                  {acting ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
+                  {publishStartAt ? 'Schedule Broadcast' : 'Broadcast to All Units'}
                 </button>
               )}
 
-              {/* Forward */}
-              {fwdOptions.length > 0 && (
-                <div className="flex items-center gap-3">
+              {/* Forward to GM/Chairman for comment — HR only */}
+              {isHR && fwdOptions.length > 0 && (
+                <div className="flex items-center gap-2">
                   <div className="relative">
-                    <select
-                      value={fwdDeptId}
-                      onChange={e => setFwdDeptId(e.target.value)}
-                      className="border border-border/60 rounded-xl p-4 text-[11px] font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-white pr-10 min-w-[200px]"
-                    >
-                      <option value="">Route to...</option>
+                    <select value={fwdDeptId} onChange={e => setFwdDeptId(e.target.value)}
+                      className="border border-border/60 rounded-xl p-3.5 text-[11px] font-black uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-white pr-10 min-w-[180px]">
+                      <option value="">Get comment from...</option>
                       {fwdOptions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
-                    <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <ChevronRight size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                   </div>
-                  <button
-                    onClick={handleForward}
-                    disabled={forwarding || !fwdDeptId}
-                    className="flex items-center gap-2 px-6 py-4 rounded-xl bg-primary hover:bg-primary/90 text-white text-[11px] font-black uppercase tracking-widest disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-primary/20"
-                  >
-                    {forwarding ? <Loader2 size={16} className="animate-spin" /> : <ArrowRightCircle size={16} />}
+                  <button onClick={handleForward} disabled={acting || !fwdDeptId}
+                    className="flex items-center gap-2 px-5 py-3.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-[11px] font-black uppercase tracking-widest disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-primary/20">
+                    {acting ? <Loader2 size={14} className="animate-spin" /> : <ArrowRightCircle size={14} />}
                     Forward
                   </button>
                 </div>
+              )}
+
+              {/* Return to creator — HR only */}
+              {isPublisher && (
+                <button onClick={handleReturn} disabled={acting}
+                  className="flex items-center gap-2 px-6 py-3.5 rounded-2xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-black uppercase tracking-widest disabled:opacity-50 transition-all active:scale-95">
+                  {acting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                  Return to Creator
+                </button>
               )}
             </div>
           </div>
@@ -375,11 +464,35 @@ const MemoManagement = ({ onViewChange }) => {
     return true;
   });
 
+  // Compute display status for each memo card
+  const getMemoDisplayStatus = (m) => {
+    const fas = m.finalApprovalStatus;
+    const endAt = m.publishEndAt;
+    if (fas === 'published' && endAt && new Date(endAt) < new Date()) return 'expired';
+    if (fas === 'published')   return 'published';
+    if (fas === 'unpublished') return 'unpublished';
+    if (m.status === 'pending') return 'pending_hr';
+    return m.status || 'draft';
+  };
+
   const statusIcon = {
-    pending:  <Clock size={13} className="text-amber-500" />,
-    approved: <CheckCircle2 size={13} className="text-emerald-500" />,
-    rejected: <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />,
-    draft:    <FileText size={13} className="text-muted-foreground" />,
+    pending_hr:  <Clock size={13} className="text-amber-500" />,
+    pending:     <Clock size={13} className="text-amber-500" />,
+    published:   <Globe size={13} className="text-emerald-500" />,
+    unpublished: <EyeOff size={13} className="text-red-400" />,
+    expired:     <Clock size={13} className="text-gray-400" />,
+    approved:    <CheckCircle2 size={13} className="text-emerald-500" />,
+    draft:       <FileText size={13} className="text-muted-foreground" />,
+  };
+
+  const statusLabel = {
+    pending_hr:  'Pending HR',
+    pending:     'Pending',
+    published:   'Published',
+    unpublished: 'Unpublished',
+    expired:     'Expired',
+    approved:    'Approved',
+    draft:       'Draft',
   };
 
   return (
@@ -463,8 +576,10 @@ const MemoManagement = ({ onViewChange }) => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredMemos.map(memo => {
-                  const isIncoming = user?.deptId && memo.targetDepartmentId === user.deptId;
-                  const isPublished = memo.finalApprovalStatus === 'published';
+                  const isIncoming  = user?.deptId && memo.targetDepartmentId === user.deptId;
+                  const displayStatus = getMemoDisplayStatus(memo);
+                  const isPublished   = displayStatus === 'published';
+                  const isExpiredCard = displayStatus === 'expired';
                   return (
                     <div
                       key={memo.id}
@@ -475,16 +590,19 @@ const MemoManagement = ({ onViewChange }) => {
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black text-primary tracking-[0.2em]">#{memo.id}</span>
                           <div className="flex items-center gap-2">
-                             {isIncoming && !isPublished && (
+                            {isIncoming && !isPublished && (
                               <span className="px-2 py-0.5 rounded-lg bg-blue-500 text-white text-[8px] font-black uppercase shadow-sm">Incoming</span>
                             )}
                             {isPublished && (
                               <span className="px-2 py-0.5 rounded-lg bg-emerald-500 text-white text-[8px] font-black uppercase flex items-center gap-1 shadow-sm">
-                                <Globe size={8} /> Broadcast
+                                <Globe size={8} /> Live
                               </span>
                             )}
+                            {isExpiredCard && (
+                              <span className="px-2 py-0.5 rounded-lg bg-gray-300 text-gray-700 text-[8px] font-black uppercase shadow-sm">Expired</span>
+                            )}
                             <div className="flex items-center gap-1">
-                              {statusIcon[memo.status]}
+                              {statusIcon[displayStatus] || statusIcon.draft}
                             </div>
                           </div>
                         </div>

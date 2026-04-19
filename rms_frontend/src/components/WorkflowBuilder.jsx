@@ -97,6 +97,12 @@ const WorkflowBuilder = ({ onViewChange }) => {
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
   const [savingThresholds, setSavingThresholds] = useState(false);
 
+  // ── Record access state ────────────────────────────────────────────────────
+  // Stores dept IDs (HR, GM, Audit, ICC) that get full-record visibility
+  const [recordDepts, setRecordDepts]       = useState([]);
+  const [recordDeptOptions, setRecordDeptOptions] = useState([]); // populated from live depts
+  const [savingRecord, setSavingRecord]     = useState(false);
+
   const loadData = async () => {
     const [workflowData, typeData] = await Promise.all([
       getWorkflows(),
@@ -105,6 +111,34 @@ const WorkflowBuilder = ({ onViewChange }) => {
     setStages(workflowData);
     setTypes(typeData);
     setLoading(false);
+  };
+
+  const loadRecordAccess = async (allDepts = []) => {
+    // Only HR, GM, Audit, ICC are configurable — Account/Chairman always have access
+    const configurable = allDepts.filter(d =>
+      /\bhr\b|human\s*resource|general\s*manager|\bgm\b|\bicc\b|integrity|compliance|audit/i.test(d.name)
+    );
+    setRecordDeptOptions(configurable);
+    try {
+      const res = await settingsAPI.get('record_visibility_depts');
+      if (res?.value) {
+        try { setRecordDepts(JSON.parse(res.value)); } catch {}
+      }
+    } catch {}
+  };
+
+  const saveRecordAccess = async () => {
+    setSavingRecord(true);
+    try {
+      await settingsAPI.set('record_visibility_depts', JSON.stringify(recordDepts));
+      toast.success('Record visibility settings saved.');
+    } catch {
+      toast.error('Failed to save. Please try again.');
+    } finally { setSavingRecord(false); }
+  };
+
+  const toggleRecordDept = (id) => {
+    setRecordDepts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const loadThresholds = async () => {
@@ -132,8 +166,15 @@ const WorkflowBuilder = ({ onViewChange }) => {
   };
 
   useEffect(() => {
-    loadData();
-    loadThresholds();
+    (async () => {
+      const { getDepartments } = await import('../lib/store');
+      const [, , depts] = await Promise.all([
+        loadData(),
+        loadThresholds(),
+        getDepartments()
+      ]);
+      await loadRecordAccess(Array.isArray(depts) ? depts : []);
+    })();
   }, []);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -239,6 +280,12 @@ const WorkflowBuilder = ({ onViewChange }) => {
               className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${activeTab === 'authority' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80'}`}
             >
               Authority Bands
+            </button>
+            <button
+              onClick={() => setActiveTab('record')}
+              className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${activeTab === 'record' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Record Access
             </button>
           </div>
         </div>
@@ -348,6 +395,65 @@ const WorkflowBuilder = ({ onViewChange }) => {
               >
                 {savingThresholds ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {savingThresholds ? 'Saving…' : 'Save Thresholds'}
+              </button>
+            </div>
+          </div>
+        ) : activeTab === 'record' ? (
+          <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="glass bg-white/60 p-8 rounded-[2.5rem] border border-border/50 shadow-xl space-y-6">
+              <div>
+                <h3 className="text-lg font-black text-foreground tracking-tight">Record Visibility Access</h3>
+                <p className="text-sm text-muted-foreground mt-1 font-medium leading-relaxed">
+                  By default, full records are visible to the <strong>Creator Department, Super Admin, Account,</strong> and <strong>Chairman/CEO</strong>.
+                  Toggle additional departments below to extend access.
+                </p>
+              </div>
+
+              {/* Always-on badges */}
+              <div className="flex flex-wrap gap-2">
+                {['Creator Dept', 'Super Admin', 'Account', 'Chairman / CEO'].map(label => (
+                  <span key={label} className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                    {label} — Always
+                  </span>
+                ))}
+              </div>
+
+              <div className="border-t border-border/40 pt-5 space-y-3">
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Configurable Departments</p>
+                {recordDeptOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No configurable departments found. Make sure HR, GM, Audit, and ICC departments exist in the system.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {recordDeptOptions.map(d => {
+                      const checked = recordDepts.includes(d.id);
+                      return (
+                        <button
+                          key={d.id}
+                          onClick={() => toggleRecordDept(d.id)}
+                          className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${checked ? 'border-primary bg-primary/5' : 'border-border/50 bg-white/80 hover:border-primary/30'}`}
+                        >
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-primary border-primary' : 'border-border'}`}>
+                            {checked && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                          </div>
+                          <div>
+                            <p className={`text-xs font-black uppercase tracking-widest ${checked ? 'text-primary' : 'text-foreground'}`}>{d.name}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{checked ? 'Full record access granted' : 'Access restricted'}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={saveRecordAccess}
+                disabled={savingRecord}
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black py-3.5 rounded-2xl transition-all shadow-lg shadow-primary/20 text-xs uppercase tracking-widest disabled:opacity-50 active:scale-[0.98]"
+              >
+                {savingRecord ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {savingRecord ? 'Saving…' : 'Save Access Settings'}
               </button>
             </div>
           </div>
