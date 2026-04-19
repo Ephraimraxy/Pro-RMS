@@ -48,10 +48,13 @@ const urgencyColors = {
   critical: 'text-red-600 font-bold',
 };
 
+const TYPE_FILTERS = ['All', 'Cash', 'Material', 'Memo'];
+
 const Dashboard = ({ onViewChange }) => {
   const { user } = useAuth();
   const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0, totalSpent: 0 });
   const [recentPending, setRecentPending] = useState([]);
+  const [typeFilter, setTypeFilter] = useState('All');
 
   const loadDashboard = async () => {
     const s = await getDashboardStats(user);
@@ -163,7 +166,26 @@ const Dashboard = ({ onViewChange }) => {
                 </button>
               </div>
 
-              {recentPending.length === 0 ? (
+              {/* Type filter tabs */}
+              <div className="flex gap-2 flex-wrap -mt-2">
+                {TYPE_FILTERS.map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setTypeFilter(f)}
+                    className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                      typeFilter === f
+                        ? 'bg-primary text-white border-primary shadow-sm'
+                        : 'bg-white border-border/50 text-muted-foreground hover:border-primary/40'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const filtered = typeFilter === 'All' ? recentPending : recentPending.filter(r => r.type === typeFilter);
+                return filtered.length === 0 ? (
                 <div className="py-20 text-center space-y-4">
                   <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
                     <CheckCircle2 size={32} />
@@ -188,7 +210,7 @@ const Dashboard = ({ onViewChange }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentPending.map(r => {
+                      {filtered.map(r => {
                         const isMoneyReq = r.type === 'Cash' || (r.amount && r.amount > 0);
                         return (
                         <tr key={r.id} className="group transition-all">
@@ -284,7 +306,8 @@ const Dashboard = ({ onViewChange }) => {
                     </tbody>
                   </table>
                 </div>
-              )}
+              );
+              })()}
             </div>
 
           </div>

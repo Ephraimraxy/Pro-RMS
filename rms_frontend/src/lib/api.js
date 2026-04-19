@@ -172,6 +172,9 @@ export const forwardAPI = {
       note: note || '',
       returnToSender: !!returnToSender
     });
+  },
+  async creatorComment(requisitionId, comment) {
+    return api.post(`/requisitions/${requisitionId}/creator-comment`, { comment });
   }
 };
 

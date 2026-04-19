@@ -105,6 +105,9 @@ model Requisition {
   treatedAt             DateTime?
   vettingEvents         VettingEvent[]
 
+  publishStartAt     DateTime?
+  publishEndAt       DateTime?
+
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 }

@@ -16,7 +16,7 @@ import {
   ArrowRightCircle, CornerDownLeft, Loader2, Send, Trash2, Printer,
   Building2, ArrowRight, ArrowLeft, History, Download, AlertTriangle,
   ExternalLink, ArrowDownToLine, MessageSquare, RotateCcw, Forward as ForwardIcon,
-  CheckCircle2, Award, ChevronDown, Gavel
+  CheckCircle2, Award, ChevronDown, Gavel, Zap
 } from 'lucide-react';
 import { reqAPI } from '../lib/api';
 
@@ -604,6 +604,68 @@ const PrintStageModal = ({ req, detail, onClose }) => {
   );
 };
 
+// ── Creator Clarification Panel (shown when requisition is returned to creator) ──
+const CreatorCommentPanel = ({ req, departments, onDone }) => {
+  const [comment, setComment] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [acting, setActing]   = useState(false);
+
+  const hrDept = departments.find(d => /\bhr\b|human\s*resource/i.test(d.name));
+
+  const handleSubmit = async () => {
+    if (!comment.trim()) { toast.error('Please enter a clarification comment before re-forwarding.'); return; }
+    if (!targetId) { toast.error('Please select the department to forward to.'); return; }
+    setActing(true);
+    try {
+      await forwardAPI.creatorComment(req.id, comment);
+      await forwardAPI.forward(req.id, {
+        targetDepartmentId: parseInt(targetId),
+        note: comment,
+        returnToSender: false
+      });
+      toast.success('Comment added and requisition re-forwarded.');
+      onDone();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Could not submit comment. Please try again.');
+    } finally { setActing(false); }
+  };
+
+  return (
+    <div className="space-y-3 border border-amber-200 rounded-2xl p-4 bg-amber-50/60 shadow-sm relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+      <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest pl-1">Add Clarification &amp; Re-forward</p>
+      <p className="text-xs text-amber-700 pl-1">Your requisition fields are locked. You may add a clarification note and re-forward to HR for processing.</p>
+      <textarea
+        value={comment}
+        onChange={e => setComment(e.target.value)}
+        placeholder="Enter your clarification or response to the return reason..."
+        className="w-full bg-white border border-amber-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-300 min-h-[80px] resize-none shadow-inner"
+      />
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Forward to</label>
+        <select
+          value={targetId}
+          onChange={e => setTargetId(e.target.value)}
+          className="w-full bg-white border border-amber-200 rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-300 appearance-none shadow-sm"
+        >
+          <option value="">— Select department —</option>
+          {departments
+            .filter(d => /\bhr\b|human\s*resource/i.test(d.name))
+            .map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      </div>
+      <button
+        onClick={handleSubmit}
+        disabled={!comment.trim() || !targetId || acting}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-all disabled:opacity-50 shadow-md"
+      >
+        {acting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+        Submit Clarification &amp; Re-forward
+      </button>
+    </div>
+  );
+};
+
 // ── Respond Panel (for target dept to forward or return) ──────────────────
 const RespondPanel = ({ req, detail, departments, onDone }) => {
   const [mode, setMode]         = useState(null); // 'forward' | null
@@ -622,16 +684,16 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
   const currentIsHR       = /\bhr\b|human\s*resource/i.test(currentDeptName);
 
   const forwardDepts = departments.filter(d => {
-    if (d.id === detail?.targetDepartmentId) return false; // Not back to current holder
+    if (d.id === detail?.targetDepartmentId) return false;
     const n = d.name || '';
-    // Chairman can forward anywhere (they're the top authority in pre-vetting chain)
+    // Chairman can forward anywhere except vetting/account depts
     if (currentIsChairman) return !/\bicc\b|integrity|compliance|audit|account/i.test(n);
-    // GM can only forward up to Chairman or return down to HR
-    if (currentIsGM) return /ceo|chairman|\bhr\b|human\s*resource/i.test(n);
-    // HR can forward up to GM or Chairman
-    if (currentIsHR) return /general\s*manager|\bgm\b|ceo|chairman/i.test(n);
-    // All other depts (ICC, Audit, Account, regular): can only route to HR
-    return /\bhr\b|human\s*resource/i.test(n);
+    // GM → Chairman ONLY (strict upward routing)
+    if (currentIsGM) return /ceo|chairman/i.test(n);
+    // HR → GM ONLY (strict upward routing)
+    if (currentIsHR) return /general\s*manager|\bgm\b/i.test(n);
+    // Regular depts: peer depts + HR (not GM, Chairman, Audit, ICC, Account)
+    return !/general\s*manager|\bgm\b|ceo|chairman|\bicc\b|integrity|compliance|audit|account/i.test(n);
   });
 
   // Work out who "Return to Sender" will actually send to by reading the
@@ -777,8 +839,9 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
 const DEFAULT_THRESHOLDS = { hr_ceiling: 50000, chairman_min: 100000 };
 
 const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
-  const [note, setNote]         = useState('');
-  const [acting, setActing]     = useState(false);
+  const [note, setNote]           = useState('');
+  const [acting, setActing]       = useState(false);
+  const [treating, setTreating]   = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
 
@@ -830,17 +893,66 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
   // Don't show if already finally approved
   if (detail?.finalApprovalStatus && detail.finalApprovalStatus !== 'none') return null;
 
+  const notifyAccount = async () => {
+    const accountDept = departments.find(d => /\baccount/i.test(d.name));
+    if (accountDept) {
+      try {
+        await forwardAPI.forward(req.id, {
+          targetDepartmentId: accountDept.id,
+          note: '[Direct Treatment] Chairman/CEO treated directly. Account notified for audit trail.',
+          returnToSender: false
+        });
+      } catch {}
+    }
+  };
+
   const handleApprove = async () => {
     setActing(true);
     try {
-      await vettingAPI.finalApprove(req.id, note);
-      toast.success('Requisition finally approved!');
-      setShowModal(true);
+      if (isChairman) {
+        await vettingAPI.finalApprove(req.id, note);
+        toast.success('Final approval granted!');
+        setShowModal(true);
+      } else {
+        const targetDept = isHR
+          ? departments.find(d => /general\s*manager|\bgm\b/i.test(d.name))
+          : departments.find(d => /ceo|chairman/i.test(d.name));
+        if (!targetDept) {
+          toast.error(isHR ? 'GM department not found in system.' : 'Chairman department not found in system.');
+          return;
+        }
+        await forwardAPI.forward(req.id, {
+          targetDepartmentId: targetDept.id,
+          note: note || `Approved by ${deptName}. Forwarding for further review.`,
+          returnToSender: false
+        });
+        toast.success(`Approved and forwarded to ${targetDept.name}.`);
+      }
       onApproved();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Final approval failed. Please try again.');
+      toast.error(err?.response?.data?.error || 'Action failed. Please try again.');
     } finally { setActing(false); }
   };
+
+  const handleTreatDirectly = async () => {
+    setTreating(true);
+    try {
+      await vettingAPI.finalApprove(req.id, note);
+      await vettingAPI.vettingAction(req.id, {
+        action: 'treated',
+        comment: note || 'Treated directly by Chairman/CEO.'
+      });
+      await notifyAccount();
+      toast.success('Requisition treated directly. Account has been notified.');
+      onApproved();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Direct treatment failed. Please try again.');
+    } finally { setTreating(false); }
+  };
+
+  const approveLabel = isChairman ? 'Final Approve → Send to Vetting'
+    : isGM ? 'Approve & Forward to Chairman'
+    : 'Approve & Forward to GM';
 
   return (
     <>
@@ -848,7 +960,9 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
         <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
         <div className="flex items-center gap-2 pl-1">
           <Gavel size={14} className="text-emerald-700" />
-          <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Final Approval</p>
+          <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">
+            {isChairman ? 'Final Approval' : 'Approve & Forward'}
+          </p>
           <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-[9px] font-black text-emerald-700 uppercase">{authorityLabel}</span>
         </div>
         <textarea
@@ -857,14 +971,31 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
           placeholder="Optional approval note or remarks..."
           className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300 min-h-[60px] resize-none shadow-inner"
         />
-        <button
-          onClick={handleApprove}
-          disabled={acting}
-          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-emerald-500/20"
-        >
-          {acting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-          {acting ? 'Processing…' : 'Final Approve'}
-        </button>
+        <div className={`grid gap-2 ${isChairman ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <button
+            onClick={handleApprove}
+            disabled={acting || treating}
+            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-emerald-500/20"
+          >
+            {acting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            {acting ? 'Processing…' : approveLabel}
+          </button>
+          {isChairman && (
+            <button
+              onClick={handleTreatDirectly}
+              disabled={acting || treating}
+              className="flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-teal-500/20"
+            >
+              {treating ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
+              {treating ? 'Processing…' : 'Treat Directly'}
+            </button>
+          )}
+        </div>
+        {isChairman && (
+          <p className="text-[9px] text-emerald-700/60 text-center leading-tight">
+            "Treat Directly" finalizes and notifies Account for audit — no vetting required.
+          </p>
+        )}
       </div>
 
       {showModal && (
@@ -881,14 +1012,20 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
 
 // ── Vetting Selection Modal ────────────────────────────────────────────────────
 const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
-  const [selectedId, setSelectedId] = useState('');
-  const [acting, setActing]         = useState(false);
+  const [vettingPath, setVettingPath] = useState('A'); // 'A' = ICC→Audit→Account | 'B' = Audit only→Account
+  const [selectedId, setSelectedId]   = useState('');
+  const [acting, setActing]           = useState(false);
 
-  // Only show ICC, Audit, Account depts
+  // Path A: ICC can be the first dept (then Audit, then Account)
+  // Path B: skip ICC — only Audit qualifies as first entry point
   const vettingDepts = departments.filter(d => {
     const n = (d.name || '').toLowerCase();
-    return /\bicc\b|integrity|compliance|audit|account/i.test(n);
+    if (vettingPath === 'B') return /audit/i.test(n);
+    return /\bicc\b|integrity|compliance|audit/i.test(n);
   });
+
+  // Reset selection when path changes
+  const handlePathChange = (path) => { setVettingPath(path); setSelectedId(''); };
 
   const handleSend = async () => {
     if (!selectedId) { toast.error('Please select a department.'); return; }
@@ -911,19 +1048,41 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
           </div>
           <div>
             <h3 className="text-base font-black text-foreground">Send to Vetting</h3>
-            <p className="text-xs text-muted-foreground">Select the first department to vet this approved requisition</p>
+            <p className="text-xs text-muted-foreground">Select the vetting path and first department</p>
           </div>
           <button onClick={onClose} className="ml-auto p-2 rounded-xl hover:bg-muted transition-colors">
             <X size={16} className="text-muted-foreground" />
           </button>
         </div>
 
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 font-semibold">
-          Vetting chain: <strong>ICC → Audit → Account</strong>. The first selected dept will receive the requisition and forward it along the chain.
+        {/* Path selector */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => handlePathChange('A')}
+            className={`flex flex-col gap-1 p-3 rounded-xl border-2 text-left transition-all ${vettingPath === 'A' ? 'border-emerald-500 bg-emerald-50' : 'border-border bg-muted/20 hover:bg-muted/40'}`}
+          >
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Path A</span>
+            <span className="text-xs font-semibold text-foreground">ICC → Audit → Account</span>
+          </button>
+          <button
+            onClick={() => handlePathChange('B')}
+            className={`flex flex-col gap-1 p-3 rounded-xl border-2 text-left transition-all ${vettingPath === 'B' ? 'border-blue-500 bg-blue-50' : 'border-border bg-muted/20 hover:bg-muted/40'}`}
+          >
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-700">Path B</span>
+            <span className="text-xs font-semibold text-foreground">Audit only → Account</span>
+          </button>
+        </div>
+
+        <div className={`rounded-xl p-3 text-xs font-semibold ${vettingPath === 'A' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-blue-50 border border-blue-200 text-blue-800'}`}>
+          {vettingPath === 'A'
+            ? <><strong>Path A:</strong> ICC will vet first, then forward to Audit, then Account treats.</>
+            : <><strong>Path B:</strong> ICC is skipped. Audit vets directly, then Account treats.</>}
         </div>
 
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">First Vetting Department</label>
+          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+            {vettingPath === 'A' ? 'First Vetting Department (ICC or Audit)' : 'Vetting Department (Audit)'}
+          </label>
           <select
             value={selectedId}
             onChange={e => setSelectedId(e.target.value)}
@@ -933,7 +1092,7 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
             {vettingDepts.map(d => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
-            {vettingDepts.length === 0 && <option disabled>No ICC/Audit/Account depts found</option>}
+            {vettingDepts.length === 0 && <option disabled>No matching vetting department found</option>}
           </select>
         </div>
 
@@ -1020,7 +1179,24 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
           nextDeptId: action === 'forward' ? parseInt(nextDeptId) : undefined,
           file: file || undefined
         });
-        toast.success(action === 'treated' ? 'Requisition marked as treated!' : 'Forwarded to next vetting department.');
+        if (action === 'treated') {
+          toast.success('Requisition marked as treated!');
+          // When Chairman treats from vetting panel, notify Account for audit trail
+          if (isChairman) {
+            const accountDept = departments.find(d => /\baccount/i.test(d.name));
+            if (accountDept) {
+              try {
+                await forwardAPI.forward(req.id, {
+                  targetDepartmentId: accountDept.id,
+                  note: '[Direct Treatment] Chairman/CEO treated directly. Account notified for audit trail.',
+                  returnToSender: false
+                });
+              } catch {}
+            }
+          }
+        } else {
+          toast.success('Forwarded to next vetting department.');
+        }
       }
       onDone();
     } catch (err) {
@@ -1177,6 +1353,8 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
 
   // Latest return event (if returned)
   const latestReturn = detail?.forwardEvents?.filter(e => e.action === 'returned').slice(-1)[0];
+  // True when the req has been returned to the original creator's dept (fields locked, comment-only)
+  const isReturnedToCreator = !!(latestReturn && detail?.targetDepartmentId === detail?.departmentId && user?.deptId === detail?.departmentId);
 
   const handleApprove = async (remarks) => {
     setActing(true);
@@ -1323,7 +1501,18 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               )}
 
               {/* Action Panels */}
-              {isIncoming && req.status === 'pending' && !loading && (
+              {isReturnedToCreator && req.status === 'pending' && !loading && (
+                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
+                  <CreatorCommentPanel
+                    req={req}
+                    departments={departments}
+                    onDone={() => { onAction(); }}
+                  />
+                </div>
+              )}
+
+              {!isReturnedToCreator && isIncoming && req.status === 'pending' && !loading &&
+               !(detail?.finalApprovalStatus === 'treated' && /\baccount/i.test(user?.name || '')) && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                    <RespondPanel
                      req={req}
@@ -1381,6 +1570,39 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                       onAction();
                     }}
                   />
+                </div>
+              )}
+
+              {/* Account read-only notice — shown when Chairman treated directly and Account was notified */}
+              {user?.role === 'department' &&
+               /\baccount/i.test(user?.name || '') &&
+               detail?.finalApprovalStatus === 'treated' &&
+               detail?.targetDepartmentId === user?.deptId && (
+                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500 border border-teal-200 rounded-2xl p-4 bg-teal-50/60 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-teal-500" />
+                  <div className="flex items-center gap-2 pl-1 mb-3">
+                    <CheckCircle2 size={14} className="text-teal-700" />
+                    <p className="text-[10px] font-black text-teal-800 uppercase tracking-widest">Direct Treatment — Audit Record</p>
+                    <span className="ml-auto px-2 py-0.5 rounded-full bg-teal-100 border border-teal-300 text-[9px] font-black text-teal-700 uppercase">View Only</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="bg-white/70 rounded-xl p-2.5 border border-teal-100">
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">Treatment By</p>
+                      <p className="font-bold text-foreground">Chairman / CEO</p>
+                    </div>
+                    <div className="bg-white/70 rounded-xl p-2.5 border border-teal-100">
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">Mode</p>
+                      <p className="font-bold text-foreground">Direct Treatment</p>
+                    </div>
+                    <div className="bg-white/70 rounded-xl p-2.5 border border-teal-100">
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">Status</p>
+                      <p className="font-bold text-teal-700">Finalized</p>
+                    </div>
+                    <div className="bg-white/70 rounded-xl p-2.5 border border-teal-100">
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">Action</p>
+                      <p className="font-bold text-muted-foreground">View Only</p>
+                    </div>
+                  </div>
                 </div>
               )}
 

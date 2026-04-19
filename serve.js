@@ -988,7 +988,8 @@ const formatCurrency = (amount) => {
 // Memo type is purely administrative and should never show monetary amounts
 const isMonetaryType = (type) => {
   if (!type) return false;
-  return type.toLowerCase() !== 'memo';
+  const t = type.toLowerCase();
+  return t !== 'memo' && t !== 'material';
 };
 
 // Returns an Amount line string for emails, or null if the request is non-monetary
@@ -1769,6 +1770,52 @@ app.get('/api/departments/:id/activation', authenticateToken, async (req, res) =
   } catch (error) { sendError(res, 500, error.message); }
 });
 
+// Creator clarification comment on a returned requisition (fields stay locked)
+app.post('/api/requisitions/:id/creator-comment', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = z.object({ comment: z.string().min(1) }).safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: 'Comment text is required' });
+    const { comment } = parsed.data;
+
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
+
+    const requisition = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
+    if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
+
+    if (!isAdmin) {
+      if (requisition.departmentId !== userDeptId) {
+        return res.status(403).json({ error: 'Only the creator department may add a clarification comment' });
+      }
+      if (requisition.targetDepartmentId !== userDeptId) {
+        return res.status(403).json({ error: 'Requisition has not been returned to your department' });
+      }
+    }
+
+    await prisma.forwardEvent.create({
+      data: {
+        requisitionId: parseInt(id),
+        fromDeptId: userDeptId,
+        toDeptId: userDeptId,
+        action: 'commented',
+        note: comment,
+        actorName: req.user?.name || 'Creator'
+      }
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        userId: getNumericUserId(req.user) || null,
+        action: 'Creator Comment Added',
+        details: `Req #${id}: clarification comment added by creator.`
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) { sendError(res, 500, error.message); }
+});
+
 // Forward / Return-to-Sender a requisition (target department response)
 app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) => {
   try {
@@ -2166,7 +2213,21 @@ app.post('/api/requisitions/:id/publish-memo', authenticateToken, async (req, re
     const memo = await prisma.requisition.findUnique({ where: { id: reqId } });
     if (!memo) return res.status(404).json({ error: 'Memo not found' });
 
-    try { await prisma.$executeRaw`UPDATE "Requisition" SET "finalApprovalStatus"='published', "status"='approved' WHERE id=${reqId}`; } catch (_) { }
+    const scheduleParsed = z.object({
+      publishStartAt: z.string().optional().nullable(),
+      publishEndAt:   z.string().optional().nullable(),
+    }).safeParse(req.body || {});
+    const scheduleData = scheduleParsed.success ? scheduleParsed.data : {};
+
+    await prisma.requisition.update({
+      where: { id: reqId },
+      data: {
+        finalApprovalStatus: 'published',
+        status: 'approved',
+        publishStartAt: scheduleData.publishStartAt ? new Date(scheduleData.publishStartAt) : null,
+        publishEndAt:   scheduleData.publishEndAt   ? new Date(scheduleData.publishEndAt)   : null,
+      }
+    });
 
     const allDepts = await prisma.department.findMany({ where: { NOT: { name: 'Super Admin' } } });
     const memoTitle = memo.title || (memo.description || '').slice(0, 60) || 'Untitled Memo';
@@ -2175,9 +2236,8 @@ app.post('/api/requisitions/:id/publish-memo', authenticateToken, async (req, re
         await prisma.notification.create({
           data: {
             departmentId: d.id,
-            message: `📋 Memo Published: "${memoTitle}" — by ${deptName || 'Administration'}`,
+            content: `📋 Memo Published: "${memoTitle}" — by ${deptName || 'Administration'}`,
             link: `/requisitions/${reqId}`,
-            type: 'info'
           }
         });
       } catch (_) { }
