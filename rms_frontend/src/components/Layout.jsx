@@ -96,7 +96,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
         </div>
         <div className="flex flex-col">
           <h1 className="text-[10px] font-black text-foreground tracking-[0.2em] uppercase flex items-center leading-none">
-            CSS <span className="text-primary italic ml-1">RMS</span>
+            <span className="text-primary italic ml-1">RMS</span>
             <span className="ml-2 px-1.5 py-0.5 rounded-md bg-primary/5 border border-primary/10 text-[7px] text-primary/60 font-mono hidden md:inline-block">V1.0.4</span>
           </h1>
           <div className="flex items-center gap-1.5 mt-1">
@@ -122,11 +122,10 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
         {actionAlert ? (
           <div
             onClick={() => onViewChange('requisitions')}
-            className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 cursor-pointer transition-all duration-500 shadow-lg group hover:scale-105 active:scale-95 ${
-            actionAlert.mode === 'desk'
-              ? 'bg-rose-500 text-white border-rose-600 shadow-rose-500/30 animate-pulse'
-              : 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30'
-          }`}>
+            className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 cursor-pointer transition-all duration-500 shadow-lg group hover:scale-105 active:scale-95 ${actionAlert.mode === 'desk'
+                ? 'bg-rose-500 text-white border-rose-600 shadow-rose-500/30 animate-pulse'
+                : 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30'
+              }`}>
             <ShieldAlert size={14} className={actionAlert.mode === 'desk' ? 'animate-bounce' : ''} />
             <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
               {actionAlert.mode === 'desk'
@@ -136,8 +135,8 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
           </div>
         ) : (
           <div className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 transition-all duration-500 shadow-sm ${isOnline
-              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600 shadow-emerald-500/5'
-              : 'bg-rose-500/5 border-rose-500/20 text-rose-500 shadow-rose-500/5'
+            ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600 shadow-emerald-500/5'
+            : 'bg-rose-500/5 border-rose-500/20 text-rose-500 shadow-rose-500/5'
             }`}>
             <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
             <span className="text-[9px] font-black uppercase tracking-[0.25em]">
@@ -295,18 +294,18 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       if (!user?.deptId) return;
       try {
         const all = await getRequisitions();
-        const userDeptId   = Number(user.deptId);
+        const userDeptId = Number(user.deptId);
         const userDeptName = user.departmentName || '';
-        const isAdmin      = normalizeRole(user.role) === 'global_admin';
-        const isExecutive  = isAdmin ||
-                             /ceo|chairman/i.test(userDeptName) ||
-                             /general\s*manager|\bgm\b/i.test(userDeptName);
+        const isAdmin = normalizeRole(user.role) === 'global_admin';
+        const isExecutive = isAdmin ||
+          /ceo|chairman/i.test(userDeptName) ||
+          /general\s*manager|\bgm\b/i.test(userDeptName);
 
         // Items actively waiting for MY action (Red Pulse: folder is on your desk)
         const pendingForMe = all.filter(r => {
           const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
           const needsFinal = isExecutive && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
-          const isVetting  = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
+          const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
           return isTargeted || needsFinal || isVetting;
         });
 
@@ -317,9 +316,9 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
           // Amber Alert: check if you have urgent in-flight items pending someone else's input
           const urgentElsewhere = all.filter(r => {
             const submittedByMe = Number(r.departmentId) === userDeptId;
-            const isInFlight    = r.status === 'pending' ||
-                                  (r.finalApprovalStatus && !['treated', 'published', 'none'].includes(r.finalApprovalStatus));
-            const isUrgent      = ['urgent', 'critical'].includes((r.urgency || '').toLowerCase());
+            const isInFlight = r.status === 'pending' ||
+              (r.finalApprovalStatus && !['treated', 'published', 'none'].includes(r.finalApprovalStatus));
+            const isUrgent = ['urgent', 'critical'].includes((r.urgency || '').toLowerCase());
             return submittedByMe && isInFlight && isUrgent;
           });
 
@@ -334,7 +333,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
         console.warn("Action check failed:", err);
       }
     };
-    
+
     checkActions();
     const interval = setInterval(checkActions, 30000);
     window.addEventListener('requisitionUpdated', checkActions);

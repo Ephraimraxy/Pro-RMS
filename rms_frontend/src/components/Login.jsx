@@ -122,7 +122,7 @@ const Login = () => {
         {/* Footer info (Outside Card) */}
         <div className="relative z-10">
           <div className="flex items-center space-x-4 text-[9px] text-white/40 uppercase tracking-widest">
-            <span>Enterprise Portal</span>
+            <span>RMS</span>
             <div className="w-1 h-1 rounded-full bg-white/30"></div>
             <span>ISO 27001</span>
           </div>
@@ -139,8 +139,8 @@ const Login = () => {
               <img src="/Group.png" alt="Logo" className="w-full h-full object-cover object-center" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-foreground tracking-tight">CSS <span className="text-primary italic">RMS</span></h1>
-              <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Enterprise Portal</p>
+              <h1 className="text-sm font-bold text-foreground tracking-tight"><span className="text-primary italic">RMS</span></h1>
+              <p className="text-[9px] text-muted-foreground uppercase tracking-widest">RMS</p>
             </div>
           </div>
 
