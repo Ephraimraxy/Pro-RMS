@@ -140,7 +140,7 @@ const Login = () => {
             </div>
             <div>
               <h1 className="text-sm font-bold text-foreground tracking-tight"><span className="text-primary italic">RMS</span></h1>
-              <p className="text-[9px] text-muted-foreground uppercase tracking-widest">RMS</p>
+              <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Portal</p>
             </div>
           </div>
 
