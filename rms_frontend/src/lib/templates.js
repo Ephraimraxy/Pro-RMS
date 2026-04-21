@@ -26,7 +26,7 @@ const buildMemoTemplate = ({ deptCode, fromLabel, toLabel, subjectLabel, headNam
         
         <!-- CSS Group Logo & Title -->
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="/CSS_Group.png" style="width: 70px; height: auto; margin-bottom: 6px; border-radius: 8px;" />
+          <img src="/logo.jpg" style="width: 70px; height: auto; margin-bottom: 6px; border-radius: 8px;" />
           <div style="font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #333;">CSS</div>
           <div style="font-size: 11px; color: #666; letter-spacing: 1px;">Group</div>
         </div>
