@@ -187,7 +187,7 @@ export async function updateRequisitionStatus(id, newStatus, remarks = '') {
   window.dispatchEvent(new CustomEvent('requisitionUpdated'));
 
   toast.success(`${id} has been ${newStatus}`, {
-    icon: <img src="/Group.png" className="w-8 h-5 object-cover rounded" alt="" />
+    icon: <img src="/CSS_Group.png" className="w-8 h-5 object-cover rounded" alt="" />
   });
 }
 

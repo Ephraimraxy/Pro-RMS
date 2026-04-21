@@ -26,7 +26,7 @@ const buildMemoTemplate = ({ deptCode, fromLabel, toLabel, subjectLabel, headNam
         
         <!-- CSS Group Logo & Title -->
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="/Group.png" style="width: 70px; height: auto; margin-bottom: 6px; border-radius: 8px;" />
+          <img src="/CSS_Group.png" style="width: 70px; height: auto; margin-bottom: 6px; border-radius: 8px;" />
           <div style="font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #333;">CSS</div>
           <div style="font-size: 11px; color: #666; letter-spacing: 1px;">Group</div>
         </div>
@@ -99,7 +99,7 @@ export const templates = {
           <tr>
             <td style="width: 50%; vertical-align: middle;">
               <div style="display: flex; align-items: center; gap: 12px;">
-                <img src="/Group.png" style="width: 70px; height: auto; border-radius: 8px;" />
+                <img src="/CSS_Group.png" style="width: 70px; height: auto; border-radius: 8px;" />
                 <div>
                   <div style="font-size: 24px; font-weight: 900; color: #1a3a6e; letter-spacing: 1px; line-height: 1;">CSS</div>
                   <div style="font-size: 10px; font-weight: 700; color: #1a3a6e; letter-spacing: 0.5px;">Group of Companies</div>

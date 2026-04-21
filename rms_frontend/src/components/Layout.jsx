@@ -92,7 +92,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
           <Menu size={18} />
         </button>
         <div className="w-20 h-11 rounded-xl overflow-hidden shrink-0 shadow-sm border border-primary/10">
-          <img src="/Group.png" alt="Logo" className="w-full h-full object-cover object-center" />
+          <img src="/CSS_Group.png" alt="Logo" className="w-full h-full object-cover object-center" />
         </div>
         <div className="flex flex-col">
           <h1 className="text-[10px] font-black text-foreground tracking-[0.2em] uppercase flex items-center leading-none">

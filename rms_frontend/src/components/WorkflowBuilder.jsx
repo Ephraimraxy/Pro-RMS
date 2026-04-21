@@ -98,10 +98,13 @@ const WorkflowBuilder = ({ onViewChange }) => {
   const [savingThresholds, setSavingThresholds] = useState(false);
 
   // ── Record access state ────────────────────────────────────────────────────
-  // Stores dept IDs (HR, GM, Audit, ICC) that get full-record visibility
   const [recordDepts, setRecordDepts]       = useState([]);
-  const [recordDeptOptions, setRecordDeptOptions] = useState([]); // populated from live depts
+  const [recordDeptOptions, setRecordDeptOptions] = useState([]);
   const [savingRecord, setSavingRecord]     = useState(false);
+
+  // ── Feature flags ──────────────────────────────────────────────────────────
+  const [studioEnabled, setStudioEnabled]   = useState(true);
+  const [savingFeatures, setSavingFeatures] = useState(false);
 
   const loadData = async () => {
     const [workflowData, typeData] = await Promise.all([
@@ -141,6 +144,23 @@ const WorkflowBuilder = ({ onViewChange }) => {
     setRecordDepts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  const loadFeatureFlags = async () => {
+    try {
+      const res = await settingsAPI.get('document_studio_enabled');
+      if (res?.value !== undefined) setStudioEnabled(res.value !== 'false');
+    } catch {}
+  };
+
+  const saveFeatureFlags = async () => {
+    setSavingFeatures(true);
+    try {
+      await settingsAPI.set('document_studio_enabled', String(studioEnabled));
+      toast.success('Feature settings saved.');
+    } catch {
+      toast.error('Failed to save. Please try again.');
+    } finally { setSavingFeatures(false); }
+  };
+
   const loadThresholds = async () => {
     try {
       const res = await settingsAPI.get('approval_thresholds');
@@ -173,7 +193,10 @@ const WorkflowBuilder = ({ onViewChange }) => {
         loadThresholds(),
         getDepartments()
       ]);
-      await loadRecordAccess(Array.isArray(depts) ? depts : []);
+      await Promise.all([
+        loadRecordAccess(Array.isArray(depts) ? depts : []),
+        loadFeatureFlags()
+      ]);
     })();
   }, []);
 
@@ -286,6 +309,12 @@ const WorkflowBuilder = ({ onViewChange }) => {
               className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${activeTab === 'record' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80'}`}
             >
               Record Access
+            </button>
+            <button
+              onClick={() => setActiveTab('features')}
+              className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-[0.15em] transition-all ${activeTab === 'features' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Features
             </button>
           </div>
         </div>
@@ -454,6 +483,52 @@ const WorkflowBuilder = ({ onViewChange }) => {
               >
                 {savingRecord ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {savingRecord ? 'Saving…' : 'Save Access Settings'}
+              </button>
+            </div>
+          </div>
+        ) : activeTab === 'features' ? (
+          <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="glass bg-white/60 p-8 rounded-[2.5rem] border border-border/50 shadow-xl space-y-6">
+              <div>
+                <h3 className="text-lg font-black text-foreground tracking-tight">Feature Controls</h3>
+                <p className="text-sm text-muted-foreground mt-1 font-medium leading-relaxed">
+                  Enable or disable system features for all users. Changes take effect immediately.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {/* Document Studio toggle */}
+                <div className="flex items-center justify-between p-5 rounded-2xl border-2 border-border/50 bg-white/80 hover:border-primary/30 transition-all">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-black text-foreground">Document Studio</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Allows all users to access the Document Studio for printing and PDF generation.
+                      When disabled the Studio tab is hidden from the sidebar.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setStudioEnabled(v => !v)}
+                    className={`relative ml-6 shrink-0 w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none ${studioEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${studioEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${studioEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                <p className="text-xs text-muted-foreground font-medium">
+                  Document Studio is currently <strong className={studioEnabled ? 'text-emerald-600' : 'text-red-500'}>{studioEnabled ? 'enabled' : 'disabled'}</strong>
+                </p>
+              </div>
+
+              <button
+                onClick={saveFeatureFlags}
+                disabled={savingFeatures}
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black py-3.5 rounded-2xl transition-all shadow-lg shadow-primary/20 text-xs uppercase tracking-widest disabled:opacity-50 active:scale-[0.98]"
+              >
+                {savingFeatures ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {savingFeatures ? 'Saving…' : 'Save Feature Settings'}
               </button>
             </div>
           </div>
