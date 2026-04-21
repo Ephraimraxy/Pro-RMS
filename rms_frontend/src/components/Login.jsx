@@ -134,7 +134,7 @@ const Login = () => {
         <div className="w-full max-w-sm border border-border/60 rounded-2xl p-8 bg-white shadow-sm lg:border-0 lg:shadow-none lg:bg-transparent lg:p-0">
 
           {/* Mobile logo + app name (Banner Style) */}
-          <div className="lg:hidden -mx-8 -mt-8 mb-8 bg-[#206e33] p-6 rounded-t-2xl flex items-center space-x-4 border-b border-white/10">
+          <div className="lg:hidden -mx-8 -mt-8 mb-8 bg-primary p-6 rounded-t-2xl flex items-center space-x-4 border-b border-white/10">
             <div className="w-20 h-11 rounded-xl overflow-hidden shrink-0 bg-white/10 p-0.5">
               <img src="/CSS_Group.png" alt="Logo" className="w-full h-full object-cover object-center" />
             </div>

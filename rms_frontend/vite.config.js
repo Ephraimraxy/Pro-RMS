@@ -12,7 +12,7 @@ export default defineConfig({
         name: 'CSS Group RMS',
         short_name: 'CSS RMS',
         description: 'Enterprise Requisition Management System',
-        theme_color: '#1a5c1a',
+        theme_color: '#206e33',
         background_color: '#ffffff',
         display: 'standalone',
         icons: [

@@ -17,7 +17,7 @@
     --muted: 220 12% 94%;             /* Light cool grey */
     --muted-foreground: 220 10% 45%;
 
-    --accent: 142 47% 25%;            /* CSS Farms dark green */
+    --accent: 135 55% 28%;            /* CSS Farms dark green */
     --accent-foreground: 0 0% 100%;
 
     --popover: 0 0% 100%;
@@ -29,7 +29,7 @@
     --card: 0 0% 100%;
     --card-foreground: 220 15% 12%;
 
-    --primary: 142 47% 25%;           /* CSS Farms Dark Green  #1a5c1a */
+    --primary: 135 55% 28%;           /* CSS Farms Dark Green  #206e33 */
     --primary-foreground: 0 0% 100%;
 
     --secondary: 24 90% 52%;          /* CSS Farms Orange  #f97316 — accent only */
@@ -38,7 +38,7 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --ring: 142 47% 25%;              /* Green focus ring */
+    --ring: 135 55% 28%;              /* Green focus ring */
     --radius: 0.75rem;
   }
 
@@ -75,14 +75,14 @@
   background: rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(26, 92, 26, 0.08);      /* subtle green border */
+  border: 1px solid rgba(32, 110, 51, 0.08);      /* subtle green border */
   box-shadow: 0 8px 32px rgba(249, 115, 22, 0.05); /* subtle orange glow */
 }
 
 /* ── Custom Stress-Free Scrollbar ── */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(26, 92, 26, 0.1) transparent;
+  scrollbar-color: rgba(32, 110, 51, 0.1) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -95,20 +95,20 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(26, 92, 26, 0);
+  background: rgba(32, 110, 51, 0);
   border-radius: 10px;
   transition: background 0.3s;
 }
 
 .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(26, 92, 26, 0.15);
+  background: rgba(32, 110, 51, 0.15);
 }
 
 /* ── Quill Editor Perfection ── */
 .rms-quill-editor .ql-toolbar {
   border: none !important;
-  border-bottom: 1px solid rgba(26, 92, 26, 0.05) !important;
-  background: rgba(26, 92, 26, 0.01);
+  border-bottom: 1px solid rgba(32, 110, 51, 0.05) !important;
+  background: rgba(32, 110, 51, 0.01);
   border-radius: 16px 16px 0 0;
 }
 
