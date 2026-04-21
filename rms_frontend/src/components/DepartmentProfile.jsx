@@ -5,7 +5,6 @@ import {
   Loader2, PenTool, CheckCircle2, Lock, Eye, EyeOff,
   KeyRound, Shield
 } from 'lucide-react';
-import Layout from './Layout';
 import { reqAPI, deptAPI, authAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -348,14 +347,12 @@ const DepartmentProfile = ({ user, onViewChange }) => {
   const isAdmin = user?.role === 'global_admin';
 
   return (
-    <Layout user={user} currentView="dept_profile" onViewChange={onViewChange}>
-      <div className="px-1 pt-2">
-        {isAdmin
-          ? <AdminProfileContent user={user} />
-          : <DeptProfileContent user={user} onViewChange={onViewChange} />
-        }
-      </div>
-    </Layout>
+    <div className="px-1 pt-2">
+      {isAdmin
+        ? <AdminProfileContent user={user} />
+        : <DeptProfileContent user={user} onViewChange={onViewChange} />
+      }
+    </div>
   );
 };
 

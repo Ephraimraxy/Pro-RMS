@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardStats, getRequisitions } from '../lib/store';
 import { reqAPI } from '../lib/api';
@@ -100,8 +99,7 @@ const Dashboard = ({ onViewChange }) => {
   };
 
   return (
-    <Layout user={user} currentView="dashboard" onViewChange={onViewChange}>
-      <div className="max-w-full mx-auto space-y-5 pb-20 animate-slide-up px-1">
+    <div className="max-w-full mx-auto space-y-5 pb-20 animate-slide-up px-1">
         {user?.role === 'department' && !isDeptReady && (
           <div className="glass bg-amber-500/10 border border-amber-500/30 rounded-[2rem] p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl shadow-amber-500/10">
             <div className="flex items-center gap-6">
@@ -313,7 +311,6 @@ const Dashboard = ({ onViewChange }) => {
           </div>
         </div>
       </div>
-    </Layout>
   );
 };
 

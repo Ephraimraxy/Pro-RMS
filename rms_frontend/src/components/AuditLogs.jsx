@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { Activity, ShieldCheck, User, Clock, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 
@@ -52,8 +51,7 @@ const AuditLogs = ({ onViewChange }) => {
   if (loading) return <div className="p-20 text-center animate-pulse text-muted-foreground font-mono text-xs">Accessing Immutable Ledger...</div>;
 
   return (
-    <Layout user={user} currentView="audit_logs" onViewChange={onViewChange}>
-      <div className="max-w-4xl mx-auto space-y-8 pb-20">
+    <div className="max-w-4xl mx-auto space-y-8 pb-20">
         <div className="flex items-center justify-between border-b border-border/50 pb-6">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight flex items-center space-x-3">
@@ -95,8 +93,7 @@ const AuditLogs = ({ onViewChange }) => {
              Load More Activity
            </button>
         </div>
-      </div>
-    </Layout>
+    </div>
   );
 };
 

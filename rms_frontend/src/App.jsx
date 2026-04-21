@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, createContext, useContext, Sus
 import Login from './components/Login'
 import PublicVerify from './components/PublicVerify'
 import DepartmentHeadModal from './components/DepartmentHeadModal'
+import Layout from './components/Layout'
 
 // ── Error Boundary — catches failed lazy-chunk imports so the app never goes blank ──
 class ChunkErrorBoundary extends React.Component {
@@ -227,6 +228,7 @@ const AppContent = () => {
 
   return (
     <>
+    <Layout user={user} currentView={activeView} onViewChange={navigate}>
       <ChunkErrorBoundary>
         <Suspense fallback={
           <div className="flex-1 flex flex-col items-center justify-center p-12">
@@ -237,6 +239,7 @@ const AppContent = () => {
           {views[activeView] || views.dashboard}
         </Suspense>
       </ChunkErrorBoundary>
+    </Layout>
       <DepartmentHeadModal
         isOpen={showDeptModal}
         department={deptProfile}

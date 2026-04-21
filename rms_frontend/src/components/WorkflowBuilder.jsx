@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Trash2, Shield, ArrowDown, Settings2, Info, FileText, Users, ChevronRight, Save, Loader2 } from 'lucide-react';
 
@@ -272,8 +271,8 @@ const WorkflowBuilder = ({ onViewChange }) => {
   }
 
   return (
-    <Layout user={user} currentView="workflow_builder" onViewChange={onViewChange}>
-      <div className="max-w-6xl mx-auto space-y-10 pb-20 animate-slide-up">
+    <>
+    <div className="max-w-6xl mx-auto space-y-10 pb-20 animate-slide-up">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tight flex items-center space-x-3">
@@ -622,7 +621,7 @@ const WorkflowBuilder = ({ onViewChange }) => {
           : `Are you sure you want to delete the "${pendingType?.name}" requisition type? This cannot be undone.`
         }
       />
-    </Layout>
+    </>
   );
 };
 

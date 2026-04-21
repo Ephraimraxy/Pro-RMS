@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import {
   Plus, Trash2, Building2, Briefcase, Search, ChevronDown, ChevronRight,
@@ -504,8 +503,8 @@ const DepartmentManager = ({ onViewChange }) => {
   }
 
   return (
-    <Layout user={user} currentView="department_manager" onViewChange={onViewChange}>
-      <div className="max-w-6xl mx-auto space-y-10 pb-20">
+    <>
+    <div className="max-w-6xl mx-auto space-y-10 pb-20">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
@@ -884,7 +883,7 @@ const DepartmentManager = ({ onViewChange }) => {
       <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete}
         isProcessing={isProcessing} title="Delete Department"
         message={`Are you sure you want to permanently delete "${pendingDept?.name}"? This action cannot be undone.`} />
-    </Layout>
+    </>
   );
 };
 

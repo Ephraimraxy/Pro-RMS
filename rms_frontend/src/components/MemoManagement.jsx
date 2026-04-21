@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { getRequisitions, getDepartments, getRequisitionDetail } from '../lib/store';
 import { forwardAPI, memoAPI } from '../lib/api';
@@ -496,8 +495,7 @@ const MemoManagement = ({ onViewChange }) => {
   };
 
   return (
-    <Layout user={user} currentView="memos" onViewChange={onViewChange}>
-      <div className="w-full mx-auto pb-20 px-1 animate-slide-up">
+    <div className="w-full mx-auto pb-20 px-1 animate-slide-up">
         {showCreate ? (
           <MemoCreateForm
             user={user}
@@ -635,7 +633,6 @@ const MemoManagement = ({ onViewChange }) => {
           </div>
         )}
       </div>
-    </Layout>
   );
 };
 

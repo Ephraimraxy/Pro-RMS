@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import Layout from './Layout';
 import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -1030,8 +1029,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
   const currentActiveDraft = allDrafts.find(d => d.id === currentDraftId);
 
   return (
-    <Layout user={user} currentView="document_studio" onViewChange={onViewChange}>
-      <div className="max-w-6xl mx-auto space-y-8 pb-20 relative">
+    <div className="max-w-6xl mx-auto space-y-8 pb-20 relative">
         
         <div className="space-y-4 max-w-7xl mx-auto px-2 lg:px-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0">
@@ -1221,7 +1219,7 @@ const DocumentStudio = ({ user, onViewChange }) => {
           </div>
         </div>
       )}
-    </Layout>
+      </div>
   );
 };
 

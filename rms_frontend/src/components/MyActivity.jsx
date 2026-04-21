@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Layout from './Layout';
 import { useAuth } from '../context/AuthContext';
 import { getActivityLog, uploadUserSignature } from '../lib/store';
 import { History, Clock, Upload } from 'lucide-react';
@@ -33,8 +32,7 @@ const MyActivity = ({ onViewChange }) => {
   };
 
   return (
-    <Layout user={user} currentView="activity" onViewChange={onViewChange}>
-      <div className="max-w-4xl mx-auto space-y-8 pb-20">
+    <div className="max-w-4xl mx-auto space-y-8 pb-20">
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">My <span className="text-primary italic">Activity</span></h1>
           <p className="text-muted-foreground text-sm mt-1">Complete log of all your actions, submissions, and approvals.</p>
@@ -88,7 +86,6 @@ const MyActivity = ({ onViewChange }) => {
           </div>
         )}
       </div>
-    </Layout>
   );
 };
 

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Layout from './Layout';
 import CashRequestForm from './CashRequestForm';
 import ApprovalTimeline from './ApprovalTimeline';
 import ApprovalActionPanel from './ApprovalActionPanel';
@@ -2049,7 +2048,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
   };
 
   return (
-    <Layout user={user} currentView="requisitions" onViewChange={onViewChange}>
+    <>
       <ConfirmModal 
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -2297,7 +2296,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
         </div>
       </div>
       )}
-    </Layout>
+    </>
   );
 };
 
