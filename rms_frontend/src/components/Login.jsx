@@ -133,14 +133,14 @@ const Login = () => {
       <div className="flex-1 flex items-center justify-center p-5 lg:p-12">
         <div className="w-full max-w-sm border border-border/60 rounded-2xl p-8 bg-white shadow-sm lg:border-0 lg:shadow-none lg:bg-transparent lg:p-0">
 
-          {/* Mobile logo + app name */}
-          <div className="lg:hidden flex items-center space-x-3 mb-8 pb-6 border-b border-border/40">
-            <div className="w-20 h-11 rounded-xl overflow-hidden shrink-0">
+          {/* Mobile logo + app name (Banner Style) */}
+          <div className="lg:hidden -mx-8 -mt-8 mb-8 bg-[#206e33] p-6 rounded-t-2xl flex items-center space-x-4 border-b border-white/10">
+            <div className="w-20 h-11 rounded-xl overflow-hidden shrink-0 bg-white/10 p-0.5">
               <img src="/CSS_Group.png" alt="Logo" className="w-full h-full object-cover object-center" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-foreground tracking-tight"><span className="text-primary italic">RMS</span></h1>
-              <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Portal</p>
+              <h1 className="text-base font-black text-white tracking-[0.1em] italic uppercase">RMS</h1>
+              <p className="text-[10px] text-white/80 uppercase tracking-[0.3em] font-bold leading-none">Portal</p>
             </div>
           </div>
 
