@@ -182,7 +182,7 @@ export async function updateRequisitionStatus(id, newStatus, remarks = '') {
     await requisitionStore.setItem('all', all);
   }
   await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
-  
+
   // Dispatch event for global listeners (like Action Alert)
   window.dispatchEvent(new CustomEvent('requisitionUpdated'));
 
@@ -227,9 +227,9 @@ export async function getDashboardStats(user) {
   const userDeptId = Number(user.deptId);
   const userDeptName = user.departmentName || '';
   const isAdmin = (user.role || '').toLowerCase().replace(/\s+/g, '_') === 'global_admin';
-  const isExecutive = isAdmin || 
-                    /ceo|chairman/i.test(userDeptName) || 
-                    /general\s*manager|\bgm\b/i.test(userDeptName);
+  const isExecutive = isAdmin ||
+    /ceo|chairman/i.test(userDeptName) ||
+    /general\s*manager|\bgm\b/i.test(userDeptName);
 
   // "Pending" on dashboard now means "Personal Action Items"
   const pendingActions = all.filter(r => {

@@ -71,7 +71,7 @@ const DepartmentSeal = ({ name, id = '' }) => {
       <text x={cx + arcR + 4} y={cy + 4} fontSize="8" fill={color} textAnchor="middle">◆</text>
 
       {/* CSS Farms logo centered */}
-      <image href="/Group.png" x={cx - 45} y={cy - 32} width="90" height="50"
+      <image href="/CSS_Group.png" x={cx - 45} y={cy - 32} width="90" height="50"
         preserveAspectRatio="xMidYMid meet" />
 
       {/* Thin divider below logo */}
@@ -90,10 +90,10 @@ const SealViewModal = ({ dept, onClose }) => {
     const svgEl = document.getElementById('seal-svg-export');
     if (!svgEl) return;
 
-    // Inline Group.png as base64 so the downloaded SVG is self-contained
+    // Inline CSS_Group.png as base64 so the downloaded SVG is self-contained
     let logoDataUrl = null;
     try {
-      const res = await fetch('/Group.png');
+      const res = await fetch('/CSS_Group.png');
       const blob = await res.blob();
       logoDataUrl = await new Promise((resolve) => {
         const reader = new FileReader();
@@ -745,8 +745,8 @@ const DepartmentManager = ({ onViewChange }) => {
                       key={dept.id}
                       onClick={() => toggleChairmanDept(dept.id)}
                       className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${allowed
-                          ? 'bg-amber-50 border-amber-300 text-amber-800'
-                          : 'bg-white border-border/50 text-muted-foreground hover:border-amber-200 hover:bg-amber-50/40'
+                        ? 'bg-amber-50 border-amber-300 text-amber-800'
+                        : 'bg-white border-border/50 text-muted-foreground hover:border-amber-200 hover:bg-amber-50/40'
                         }`}
                     >
                       <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${allowed ? 'bg-amber-500 border-amber-500' : 'border-border'

@@ -1957,9 +1957,9 @@ app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, r
       where: { id: reqId },
       select: { id: true, amount: true, finalApprovalStatus: true }
     });
-    
+
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
-    
+
     if (requisition.finalApprovalStatus && requisition.finalApprovalStatus !== 'none') {
       return res.status(409).json({ error: 'This requisition has already been finally approved.' });
     }
@@ -2011,7 +2011,7 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
       where: { id: reqId },
       select: { id: true, title: true, finalApprovedByDeptId: true, finalApprovalStatus: true }
     });
-    
+
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
 
     if (requisition.finalApprovalStatus !== 'approved') {
@@ -2088,14 +2088,14 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
       where: { id: reqId },
       include: { finalApprovedByDept: { select: { name: true } } }
     });
-    
+
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
 
     // Allow: current vetting dept, final approving dept (chairman can treat), or admin
-    const canAct = isAdmin 
-      || (requisition.currentVettingDeptId === userDeptId) 
+    const canAct = isAdmin
+      || (requisition.currentVettingDeptId === userDeptId)
       || (action === 'treated' && requisition.finalApprovedByDeptId === userDeptId);
-      
+
     if (!canAct) {
       return res.status(403).json({ error: 'You are not authorized to perform vetting actions for this requisition.' });
     }
@@ -2106,7 +2106,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
       attachmentKey = generateStorageKey(`vetting/${id}`, req.file.originalname);
       attachmentName = req.file.originalname;
       await putObject({ key: attachmentKey, body: req.file.buffer, contentType: req.file.mimetype });
-      
+
       await prisma.attachment.create({
         data: {
           filename: req.file.originalname,
@@ -2215,7 +2215,7 @@ app.post('/api/requisitions/:id/publish-memo', authenticateToken, async (req, re
 
     const scheduleParsed = z.object({
       publishStartAt: z.string().optional().nullable(),
-      publishEndAt:   z.string().optional().nullable(),
+      publishEndAt: z.string().optional().nullable(),
     }).safeParse(req.body || {});
     const scheduleData = scheduleParsed.success ? scheduleParsed.data : {};
 
@@ -2225,7 +2225,7 @@ app.post('/api/requisitions/:id/publish-memo', authenticateToken, async (req, re
         finalApprovalStatus: 'published',
         status: 'approved',
         publishStartAt: scheduleData.publishStartAt ? new Date(scheduleData.publishStartAt) : null,
-        publishEndAt:   scheduleData.publishEndAt   ? new Date(scheduleData.publishEndAt)   : null,
+        publishEndAt: scheduleData.publishEndAt ? new Date(scheduleData.publishEndAt) : null,
       }
     });
 
@@ -2794,7 +2794,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // ── Logo ────────────────────────────────────────────
     try {
-      const logoPath = path.join(__dirname, 'rms_frontend', 'public', 'Group.png');
+      const logoPath = path.join(__dirname, 'rms_frontend', 'public', 'CSS_Group.png');
       if (fs.existsSync(logoPath)) {
         const logoBytes = fs.readFileSync(logoPath);
         const logoImage = await embedSafe(logoBytes);

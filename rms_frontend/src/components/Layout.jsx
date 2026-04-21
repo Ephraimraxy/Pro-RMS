@@ -123,8 +123,8 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
           <div
             onClick={() => onViewChange('requisitions')}
             className={`px-4 py-1.5 rounded-full border flex items-center gap-2.5 cursor-pointer transition-all duration-500 shadow-lg group hover:scale-105 active:scale-95 ${actionAlert.mode === 'desk'
-                ? 'bg-rose-500 text-white border-rose-600 shadow-rose-500/30 animate-pulse'
-                : 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30'
+              ? 'bg-rose-500 text-white border-rose-600 shadow-rose-500/30 animate-pulse'
+              : 'bg-amber-500 text-white border-amber-600 shadow-amber-500/30'
               }`}>
             <ShieldAlert size={14} className={actionAlert.mode === 'desk' ? 'animate-bounce' : ''} />
             <span className="text-[9px] font-black uppercase tracking-[0.2em] whitespace-nowrap">

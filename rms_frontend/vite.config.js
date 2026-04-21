@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['CSS_Favicon.svg', 'CSS_Favicon.png', 'CSS_Group.png', 'CSS_Group.svg'],
+      includeAssets: ['CSS_Favicon.svg', 'CSS_Favicon.png', 'CSS_CSS_Group.png', 'CSS_Group.svg'],
       manifest: {
         name: 'CSS Group RMS',
         short_name: 'CSS RMS',
