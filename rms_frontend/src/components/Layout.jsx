@@ -17,8 +17,8 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
     onClick={onClick}
     title={isCollapsed ? label : ''}
     className={mobile
-      ? `flex flex-col items-center justify-center p-2.5 rounded-2xl cursor-pointer transition-all active:scale-90 ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`
-      : `flex items-center group relative px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-300 ${isCollapsed ? 'justify-center mx-1' : 'space-x-4 mx-1'} ${active ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[0.98]' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`
+      ? `flex flex-col items-center justify-center p-2.5 rounded-2xl cursor-pointer transition-all active:scale-95 ${active ? 'text-white animate-nav-blink' : 'text-white/40 hover:text-white'}`
+      : `flex items-center group relative px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-300 hover-shine-effect ${isCollapsed ? 'justify-center mx-1' : 'space-x-4 mx-1'} ${active ? 'bg-white/10 text-white shadow-lg shadow-black/20 scale-[0.98] animate-nav-blink' : 'text-white/50 hover:bg-white/5 hover:text-white'}`
     }
   >
     <div className={`transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
@@ -30,11 +30,11 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
       </span>
     )}
     {isCollapsed && !mobile && (
-      <div className="absolute left-full ml-4 px-3 py-2 bg-foreground text-background text-[10px] font-black rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-[-10px] group-hover:translate-x-0 shadow-xl whitespace-nowrap z-[100] uppercase tracking-widest">
+      <div className="absolute left-full ml-4 px-3 py-2 bg-white text-primary text-[10px] font-black rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-[-10px] group-hover:translate-x-0 shadow-xl whitespace-nowrap z-[100] uppercase tracking-widest">
         {label}
       </div>
     )}
-    {mobile && <span className={`text-[9px] font-black mt-1.5 uppercase tracking-tighter transition-all ${active ? 'opacity-100' : 'opacity-60'}`}>{label}</span>}
+    {mobile && <span className={`text-[9px] font-black mt-1.5 uppercase tracking-tighter transition-all ${active ? 'opacity-100' : 'opacity-40'}`}>{label}</span>}
   </div>
 );
 
@@ -411,12 +411,12 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       <div className="flex h-[calc(100vh-56px)] overflow-hidden">
         {/* Desktop Sidebar App-Tile Navigation */}
         <aside
-          className={`border-r border-border/30 bg-white/40 backdrop-blur-3xl sticky top-0 hidden lg:flex flex-col transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${isCollapsed ? 'w-20' : 'w-64'}`}
+          className={`border-r border-white/5 bg-[#206e33] sticky top-0 hidden lg:flex flex-col transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${isCollapsed ? 'w-20' : 'w-64'}`}
         >
           <div className="p-4 pt-6 flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
             <div className="space-y-2">
               {!isCollapsed && (
-                <p className="px-4 text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
+                <p className="px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
                   Main Network
                 </p>
               )}
@@ -441,7 +441,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
             {user?.role !== 'department' && (
               <div className="mt-10 space-y-2">
                 {!isCollapsed && (
-                  <p className="px-4 text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
+                  <p className="px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
                     Oversight Center
                   </p>
                 )}
@@ -489,12 +489,12 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
             </div>
           </div>
         )}
-        <nav className="glass bg-white/60 backdrop-blur-2xl border border-white/40 rounded-[2.5rem] flex items-center justify-around px-4 py-2 shadow-2xl shadow-primary/10">
+        <nav className="bg-[#206e33] border border-white/10 rounded-[2.5rem] flex items-center justify-around px-4 py-2 shadow-2xl shadow-black/30">
           {user?.role === 'department' ? (
             <>
               <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
               <SidebarItem icon={FileText} label="MEMO" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
+              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#206e33] shadow-lg hover:scale-110 transition-transform active:scale-95 -translate-y-4 border-4 border-[#FAF9F6] cursor-pointer" onClick={() => onViewChange('document_studio')}>
                 <PenTool size={20} />
               </div>
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
@@ -504,13 +504,13 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
             <>
               <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30 -translate-y-4 border-4 border-[#FAF9F6]" onClick={() => onViewChange('document_studio')}>
+              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#206e33] shadow-lg hover:scale-110 transition-transform active:scale-95 -translate-y-4 border-4 border-[#FAF9F6] cursor-pointer" onClick={() => onViewChange('document_studio')}>
                 <PenTool size={20} />
               </div>
               <SidebarItem icon={FileText} label="MEMO" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
               <button
                 onClick={() => setShowOversightMenu(v => !v)}
-                className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView) || showOversightMenu ? 'text-primary' : 'text-muted-foreground'}`}
+                className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView) || showOversightMenu ? 'text-white' : 'text-white/40'}`}
               >
                 <Settings size={18} />
                 <span className="text-[9px] font-bold">Oversight</span>
