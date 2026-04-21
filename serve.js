@@ -2794,7 +2794,7 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
 
     // ── Logo ────────────────────────────────────────────
     try {
-      const logoPath = path.join(__dirname, 'rms_frontend', 'public', 'CSS_Group.png');
+      const logoPath = path.join(__dirname, 'rms_frontend', 'public', 'logo.jpg');
       if (fs.existsSync(logoPath)) {
         const logoBytes = fs.readFileSync(logoPath);
         const logoImage = await embedSafe(logoBytes);

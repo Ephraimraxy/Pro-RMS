@@ -113,7 +113,7 @@ const ProcessingChain = ({ events = [] }) => {
 // Stage 1: detect type from extension
 // Stage 2: fetch with auth → Blob → blobUrl (uniform regardless of source)
 // Stage 3: route to purpose-built renderer; always has a download fallback
-const FilePreviewModal = ({ attachment, onClose }) => {
+const FilePreviewModal = ({ attachment, onClose, initialBlobUrl = null }) => {
   const [status,      setStatus]      = useState('loading'); // 'loading'|'ready'|'error'
   const [errorMsg,    setErrorMsg]    = useState('');
   const [blobUrl,     setBlobUrl]     = useState(null);   // pdf / image / video / audio
@@ -127,10 +127,10 @@ const FilePreviewModal = ({ attachment, onClose }) => {
   if (!attachment) return null;
 
   const token       = localStorage.getItem('rms_token');
-  const serverUrl   = `/api/attachments/${attachment.id}/preview`;
-  const downloadUrl = `/api/attachments/${attachment.id}/download?token=${token}`;
-  const name        = attachment.filename || '';
-  const ext         = name.split('.').pop().toLowerCase();
+  const serverUrl   = attachment?.id ? `/api/attachments/${attachment.id}/preview` : null;
+  const downloadUrl = attachment?.id ? `/api/attachments/${attachment.id}/download?token=${token}` : null;
+  const name        = attachment?.filename || 'Document Preview';
+  const ext         = initialBlobUrl ? 'pdf' : (name.split('.').pop().toLowerCase());
   const isMobile    = window.innerWidth < 768;
 
   // ── Stage 1: classify by extension ──────────────────────────────────────
@@ -149,6 +149,12 @@ const FilePreviewModal = ({ attachment, onClose }) => {
 
   // ── Stage 2: fetch → Blob + Stage 3 setup ───────────────────────────────
   React.useEffect(() => {
+    if (initialBlobUrl) {
+      setBlobUrl(initialBlobUrl);
+      setStatus('ready');
+      return;
+    }
+
     let activeBlobUrl = null;
     setStatus('loading');
     setBlobUrl(null); setTextContent(null); setSheetData(null); setDocxBlob(null);
@@ -211,8 +217,8 @@ const FilePreviewModal = ({ attachment, onClose }) => {
 
     processFile();
 
-    return () => { if (activeBlobUrl) URL.revokeObjectURL(activeBlobUrl); };
-  }, [attachment.id]);
+    return () => { if (activeBlobUrl && !initialBlobUrl) URL.revokeObjectURL(activeBlobUrl); };
+  }, [attachment?.id, initialBlobUrl]);
 
   // ── DOCX renderer: fires after docxBlob is set and the div ref is mounted ──
   React.useEffect(() => {
@@ -278,7 +284,7 @@ const FilePreviewModal = ({ attachment, onClose }) => {
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <FileText size={15} className="text-primary shrink-0" />
             <span className="text-xs sm:text-sm font-bold text-foreground truncate">{name}</span>
-            {attachment.size && (
+            {attachment?.size && (
               <span className="text-[9px] text-muted-foreground shrink-0">
                 {(attachment.size / 1024).toFixed(0)} KB
               </span>
@@ -290,10 +296,12 @@ const FilePreviewModal = ({ attachment, onClose }) => {
               className="p-2 hover:bg-muted rounded-lg text-primary transition-colors">
               <ExternalLink size={15} />
             </button>
-            <a href={downloadUrl} download title="Download"
-              className="p-2 hover:bg-muted rounded-lg text-primary transition-colors">
-              <ArrowDownToLine size={15} />
-            </a>
+            {downloadUrl && (
+              <a href={downloadUrl} download title="Download"
+                className="p-2 hover:bg-muted rounded-lg text-primary transition-colors">
+                <ArrowDownToLine size={15} />
+              </a>
+            )}
             <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg text-muted-foreground">
               <X size={15} />
             </button>
@@ -439,6 +447,8 @@ const FilePreviewModal = ({ attachment, onClose }) => {
 const PrintStageModal = ({ req, detail, onClose }) => {
   const [selectedStage, setSelectedStage] = useState('all');
   const [generating, setGenerating] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [stagePreviewFile, setStagePreviewFile] = useState(null);
 
   const attachments = detail?.attachments || [];
@@ -518,6 +528,20 @@ const PrintStageModal = ({ req, detail, onClose }) => {
     } finally { setGenerating(false); }
   };
 
+  const handlePreview = async () => {
+    setPreviewing(true);
+    const toastId = toast.loading('Syncing level data for preview...');
+    try {
+      const stageParam = selectedStage === 'all' ? null : selectedStage;
+      const blob = await reqAPI.getDynamicPdf(req.id, stageParam);
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      toast.success('Report levels synchronized!', { id: toastId });
+    } catch (err) {
+      toast.error('Preview failed. Server busy.', { id: toastId });
+    } finally { setPreviewing(false); }
+  };
+
   return (
     <>
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
@@ -584,19 +608,35 @@ const PrintStageModal = ({ req, detail, onClose }) => {
             </div>
           </div>
         )}
-        <div className="p-5 border-t border-border/50 bg-muted/10">
+        <div className="p-5 border-t border-border/50 bg-muted/10 grid grid-cols-2 gap-3">
+          <button
+            onClick={handlePreview}
+            disabled={generating || previewing}
+            className="flex items-center justify-center gap-2 bg-white border border-border/60 hover:bg-muted text-foreground font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-[10px] uppercase tracking-[0.2em] shadow-sm animate-pulse-slow"
+          >
+            {previewing ? <Loader2 size={16} className="animate-spin text-primary" /> : <Eye size={16} className="text-primary" />}
+            {previewing ? 'Syncing...' : 'Preview Report'}
+          </button>
           <button
             onClick={handleGenerate}
-            disabled={generating}
-            className="w-full flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-xs uppercase tracking-widest"
+            disabled={generating || previewing}
+            className="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-black/10"
           >
             {generating ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            {relevantAttachments.length > 0
-              ? `Download Report + ${relevantAttachments.length} Attachment${relevantAttachments.length > 1 ? 's' : ''}`
-              : 'Download Report'}
+            Download
           </button>
         </div>
       </div>
+      {previewUrl && (
+        <FilePreviewModal
+          attachment={{ filename: `Report_Level_${selectedStage}.pdf` }}
+          initialBlobUrl={previewUrl}
+          onClose={() => {
+            URL.revokeObjectURL(previewUrl);
+            setPreviewUrl(null);
+          }}
+        />
+      )}
     </div>
     {stagePreviewFile && <FilePreviewModal attachment={stagePreviewFile} onClose={() => setStagePreviewFile(null)} />}
     </>
