@@ -227,3 +227,15 @@
 .hover-shine-effect:hover::after {
   animation: sidebar-shine 0.6s forwards;
 }
+
+@keyframes orange-electric-pulse {
+  0% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0 rgba(249, 115, 22, 0); }
+  50% { transform: scale(1.02); filter: brightness(1.2); box-shadow: 0 0 20px rgba(249, 115, 22, 0.4); }
+  100% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0 rgba(249, 115, 22, 0); }
+}
+
+.hover-orange-pulse:hover {
+  animation: orange-electric-pulse 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #fb923c !important;
+  background: rgba(251, 146, 60, 0.1) !important;
+}

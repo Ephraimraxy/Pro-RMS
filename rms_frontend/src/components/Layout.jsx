@@ -19,8 +19,8 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
     tabIndex={0}
     title={isCollapsed ? label : ''}
     className={mobile
-      ? `flex flex-col items-center justify-center p-2.5 rounded-2xl cursor-pointer transition-all active:scale-95 outline-none focus-electric-halo ${active ? 'text-white animate-electric-pulse' : 'text-white/40 hover:text-white'}`
-      : `flex items-center group relative px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-300 hover-shine-effect outline-none focus-electric-halo ${isCollapsed ? 'justify-center mx-1' : 'space-x-4 mx-1'} ${active ? 'bg-white/10 text-white shadow-lg shadow-black/20 scale-[0.98] animate-electric-pulse animate-active-hum' : 'text-white/50 hover:bg-white/5 hover:text-white'}`
+      ? `flex flex-col items-center justify-center p-2.5 rounded-2xl cursor-pointer transition-all active:scale-95 outline-none focus-electric-halo hover-orange-pulse ${active ? 'text-[#f97316] animate-electric-pulse' : 'text-white'}`
+      : `flex items-center group relative px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-300 hover-shine-effect outline-none focus-electric-halo hover-orange-pulse ${isCollapsed ? 'justify-center mx-1' : 'space-x-4 mx-1'} ${active ? 'bg-white/10 text-[#f97316] shadow-lg shadow-black/20 scale-[0.98] animate-electric-pulse animate-active-hum' : 'text-white'}`
     }
   >
     <div className={`transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
@@ -36,7 +36,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, mobile = fals
         {label}
       </div>
     )}
-    {mobile && <span className={`text-[9px] font-black mt-1.5 uppercase tracking-tighter transition-all ${active ? 'opacity-100' : 'opacity-40'}`}>{label}</span>}
+    {mobile && <span className={`text-[9px] font-black mt-1.5 uppercase tracking-tighter transition-all ${active ? 'text-[#f97316]' : 'text-white'}`}>{label}</span>}
   </div>
 );
 
