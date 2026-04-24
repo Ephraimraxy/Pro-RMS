@@ -729,8 +729,8 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
     if (currentIsChairman) return !/\bicc\b|integrity|compliance|audit|account/i.test(n);
     // GM → Chairman ONLY (strict upward routing)
     if (currentIsGM) return /ceo|chairman/i.test(n);
-    // HR → GM ONLY (strict upward routing)
-    if (currentIsHR) return /general\s*manager|\bgm\b/i.test(n);
+    // HR → all departments except Chairman/CEO
+    if (currentIsHR) return !/ceo|chairman/i.test(n);
     // Regular depts: peer depts + HR (not GM, Chairman, Audit, ICC, Account)
     return !/general\s*manager|\bgm\b|ceo|chairman|\bicc\b|integrity|compliance|audit|account/i.test(n);
   });
