@@ -948,50 +948,13 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
   const handleApprove = async () => {
     setActing(true);
     try {
-      if (isChairman) {
-        await vettingAPI.finalApprove(req.id, note);
-        toast.success('Final approval granted!');
-        setShowModal(true);
-      } else {
-        const targetDept = isHR
-          ? departments.find(d => /general\s*manager|\bgm\b/i.test(d.name))
-          : departments.find(d => /ceo|chairman/i.test(d.name));
-        if (!targetDept) {
-          toast.error(isHR ? 'GM department not found in system.' : 'Chairman department not found in system.');
-          return;
-        }
-        await forwardAPI.forward(req.id, {
-          targetDepartmentId: targetDept.id,
-          note: note || `Approved by ${deptName}. Forwarding for further review.`,
-          returnToSender: false
-        });
-        toast.success(`Approved and forwarded to ${targetDept.name}.`);
-      }
-      onApproved();
+      await vettingAPI.finalApprove(req.id, note);
+      toast.success('Approved! Now send to vetting.');
+      setShowModal(true);
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Action failed. Please try again.');
+      toast.error(err?.response?.data?.error || 'Approval failed. Please try again.');
     } finally { setActing(false); }
   };
-
-  const handleTreatDirectly = async () => {
-    setTreating(true);
-    try {
-      await vettingAPI.finalApprove(req.id, note);
-      await vettingAPI.vettingAction(req.id, {
-        action: 'treated',
-        comment: note || 'Treated directly by Chairman/CEO.'
-      });
-      await notifyAccount();
-      toast.success('Requisition treated directly. Account has been notified.');
-      onApproved();
-    } catch (err) {
-      toast.error(err?.response?.data?.error || 'Direct treatment failed. Please try again.');
-    } finally { setTreating(false); }
-  };
-
-  const approveLabel = isChairman ? 'Final Approve → Send to Vetting'
-    : isGM ? 'Approve & Forward to Chairman'
-    : 'Approve & Forward to GM';
 
   return (
     <>
@@ -999,9 +962,7 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
         <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
         <div className="flex items-center gap-2 pl-1">
           <Gavel size={14} className="text-emerald-700" />
-          <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">
-            {isChairman ? 'Final Approval' : 'Approve & Forward'}
-          </p>
+          <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Approve</p>
           <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-[9px] font-black text-emerald-700 uppercase">{authorityLabel}</span>
         </div>
         <textarea
@@ -1010,31 +971,14 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
           placeholder="Optional approval note or remarks..."
           className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-300 min-h-[60px] resize-none shadow-inner"
         />
-        <div className={`grid gap-2 ${isChairman ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          <button
-            onClick={handleApprove}
-            disabled={acting || treating}
-            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-emerald-500/20"
-          >
-            {acting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-            {acting ? 'Processing…' : approveLabel}
-          </button>
-          {isChairman && (
-            <button
-              onClick={handleTreatDirectly}
-              disabled={acting || treating}
-              className="flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-teal-500/20"
-            >
-              {treating ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
-              {treating ? 'Processing…' : 'Treat Directly'}
-            </button>
-          )}
-        </div>
-        {isChairman && (
-          <p className="text-[9px] text-emerald-700/60 text-center leading-tight">
-            "Treat Directly" finalizes and notifies Account for audit — no vetting required.
-          </p>
-        )}
+        <button
+          onClick={handleApprove}
+          disabled={acting}
+          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-emerald-500/20"
+        >
+          {acting ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+          {acting ? 'Processing…' : 'Approve → Send to Vetting'}
+        </button>
       </div>
 
       {showModal && (
@@ -1051,27 +995,27 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
 
 // ── Vetting Selection Modal ────────────────────────────────────────────────────
 const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
-  const [vettingPath, setVettingPath] = useState('A'); // 'A' = ICC→Audit→Account | 'B' = Audit only→Account
-  const [selectedId, setSelectedId]   = useState('');
-  const [acting, setActing]           = useState(false);
+  const [selectedId, setSelectedId] = useState('');
+  const [acting, setActing]         = useState(false);
 
-  // Path A: ICC can be the first dept (then Audit, then Account)
-  // Path B: skip ICC — only Audit qualifies as first entry point
-  const vettingDepts = departments.filter(d => {
-    const n = (d.name || '').toLowerCase();
-    if (vettingPath === 'B') return /audit/i.test(n);
-    return /\bicc\b|integrity|compliance|audit/i.test(n);
-  });
+  // Offer ICC and Audit as starting points (Account is never a start)
+  const vettingDepts = departments.filter(d =>
+    /\bicc\b|integrity|compliance|audit/i.test(d.name || '')
+  );
 
-  // Reset selection when path changes
-  const handlePathChange = (path) => { setVettingPath(path); setSelectedId(''); };
+  const selectedDept = vettingDepts.find(d => String(d.id) === String(selectedId));
+  const isAuditDirect = selectedDept && /audit/i.test(selectedDept.name);
+  const pathHint = !selectedId ? null
+    : isAuditDirect
+      ? 'ICC skipped — flow will be: Audit → Account'
+      : 'Full chain — flow will be: ICC → Audit → Account';
 
   const handleSend = async () => {
     if (!selectedId) { toast.error('Please select a department.'); return; }
     setActing(true);
     try {
       await vettingAPI.sendToVetting(reqId, parseInt(selectedId));
-      toast.success('Requisition sent to vetting department!');
+      toast.success('Requisition sent to vetting!');
       onDone();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to send to vetting.');
@@ -1087,40 +1031,16 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
           </div>
           <div>
             <h3 className="text-base font-black text-foreground">Send to Vetting</h3>
-            <p className="text-xs text-muted-foreground">Select the vetting path and first department</p>
+            <p className="text-xs text-muted-foreground">Choose where vetting starts (ICC or Audit directly)</p>
           </div>
           <button onClick={onClose} className="ml-auto p-2 rounded-xl hover:bg-muted transition-colors">
             <X size={16} className="text-muted-foreground" />
           </button>
         </div>
 
-        {/* Path selector */}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => handlePathChange('A')}
-            className={`flex flex-col gap-1 p-3 rounded-xl border-2 text-left transition-all ${vettingPath === 'A' ? 'border-emerald-500 bg-emerald-50' : 'border-border bg-muted/20 hover:bg-muted/40'}`}
-          >
-            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Path A</span>
-            <span className="text-xs font-semibold text-foreground">ICC → Audit → Account</span>
-          </button>
-          <button
-            onClick={() => handlePathChange('B')}
-            className={`flex flex-col gap-1 p-3 rounded-xl border-2 text-left transition-all ${vettingPath === 'B' ? 'border-blue-500 bg-blue-50' : 'border-border bg-muted/20 hover:bg-muted/40'}`}
-          >
-            <span className="text-[10px] font-black uppercase tracking-widest text-blue-700">Path B</span>
-            <span className="text-xs font-semibold text-foreground">Audit only → Account</span>
-          </button>
-        </div>
-
-        <div className={`rounded-xl p-3 text-xs font-semibold ${vettingPath === 'A' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-blue-50 border border-blue-200 text-blue-800'}`}>
-          {vettingPath === 'A'
-            ? <><strong>Path A:</strong> ICC will vet first, then forward to Audit, then Account treats.</>
-            : <><strong>Path B:</strong> ICC is skipped. Audit vets directly, then Account treats.</>}
-        </div>
-
         <div className="space-y-2">
           <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-            {vettingPath === 'A' ? 'First Vetting Department (ICC or Audit)' : 'Vetting Department (Audit)'}
+            First Vetting Department
           </label>
           <select
             value={selectedId}
@@ -1128,18 +1048,18 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
             className="w-full bg-white border border-border rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none shadow-sm"
           >
             <option value="">— Select department —</option>
-            {vettingDepts.map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-            {vettingDepts.length === 0 && <option disabled>No matching vetting department found</option>}
+            {vettingDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {vettingDepts.length === 0 && <option disabled>No vetting departments found</option>}
           </select>
+          {pathHint && (
+            <p className={`text-[11px] font-semibold px-3 py-2 rounded-lg ${isAuditDirect ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+              {pathHint}
+            </p>
+          )}
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:bg-muted transition-all"
-          >
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:bg-muted transition-all">
             Skip for Now
           </button>
           <button
@@ -1156,90 +1076,54 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
   );
 };
 
-// ── Vetting Panel (for ICC / Audit / Account + Chairman treat) ───────────────
+// ── Vetting Panel (ICC / Audit / Account — role-specific auto-routing) ─────────
 const VettingPanel = ({ req, detail, user, departments, onDone }) => {
-  const [comment, setComment]     = useState('');
-  const [file, setFile]           = useState(null);
-  const [acting, setActing]       = useState(false);
-  const [mode, setMode]           = useState(null); // 'forward' | 'return'
-  const [nextDeptId, setNextDeptId] = useState('');
-  const [returnDeptId, setReturnDeptId] = useState('');
+  const [comment, setComment] = useState('');
+  const [acting, setActing]   = useState(false);
   const fileRef = React.useRef(null);
+  const [file, setFile]       = useState(null);
 
   const deptName = user?.name || '';
-  const isChairman = /ceo|chairman/i.test(deptName);
   const currentVettingDeptId = detail?.currentVettingDeptId ? parseInt(detail.currentVettingDeptId) : null;
   const isCurrentVetter = user?.deptId && currentVettingDeptId === user.deptId;
   const finalApprovalStatus = detail?.finalApprovalStatus;
 
-  const canTreat   = isChairman || isCurrentVetter;
-  const canForward = isCurrentVetter;
-  const canReturn  = isCurrentVetter;
-
-  if (!canTreat && !canForward) return null;
+  if (!isCurrentVetter) return null;
   if (!finalApprovalStatus || finalApprovalStatus === 'none') return null;
   if (finalApprovalStatus === 'treated') return null;
 
-  // Next in chain: ICC(0) → Audit(1) → Account(2)
-  const getChainIndex = (name) => {
-    if (/\bicc\b|integrity|compliance/i.test(name)) return 0;
-    if (/audit/i.test(name)) return 1;
-    if (/account/i.test(name)) return 2;
-    return -1;
-  };
-  const myChainIdx = getChainIndex(deptName);
-  const nextDepts = departments.filter(d => {
-    const idx = getChainIndex(d.name);
-    return idx > myChainIdx && idx >= 0;
-  });
+  const isICC     = /\bicc\b|integrity|compliance/i.test(deptName);
+  const isAudit   = /\baudit\b/i.test(deptName);
+  const isAccount = /\baccount\b/i.test(deptName);
 
-  // Return targets: HR, GM, Chairman (authority chain only)
-  const returnDepts = departments.filter(d =>
-    /\bhr\b|human\s*resource|general\s*manager|\bgm\b|ceo|chairman/i.test(d.name) &&
-    d.id !== user?.deptId
-  );
+  // Auto-resolve next/return dept from departments list (no dropdown needed)
+  const auditDept   = departments.find(d => /\baudit\b/i.test(d.name));
+  const accountDept = departments.find(d => /\baccount\b/i.test(d.name));
 
-  const submit = async (action) => {
-    if (action === 'forward' && !nextDeptId) { setMode('forward'); return; }
-    if (action === 'return'  && !returnDeptId) { setMode('return');  return; }
+  // Role-specific labels
+  const roleLabel      = isICC ? 'ICC Vetting' : isAudit ? 'Audit Vetting' : isAccount ? 'Account Vetting' : 'Vetting Review';
+  const primaryLabel   = isICC ? 'Submit to Audit' : isAudit ? 'Forward to Account' : 'Mark Treated';
+  const primaryDisabled = (isICC && !auditDept) || (isAudit && !accountDept);
+
+  const act = async (action) => {
     setActing(true);
     try {
-      if (action === 'return') {
-        await forwardAPI.forward(req.id, {
-          targetDepartmentId: parseInt(returnDeptId),
-          note: comment || 'Returned for correction or review.',
-          returnToSender: false
-        });
-        toast.success('Document returned to authority chain for review.');
-      } else {
-        await vettingAPI.vettingAction(req.id, {
-          action,
-          comment: comment || undefined,
-          nextDeptId: action === 'forward' ? parseInt(nextDeptId) : undefined,
-          file: file || undefined
-        });
-        if (action === 'treated') {
-          toast.success('Requisition marked as treated!');
-          // When Chairman treats from vetting panel, notify Account for audit trail
-          if (isChairman) {
-            const accountDept = departments.find(d => /\baccount/i.test(d.name));
-            if (accountDept) {
-              try {
-                await forwardAPI.forward(req.id, {
-                  targetDepartmentId: accountDept.id,
-                  note: '[Direct Treatment] Chairman/CEO treated directly. Account notified for audit trail.',
-                  returnToSender: false
-                });
-              } catch {}
-            }
-          }
-        } else {
-          toast.success('Forwarded to next vetting department.');
-        }
+      if (action === 'forward') {
+        const nextDeptId = isICC ? auditDept?.id : accountDept?.id;
+        if (!nextDeptId) { toast.error('Next department not found.'); return; }
+        await vettingAPI.vettingAction(req.id, { action: 'forward', comment: comment || undefined, nextDeptId });
+        toast.success(isICC ? 'Submitted to Audit.' : 'Forwarded to Account.');
+      } else if (action === 'treated') {
+        await vettingAPI.vettingAction(req.id, { action: 'treated', comment: comment || undefined });
+        toast.success('Requisition marked as treated!');
+      } else if (action === 'return') {
+        if (!comment.trim()) { toast.error('Please enter a reason before returning.'); setActing(false); return; }
+        await vettingAPI.vettingAction(req.id, { action: 'return', comment });
+        toast.success('Returned to previous department.');
       }
       onDone();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Action failed. Please try again.');
+      toast.error(err?.response?.data?.error || 'Action failed.');
     } finally { setActing(false); }
   };
 
@@ -1248,20 +1132,17 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
       <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
       <div className="flex items-center gap-2 pl-1">
         <Award size={14} className="text-blue-700" />
-        <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Vetting Review</p>
-        {finalApprovalStatus === 'vetting' && (
-          <span className="ml-auto px-2 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-[9px] font-black text-blue-700 uppercase">In Vetting</span>
-        )}
+        <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest">{roleLabel}</p>
+        <span className="ml-auto px-2 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-[9px] font-black text-blue-700 uppercase">In Vetting</span>
       </div>
 
       <textarea
         value={comment}
         onChange={e => setComment(e.target.value)}
-        placeholder="Vetting comment, observations, or return reason..."
+        placeholder={isAccount ? 'Treatment remarks...' : 'Vetting comment or return reason (required to return)...'}
         className="w-full bg-white border border-blue-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-300 min-h-[72px] resize-none shadow-inner"
       />
 
-      {/* File attach */}
       <div>
         <input type="file" ref={fileRef} className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
         {file ? (
@@ -1278,70 +1159,28 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
         )}
       </div>
 
-      {/* Forward dept selector */}
-      {mode === 'forward' && (
-        <div className="p-3 bg-white border border-blue-200 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
-          <label className="text-[10px] font-black text-blue-800 uppercase tracking-widest flex items-center justify-between">
-            <span>Forward to next vetting dept</span>
-            <button onClick={() => setMode(null)} className="text-muted-foreground text-[10px] normal-case font-normal hover:text-foreground px-2 py-0.5 rounded hover:bg-black/5">Cancel</button>
-          </label>
-          <select value={nextDeptId} onChange={e => setNextDeptId(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none shadow-sm">
-            <option value="">— Select next department —</option>
-            {nextDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            {nextDepts.length === 0 && <option disabled>No further departments in chain</option>}
-          </select>
-          <button onClick={() => submit('forward')} disabled={!nextDeptId || acting}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm">
-            {acting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} Confirm Forward
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        {/* Primary action: ICC→Submit, Audit→Forward, Account→Treated */}
+        {!isAccount ? (
+          <button onClick={() => act('forward')} disabled={acting || primaryDisabled}
+            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm shadow-sm">
+            {acting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {primaryLabel}
           </button>
-        </div>
-      )}
-
-      {/* Return dept selector */}
-      {mode === 'return' && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 animate-in fade-in slide-in-from-top-2">
-          <label className="text-[10px] font-black text-amber-800 uppercase tracking-widest flex items-center justify-between">
-            <span>Return to authority chain</span>
-            <button onClick={() => setMode(null)} className="text-muted-foreground text-[10px] normal-case font-normal hover:text-foreground px-2 py-0.5 rounded hover:bg-black/5">Cancel</button>
-          </label>
-          <select value={returnDeptId} onChange={e => setReturnDeptId(e.target.value)}
-            className="w-full bg-white border border-border rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 appearance-none shadow-sm">
-            <option value="">— Select department —</option>
-            {returnDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-          <button onClick={() => submit('return')} disabled={!returnDeptId || acting}
-            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm">
-            {acting ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />} Confirm Return
+        ) : (
+          <button onClick={() => act('treated')} disabled={acting}
+            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm shadow-sm">
+            {acting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            Mark Treated
           </button>
-        </div>
-      )}
-
-      {mode === null && (
-        <div className={`grid gap-2 pt-1 ${[canForward && nextDepts.length > 0, canReturn, canTreat].filter(Boolean).length > 1 ? 'grid-cols-3' : 'grid-cols-1'}`}>
-          {canForward && nextDepts.length > 0 && (
-            <button onClick={() => submit('forward')}
-              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-sm transition-all shadow-sm">
-              <ArrowRightCircle size={18} />
-              <span className="text-[10px]">Forward to Next</span>
-            </button>
-          )}
-          {canReturn && (
-            <button onClick={() => submit('return')}
-              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-sm transition-all shadow-sm">
-              <RotateCcw size={18} />
-              <span className="text-[10px]">Return...</span>
-            </button>
-          )}
-          {canTreat && (
-            <button onClick={() => submit('treated')} disabled={acting}
-              className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm transition-all disabled:opacity-50 shadow-sm">
-              {acting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-              <span className="text-[10px]">Mark Treated</span>
-            </button>
-          )}
-        </div>
-      )}
+        )}
+        {/* Return button — auto-routes to previous dept via backend */}
+        <button onClick={() => act('return')} disabled={acting}
+          className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm shadow-sm">
+          {acting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+          Return
+        </button>
+      </div>
     </div>
   );
 };

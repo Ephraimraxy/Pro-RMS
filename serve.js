@@ -53,17 +53,29 @@ let isSystemReady = false; // Flag for database/seed readiness
 
 // ── Final Approval Authority ──────────────────────────────────────────────────
 // Returns: 'hr' | 'gm' | 'chairman' | null (no authority)
-const checkFinalApproveAuthority = (deptName, amount) => {
+const checkFinalApproveAuthority = (deptName, amount, isMaterial = false) => {
   const n = (deptName || '').toLowerCase();
   const amt = parseFloat(amount) || 0;
   const isChairman = /ceo|chairman/i.test(n);
   const isGM = /general\s*manager|\bgm\b/i.test(n);
   const isHR = /\bhr\b|human\s*resource/i.test(n);
 
-  if (isChairman) return 'chairman'; // Chairman/CEO approves all amounts
-  if (isGM && amt >= 50000) return 'gm';
+  // Material requests have no cash threshold — any authority tier can approve
+  if (isMaterial) {
+    if (isChairman) return 'chairman';
+    if (isGM)       return 'gm';
+    if (isHR)       return 'hr';
+    return null;
+  }
+
+  // Cash threshold-based:
+  // HR  → below ₦50,000
+  // GM  → ₦50,000 – ₦99,999
+  // Chairman/CEO → ₦100,000 and above
+  if (isChairman && amt >= 100000) return 'chairman';
+  if (isGM && amt >= 50000 && amt < 100000) return 'gm';
   if (isHR && amt < 50000) return 'hr';
-  return null; // Not authorised for this amount
+  return null; // Not authorised for this amount band
 };
 
 // Vetting chain order: ICC → Audit → Account
@@ -1947,7 +1959,7 @@ app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, r
 
     const requisition = await prisma.requisition.findUnique({
       where: { id: reqId },
-      select: { id: true, amount: true, finalApprovalStatus: true }
+      select: { id: true, amount: true, type: true, finalApprovalStatus: true }
     });
 
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
@@ -1956,7 +1968,8 @@ app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, r
       return res.status(409).json({ error: 'This requisition has already been finally approved.' });
     }
 
-    const authority = isAdmin ? 'chairman' : checkFinalApproveAuthority(deptName, requisition.amount || 0);
+    const isMaterial = /^material/i.test(requisition.type || '');
+    const authority = isAdmin ? 'chairman' : checkFinalApproveAuthority(deptName, requisition.amount || 0, isMaterial);
     if (!authority) {
       return res.status(403).json({ error: `Your department does not have authority to final-approve this amount.` });
     }
@@ -2065,7 +2078,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     const reqId = parseInt(id);
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const parsed = z.object({
-      action: z.enum(['forward', 'treated']),
+      action: z.enum(['forward', 'treated', 'return']),
       comment: z.string().optional(),
       nextDeptId: z.number().optional()
     }).safeParse(body || {});
@@ -2077,7 +2090,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
 
     const requisition = await prisma.requisition.findUnique({
       where: { id: reqId },
-      include: { finalApprovedByDept: { select: { name: true } } }
+      include: { finalApprovedByDept: { select: { id: true, name: true } } }
     });
 
     if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
@@ -2085,7 +2098,8 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     // Allow: current vetting dept, final approving dept (chairman can treat), or admin
     const canAct = isAdmin
       || (requisition.currentVettingDeptId === userDeptId)
-      || (action === 'treated' && requisition.finalApprovedByDeptId === userDeptId);
+      || (action === 'treated' && requisition.finalApprovedByDeptId === userDeptId)
+      || (action === 'return' && requisition.currentVettingDeptId === userDeptId);
 
     if (!canAct) {
       return res.status(403).json({ error: 'You are not authorized to perform vetting actions for this requisition.' });
@@ -2132,7 +2146,70 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
       }
     });
 
-    if (action === 'treated') {
+    if (action === 'return') {
+      // Auto-determine return destination based on chain position
+      const myChainIdx = getVettingChainIndex(actingDeptName);
+      const allDepts = await prisma.department.findMany({ select: { id: true, name: true } });
+      const iccDept   = allDepts.find(d => /\bicc\b|integrity|compliance/i.test(d.name));
+      const auditDept = allDepts.find(d => /\baudit\b/i.test(d.name));
+
+      let returnToDeptId = null;
+      let resetVetting = false;
+
+      if (myChainIdx === 0 || myChainIdx === -1) {
+        // ICC → return to final-approving authority; reset vetting entirely
+        returnToDeptId = requisition.finalApprovedByDeptId;
+        resetVetting = true;
+      } else if (myChainIdx === 1) {
+        // Audit → return to ICC if ICC was in the chain, else to approving authority
+        const iccWasPresent = iccDept && await prisma.vettingEvent.findFirst({
+          where: { requisitionId: reqId, deptId: iccDept.id }
+        });
+        if (iccWasPresent) {
+          returnToDeptId = iccDept.id; // intra-vetting return to ICC
+        } else {
+          returnToDeptId = requisition.finalApprovedByDeptId; // ICC was skipped; reset
+          resetVetting = true;
+        }
+      } else if (myChainIdx === 2) {
+        // Account → return to Audit (intra-vetting)
+        returnToDeptId = auditDept?.id || null;
+      }
+
+      if (!returnToDeptId) return res.status(400).json({ error: 'Could not determine return destination.' });
+
+      if (resetVetting) {
+        // Send back to approving authority — reset approval so they can re-evaluate
+        await prisma.requisition.update({
+          where: { id: reqId },
+          data: {
+            finalApprovalStatus: 'none',
+            currentVettingDeptId: null,
+            finalApprovedByDeptId: null,
+            finalApprovedAt: null,
+            finalApprovedNote: null,
+            targetDepartmentId: returnToDeptId
+          }
+        });
+      } else {
+        // Intra-vetting return — stay in vetting, just move to previous dept
+        await prisma.requisition.update({
+          where: { id: reqId },
+          data: { currentVettingDeptId: returnToDeptId }
+        });
+      }
+
+      await notifyDepartmentHead({
+        departmentId: returnToDeptId,
+        requisition: { id: reqId, title: requisition.title || `Requisition #${id}` },
+        subject: `↩️ Requisition Returned for Review: #${id}`,
+        lines: [
+          `A requisition has been returned to your department by ${actingDeptName}.`,
+          comment ? `Reason: ${comment}` : null
+        ].filter(Boolean)
+      }).catch(() => { });
+
+    } else if (action === 'treated') {
       await prisma.requisition.update({
         where: { id: reqId },
         data: {
@@ -2155,6 +2232,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
         }).catch(() => { });
       }
     } else {
+      // forward
       if (!nextDeptId) return res.status(400).json({ error: 'nextDeptId is required for forward action' });
       const nextDept = await prisma.department.findUnique({ where: { id: nextDeptId }, select: { name: true } });
       if (!nextDept) return res.status(404).json({ error: 'Next vetting department not found' });
@@ -2179,7 +2257,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     await prisma.activityLog.create({
       data: {
         userId: getNumericUserId(req.user) || null,
-        action: action === 'treated' ? 'Requisition Treated' : 'Vetting Forwarded',
+        action: action === 'treated' ? 'Requisition Treated' : action === 'return' ? 'Vetting Returned' : 'Vetting Forwarded',
         details: `Req #${id}: ${action} by ${actingDeptName}. ${comment ? `Note: ${comment}` : ''}`
       }
     });
