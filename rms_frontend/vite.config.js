@@ -32,7 +32,63 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // Requisition list + detail — NetworkFirst, 5 s timeout, fall back to cache
+            urlPattern: /^\/api\/requisitions/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-requisitions',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 100, maxAgeSeconds: 86400 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            // Department list — NetworkFirst, rarely changes
+            urlPattern: /^\/api\/departments/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-departments',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            // Workflow stages — StaleWhileRevalidate (infrequently updated)
+            urlPattern: /^\/api\/workflow-stages/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'api-workflows',
+              expiration: { maxEntries: 10, maxAgeSeconds: 86400 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            // Notifications — NetworkFirst, short cache window
+            urlPattern: /^\/api\/notifications/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-notifications',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 20, maxAgeSeconds: 3600 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            // Audit logs — NetworkFirst
+            urlPattern: /^\/api\/audit-logs/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-audit',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 20, maxAgeSeconds: 86400 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          }
+        ]
       }
     })
   ],

@@ -60,7 +60,6 @@ const MyActivity = React.lazy(() => import('./components/MyActivity'))
 
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AIFeaturesProvider } from './context/AIFeaturesContext'
-import { Wifi, WifiOff } from 'lucide-react'
 import { Toaster, toast } from 'react-hot-toast'
 
 import { flushSyncQueue, getDepartmentById, updateDepartmentHead } from './lib/store';
@@ -89,7 +88,7 @@ const NetworkProvider = ({ children }) => {
 
         if (response.ok && !isOnline) {
           setIsOnline(true);
-          toast.success('Connection Restored. Syncing drafts...', {
+          toast.success('Connection Restored. Syncing pending actions…', {
             icon: <img src="/CSS_Group.png" className="w-8 h-5 object-cover rounded" alt="" />
           });
           flushSyncQueue();

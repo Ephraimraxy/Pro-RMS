@@ -1,14 +1,15 @@
 import localforage from 'localforage';
 import { toast } from 'react-hot-toast';
 import React from 'react';
-import api, { deptAPI, reqAPI, auditAPI, userAPI } from './api';
+import api, { deptAPI, reqAPI, auditAPI, userAPI, forwardAPI, vettingAPI } from './api';
 
 // ── Configure storage namespaces ──
 const requisitionStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'requisitions' });
 const activityStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'activity' });
 const workflowStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'workflows' });
 const departmentStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'departments' });
-const syncQueueStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'sync_queue' });
+const syncQueueStore    = localforage.createInstance({ name: 'CSS_RMS', storeName: 'sync_queue' });
+const notificationStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'notifications' });
 
 // ── Seed data ──
 const SEED_REQUISITIONS = [];
@@ -109,7 +110,18 @@ export async function flushSyncQueue({ force = false } = {}) {
       continue;
     }
     try {
-      await reqAPI.addRequisition(entry.payload);
+      const type = entry.type || 'addRequisition';
+      if (type === 'addRequisition') {
+        await reqAPI.addRequisition(entry.payload);
+      } else if (type === 'forward') {
+        await forwardAPI.forward(entry.reqId, entry.payload);
+      } else if (type === 'finalApprove') {
+        await vettingAPI.finalApprove(entry.reqId, entry.payload.note);
+      } else if (type === 'sendToVetting') {
+        await vettingAPI.sendToVetting(entry.reqId, entry.payload.vettingDeptId);
+      } else if (type === 'vettingAction') {
+        await vettingAPI.vettingAction(entry.reqId, entry.payload);
+      }
       synced += 1;
     } catch (err) {
       const retryCount = (entry.retryCount || 0) + 1;
@@ -125,7 +137,8 @@ export async function flushSyncQueue({ force = false } = {}) {
 
   await syncQueueStore.setItem('pending', remaining);
   if (synced > 0) {
-    toast.success(`Synced ${synced} offline record(s) to server!`);
+    toast.success(`Synced ${synced} pending action(s) to server!`);
+    window.dispatchEvent(new CustomEvent('requisitionUpdated'));
   }
   return { synced, pending: remaining.length };
 }
@@ -318,10 +331,12 @@ export async function getNotifications() {
   try {
     const remote = await notificationAPI.getNotifications();
     const data = Array.isArray(remote) ? remote : [];
-    return data.map(n => ({ ...n, message: n.message || n.content }));
+    const mapped = data.map(n => ({ ...n, message: n.message || n.content }));
+    await notificationStore.setItem('all', mapped);
+    return mapped;
   } catch (err) {
     console.warn("Offline: Could not fetch notifications", err);
-    return [];
+    return (await notificationStore.getItem('all')) || [];
   }
 }
 
@@ -480,6 +495,74 @@ export async function uploadUserSignature(userId, file) {
     return result;
   } catch (err) {
     toast.error("Failed to upload signature");
+    throw err;
+  }
+}
+
+// ── Offline-safe write helpers ────────────────────────────────────────────────
+// Returns true when the error is a network failure (not a 4xx validation error).
+const isNetworkError = (err) => {
+  const status = err?.response?.status;
+  if (status && status >= 400) return false;
+  return true;
+};
+
+async function queueOfflineAction(type, reqId, payload) {
+  const queue = (await syncQueueStore.getItem('pending')) || [];
+  queue.push({ type, reqId, payload, retryCount: 0, nextAttemptAt: Date.now(), lastError: null });
+  await syncQueueStore.setItem('pending', queue);
+  toast('Offline: Action queued — will sync when reconnected.');
+}
+
+export async function forwardRequisition(reqId, { targetDepartmentId, note, returnToSender }) {
+  try {
+    return await forwardAPI.forward(reqId, { targetDepartmentId, note, returnToSender });
+  } catch (err) {
+    if (isNetworkError(err)) {
+      await queueOfflineAction('forward', reqId, { targetDepartmentId, note, returnToSender });
+      return null;
+    }
+    throw err;
+  }
+}
+
+export async function finalApproveRequisition(reqId, note = '') {
+  try {
+    return await vettingAPI.finalApprove(reqId, note);
+  } catch (err) {
+    if (isNetworkError(err)) {
+      await queueOfflineAction('finalApprove', reqId, { note });
+      return null;
+    }
+    throw err;
+  }
+}
+
+export async function sendToVettingRequisition(reqId, vettingDeptId) {
+  try {
+    return await vettingAPI.sendToVetting(reqId, vettingDeptId);
+  } catch (err) {
+    if (isNetworkError(err)) {
+      await queueOfflineAction('sendToVetting', reqId, { vettingDeptId });
+      return null;
+    }
+    throw err;
+  }
+}
+
+// File attachments cannot be serialised to IndexedDB — block them offline.
+export async function vettingActionRequisition(reqId, { action, comment, nextDeptId, file } = {}) {
+  if (file && !navigator.onLine) {
+    toast.error('File attachments require an active connection.');
+    throw new Error('Offline — file attachments blocked');
+  }
+  try {
+    return await vettingAPI.vettingAction(reqId, { action, comment, nextDeptId, file });
+  } catch (err) {
+    if (!file && isNetworkError(err)) {
+      await queueOfflineAction('vettingAction', reqId, { action, comment, nextDeptId });
+      return null;
+    }
     throw err;
   }
 }

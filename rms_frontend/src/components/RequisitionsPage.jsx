@@ -5,8 +5,8 @@ import ApprovalActionPanel from './ApprovalActionPanel';
 import ConfirmModal from './ConfirmModal';
 import VoiceDictation from './VoiceDictation';
 import { useAuth } from '../context/AuthContext';
-import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments } from '../lib/store';
-import { forwardAPI, aiAPI, settingsAPI, vettingAPI } from '../lib/api';
+import { getRequisitions, getRequisitionDetail, updateRequisitionStatus, downloadSignedPdf, downloadDynamicPdf, getDepartments, forwardRequisition, finalApproveRequisition, sendToVettingRequisition, vettingActionRequisition } from '../lib/store';
+import { aiAPI, settingsAPI } from '../lib/api';
 import { useAIFeatures } from '../context/AIFeaturesContext';
 import { toast } from 'react-hot-toast';
 import {
@@ -777,12 +777,14 @@ const RespondPanel = ({ req, detail, departments, onDone }) => {
     
     setActing(true);
     try {
-      await forwardAPI.forward(req.id, {
+      const result = await forwardRequisition(req.id, {
         targetDepartmentId: actionMode === 'forward' ? parseInt(targetId) : null,
         note,
         returnToSender: actionMode === 'return'
       });
-      toast.success(actionMode === 'return' ? `Requisition returned to ${returnTarget?.name || 'sender'}.` : 'Requisition forwarded successfully.');
+      if (result !== null) {
+        toast.success(actionMode === 'return' ? `Requisition returned to ${returnTarget?.name || 'sender'}.` : 'Requisition forwarded successfully.');
+      }
       onDone();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'This action could not be completed. Please try again.');
@@ -936,7 +938,7 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
     const accountDept = departments.find(d => /\baccount/i.test(d.name));
     if (accountDept) {
       try {
-        await forwardAPI.forward(req.id, {
+        await forwardRequisition(req.id, {
           targetDepartmentId: accountDept.id,
           note: '[Direct Treatment] Chairman/CEO treated directly. Account notified for audit trail.',
           returnToSender: false
@@ -948,8 +950,8 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
   const handleApprove = async () => {
     setActing(true);
     try {
-      await vettingAPI.finalApprove(req.id, note);
-      toast.success('Approved! Now send to vetting.');
+      const result = await finalApproveRequisition(req.id, note);
+      if (result !== null) toast.success('Approved! Now send to vetting.');
       setShowModal(true);
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Approval failed. Please try again.');
@@ -1014,8 +1016,8 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
     if (!selectedId) { toast.error('Please select a department.'); return; }
     setActing(true);
     try {
-      await vettingAPI.sendToVetting(reqId, parseInt(selectedId));
-      toast.success('Requisition sent to vetting!');
+      const result = await sendToVettingRequisition(reqId, parseInt(selectedId));
+      if (result !== null) toast.success('Requisition sent to vetting!');
       onDone();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Failed to send to vetting.');
@@ -1108,18 +1110,19 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
   const act = async (action) => {
     setActing(true);
     try {
+      let result = null;
       if (action === 'forward') {
         const nextDeptId = isICC ? auditDept?.id : accountDept?.id;
-        if (!nextDeptId) { toast.error('Next department not found.'); return; }
-        await vettingAPI.vettingAction(req.id, { action: 'forward', comment: comment || undefined, nextDeptId });
-        toast.success(isICC ? 'Submitted to Audit.' : 'Forwarded to Account.');
+        if (!nextDeptId) { toast.error('Next department not found.'); setActing(false); return; }
+        result = await vettingActionRequisition(req.id, { action: 'forward', comment: comment || undefined, nextDeptId, file: file || undefined });
+        if (result !== null) toast.success(isICC ? 'Submitted to Audit.' : 'Forwarded to Account.');
       } else if (action === 'treated') {
-        await vettingAPI.vettingAction(req.id, { action: 'treated', comment: comment || undefined });
-        toast.success('Requisition marked as treated!');
+        result = await vettingActionRequisition(req.id, { action: 'treated', comment: comment || undefined, file: file || undefined });
+        if (result !== null) toast.success('Requisition marked as treated!');
       } else if (action === 'return') {
         if (!comment.trim()) { toast.error('Please enter a reason before returning.'); setActing(false); return; }
-        await vettingAPI.vettingAction(req.id, { action: 'return', comment });
-        toast.success('Returned to previous department.');
+        result = await vettingActionRequisition(req.id, { action: 'return', comment, file: file || undefined });
+        if (result !== null) toast.success('Returned to previous department.');
       }
       onDone();
     } catch (err) {
