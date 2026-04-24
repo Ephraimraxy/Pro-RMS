@@ -2897,34 +2897,120 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
     let rawContent = requisition.content || requisition.description || 'No content provided.';
 
     // Smart Parsing for JSON content (Cash/Material separation)
+    let parsedContent = null;
     if (rawContent.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(rawContent);
-        // If it's a Material Requisition, extract description
-        // If it's a Cash Request, extract project comment
-        rawContent = parsed.description || parsed.comment || rawContent;
-      } catch (e) { /* fallback to raw */ }
+      try { parsedContent = JSON.parse(rawContent); } catch (e) { /* fallback */ }
     }
 
-    const plainContent = sanitizeText(stripHtml(rawContent));
-    const paragraphs = plainContent.split(/\n+/).filter(Boolean);
+    const hasItems = parsedContent && Array.isArray(parsedContent.items) && parsedContent.items.length > 0;
 
-    for (const para of paragraphs) {
-      ensureSpace(20);
-      drawWrappedText(para, { indent: isMemo ? 20 : 5 });
-      y -= 5;
-    }
+    if (hasItems) {
+      // ── Itemized Table for Cash Requests ──────────────────────────────────
+      const items = parsedContent.items;
+      const itemComment = parsedContent.comment ? sanitizeText(parsedContent.comment) : null;
+      if (itemComment) { drawWrappedText(itemComment, { indent: 5 }); y -= 10; }
 
-    // ── Amount block (for Requisition Voucher only) ─────
-    if (!isMemo && isFinancial) {
-      y -= 10;
-      ensureSpace(40);
-      page.drawLine({ start: { x: margin, y: y + 8 }, end: { x: A4_W - margin, y: y + 8 }, thickness: 0.5 });
-      const amtLabel = 'TOTAL AMOUNT:';
-      const amtValue = `NGN ${Number(requisition.amount).toLocaleString()}`;
-      page.drawText(amtLabel, { x: margin, y, size: 12, font: boldFont });
-      page.drawText(amtValue, { x: A4_W - margin - boldFont.widthOfTextAtSize(amtValue, 12), y, size: 12, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
-      y -= 25;
+      // Column widths (total = contentWidth = 495)
+      const snW = 28, qtyW = 38, amtNW = 98, amtKW = 35;
+      const descW = contentWidth - snW - qtyW - amtNW - amtKW; // 296
+      const snX = margin, qtyX = snX + snW, descX = qtyX + qtyW;
+      const amtNX = descX + descW, amtKX = amtNX + amtNW;
+      const tableRight = amtKX + amtKW;
+      const rowH = 18, headerH = 30;
+      const tableH = headerH + rowH * (items.length + 1); // +1 for total row
+
+      ensureSpace(tableH + 20);
+      const tableTop = y;
+
+      // Header background
+      page.drawRectangle({ x: snX, y: tableTop - headerH, width: tableRight - snX, height: headerH, color: rgb(0.92, 0.94, 0.98), opacity: 1 });
+
+      // Outer border
+      const borderC = rgb(0.15, 0.15, 0.15);
+      page.drawLine({ start: { x: snX, y: tableTop }, end: { x: tableRight, y: tableTop }, thickness: 0.8, color: borderC });
+      page.drawLine({ start: { x: snX, y: tableTop - tableH }, end: { x: tableRight, y: tableTop - tableH }, thickness: 0.8, color: borderC });
+      page.drawLine({ start: { x: snX, y: tableTop }, end: { x: snX, y: tableTop - tableH }, thickness: 0.8, color: borderC });
+      page.drawLine({ start: { x: tableRight, y: tableTop }, end: { x: tableRight, y: tableTop - tableH }, thickness: 0.8, color: borderC });
+
+      // Header bottom line
+      page.drawLine({ start: { x: snX, y: tableTop - headerH }, end: { x: tableRight, y: tableTop - headerH }, thickness: 0.8, color: borderC });
+
+      // Vertical column separators (full table height)
+      for (const colX of [qtyX, descX, amtNX, amtKX]) {
+        page.drawLine({ start: { x: colX, y: tableTop }, end: { x: colX, y: tableTop - tableH }, thickness: 0.5, color: rgb(0.35, 0.35, 0.35) });
+      }
+
+      // "Amount" spanning text in top half of header
+      const amtHdr = 'Amount';
+      const amtHdrW = boldFont.widthOfTextAtSize(amtHdr, 9);
+      page.drawText(amtHdr, { x: amtNX + (amtNW + amtKW) / 2 - amtHdrW / 2, y: tableTop - 11, size: 9, font: boldFont });
+      // Mid-divider inside header (only over Amount columns)
+      page.drawLine({ start: { x: amtNX, y: tableTop - headerH / 2 }, end: { x: tableRight, y: tableTop - headerH / 2 }, thickness: 0.4, color: rgb(0.4, 0.4, 0.4) });
+
+      // Column header labels (bottom half)
+      const hdrY = tableTop - headerH + 6;
+      page.drawText('S/N',              { x: snX + 5,  y: hdrY, size: 9, font: boldFont });
+      page.drawText('Qty',              { x: qtyX + 8, y: hdrY, size: 9, font: boldFont });
+      page.drawText('Item Description', { x: descX + 5, y: hdrY, size: 9, font: boldFont });
+      page.drawText('N', { x: amtNX + amtNW / 2 - boldFont.widthOfTextAtSize('N', 9) / 2, y: hdrY, size: 9, font: boldFont });
+      page.drawText('K', { x: amtKX + amtKW / 2 - boldFont.widthOfTextAtSize('K', 9) / 2, y: hdrY, size: 9, font: boldFont });
+
+      // Data rows
+      const maxDescChars = Math.floor(descW / (font.widthOfTextAtSize('M', 9) * 0.58));
+      let rowY = tableTop - headerH;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const lineTotal = item.lineTotal != null ? item.lineTotal : (item.qty || 1) * (item.amount || 0);
+        const naira = Math.floor(lineTotal);
+        const kobo = Math.round((lineTotal - naira) * 100);
+        rowY -= rowH;
+        page.drawLine({ start: { x: snX, y: rowY }, end: { x: tableRight, y: rowY }, thickness: 0.3, color: rgb(0.55, 0.55, 0.55) });
+        const cellY = rowY + 5;
+        page.drawText(String(i + 1), { x: snX + 10, y: cellY, size: 9, font });
+        page.drawText(String(item.qty ?? 1), { x: qtyX + 12, y: cellY, size: 9, font });
+        const desc = sanitizeText(item.description || '');
+        const truncDesc = desc.length > maxDescChars ? desc.substring(0, maxDescChars - 2) + '..' : desc;
+        page.drawText(truncDesc, { x: descX + 5, y: cellY, size: 9, font });
+        const nairaStr = Number(naira).toLocaleString();
+        page.drawText(nairaStr, { x: amtNX + amtNW - font.widthOfTextAtSize(nairaStr, 9) - 4, y: cellY, size: 9, font });
+        page.drawText(kobo > 0 ? String(kobo).padStart(2, '0') : '00', { x: amtKX + 5, y: cellY, size: 9, font });
+      }
+
+      // Total row
+      rowY -= rowH;
+      page.drawLine({ start: { x: snX, y: rowY + rowH }, end: { x: tableRight, y: rowY + rowH }, thickness: 0.8, color: borderC });
+      const grandTotal = items.reduce((sum, it) => sum + (it.lineTotal != null ? it.lineTotal : (it.qty || 1) * (it.amount || 0)), 0);
+      const totalNaira = Math.floor(grandTotal);
+      const totalKobo = Math.round((grandTotal - totalNaira) * 100);
+      const totalLabel = 'TOTAL';
+      page.drawText(totalLabel, { x: amtNX - boldFont.widthOfTextAtSize(totalLabel, 10) - 8, y: rowY + 5, size: 10, font: boldFont });
+      const totalNairaStr = Number(totalNaira).toLocaleString();
+      page.drawText(totalNairaStr, { x: amtNX + amtNW - boldFont.widthOfTextAtSize(totalNairaStr, 10) - 4, y: rowY + 5, size: 10, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+      page.drawText(totalKobo > 0 ? String(totalKobo).padStart(2, '0') : '00', { x: amtKX + 5, y: rowY + 5, size: 10, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+      y = rowY - 15;
+
+    } else {
+      // ── Plain text fallback ────────────────────────────────────────────────
+      if (parsedContent) rawContent = parsedContent.description || parsedContent.comment || rawContent;
+      const plainContent = sanitizeText(stripHtml(rawContent));
+      const paragraphs = plainContent.split(/\n+/).filter(Boolean);
+      for (const para of paragraphs) {
+        ensureSpace(20);
+        drawWrappedText(para, { indent: isMemo ? 20 : 5 });
+        y -= 5;
+      }
+
+      // ── Amount block (for Requisition Voucher only) ─────
+      if (!isMemo && isFinancial) {
+        y -= 10;
+        ensureSpace(40);
+        page.drawLine({ start: { x: margin, y: y + 8 }, end: { x: A4_W - margin, y: y + 8 }, thickness: 0.5 });
+        const amtLabel = 'TOTAL AMOUNT:';
+        const amtValue = `NGN ${Number(requisition.amount).toLocaleString()}`;
+        page.drawText(amtLabel, { x: margin, y, size: 12, font: boldFont });
+        page.drawText(amtValue, { x: A4_W - margin - boldFont.widthOfTextAtSize(amtValue, 12), y, size: 12, font: boldFont, color: rgb(0.1, 0.22, 0.43) });
+        y -= 25;
+      }
     }
 
     // ══════════════════════════════════════════════════════
