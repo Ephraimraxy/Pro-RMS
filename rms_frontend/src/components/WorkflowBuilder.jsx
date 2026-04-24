@@ -30,44 +30,24 @@ const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Authorized Role</label>
-            <div className="flex items-center space-x-2 bg-white/80 rounded-lg px-3 py-2 border border-border/50 shadow-sm">
-              <Shield size={12} className="text-muted-foreground" />
-              <select 
-                value={stage.role}
-                onChange={(e) => onUpdate({ ...stage, role: e.target.value })}
-                className="bg-transparent border-none text-xs text-foreground focus:outline-none w-full cursor-pointer"
-              >
-                <option value="Admin" className="bg-background">Admin</option>
-                <option value="Audit" className="bg-background">Audit</option>
-                <option value="Procurement" className="bg-background">Procurement</option>
-                <option value="Finance" className="bg-background">Finance</option>
-                <option value="GM" className="bg-background">General Manager</option>
-                <option value="Chairman" className="bg-background">Chairman</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Min Threshold (₦)</label>
-            <input 
-                type="number"
-                value={stage.threshold}
-                onChange={(e) => onUpdate({ ...stage, threshold: e.target.value })}
-                className="bg-white/80 border border-border/50 rounded-lg px-3 py-2 text-xs text-foreground w-full focus:outline-none focus:border-primary/50 font-mono shadow-sm"
-                placeholder="0"
-            />
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Authorized Role</label>
+          <div className="flex items-center space-x-2 bg-white/80 rounded-lg px-3 py-2 border border-border/50 shadow-sm">
+            <Shield size={12} className="text-muted-foreground" />
+            <select
+              value={stage.role}
+              onChange={(e) => onUpdate({ ...stage, role: e.target.value })}
+              className="bg-transparent border-none text-xs text-foreground focus:outline-none w-full cursor-pointer"
+            >
+              <option value="Admin" className="bg-background">Admin</option>
+              <option value="Audit" className="bg-background">Audit</option>
+              <option value="Procurement" className="bg-background">Procurement</option>
+              <option value="Finance" className="bg-background">Finance</option>
+              <option value="GM" className="bg-background">General Manager</option>
+              <option value="Chairman" className="bg-background">Chairman</option>
+            </select>
           </div>
         </div>
-        
-        {stage.threshold > 0 && (
-          <div className="mt-4 pt-3 border-t border-border/50 flex items-center space-x-2 text-[10px] text-primary font-bold italic">
-            <Info size={10} />
-            <span>This stage will be skipped for requisitions below ₦{Number(stage.threshold).toLocaleString()}</span>
-          </div>
-        )}
       </div>
     </div>
   );
