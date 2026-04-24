@@ -1513,13 +1513,12 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
         await notifyDepartmentHead({
           departmentId: originDeptId,
           requisition: { ...created, department: originDept || null },
-          subject: `New Requisition Submitted: ${created.title}`,
+          subject: `Your Requisition has been Submitted: ${created.title}`,
           lines: [
             `Department: ${originDept?.name || 'Department'}`,
             `Type: ${created.type}`,
             amountLine(created.type, created.amount),
             `Urgency: ${created.urgency || 'normal'}`,
-            `Created By: ${req.user?.name || 'System'}`
           ]
         });
 
@@ -1535,9 +1534,7 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
               `Type: ${created.type}`,
               amountLine(created.type, created.amount),
               `Urgency: ${created.urgency || 'normal'}`,
-              `Description: ${created.description || '—'}`,
-              ``,
-              `Please log in to your dashboard to review and respond to this requisition.`
+              `Description: ${created.description || '—'}`
             ]
           });
         }
@@ -1616,8 +1613,7 @@ app.put('/api/requisitions/:id', authenticateToken, generalLimiter, async (req, 
             `From Department: ${originDept?.name || 'Department'}`,
             `Type: ${updated.type}`,
             amountLine(updated.type, updated.amount),
-            `Urgency: ${updated.urgency || 'normal'}`,
-            `Created By: ${req.user?.name || 'System'}`
+            `Urgency: ${updated.urgency || 'normal'}`
           ]
         });
       }
@@ -1907,9 +1903,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
           `Forwarded By: ${requisition.targetDepartment?.name || 'Department'}`,
           `Type: ${updated.type}`,
           amountLine(updated.type, updated.amount),
-          note ? `Note: ${note}` : null,
-          ``,
-          `Please log in to your dashboard to review and respond.`
+          note ? `Note: ${note}` : null
         ].filter(Boolean)
       });
     }
@@ -1923,9 +1917,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
         lines: [
           `Your requisition has been returned for clarification.`,
           `Returned By: ${requisition.targetDepartment?.name || 'Department'}`,
-          note ? `Reason: ${note}` : `Please review the requisition for details.`,
-          ``,
-          `Log in to update the requisition and re-submit.`
+          note ? `Reason: ${note}` : `Please review the requisition for details.`
         ].filter(Boolean)
       });
     }
@@ -2050,8 +2042,7 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
       requisition: { id: reqId, title: requisition.title || `Requisition #${id}` },
       subject: `📋 Approved Requisition for Vetting: #${id}`,
       lines: [
-        `A finally-approved requisition has been sent to your department for vetting.`,
-        `Please log in to review, comment, and forward to the next department.`
+        `A finally-approved requisition has been sent to your department for vetting.`
       ]
     }).catch(() => { });
 
@@ -2180,8 +2171,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
         lines: [
           `A finally-approved requisition has been forwarded to your department for vetting.`,
           `Forwarded by: ${actingDeptName}`,
-          comment ? `Note: ${comment}` : null,
-          `Please log in to review and process.`
+          comment ? `Note: ${comment}` : null
         ].filter(Boolean)
       }).catch(() => { });
     }

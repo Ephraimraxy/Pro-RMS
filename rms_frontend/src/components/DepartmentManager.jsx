@@ -165,51 +165,6 @@ const SealViewModal = ({ dept, onClose }) => {
   );
 };
 
-// ── DeptItem ──────────────────────────────────────────────────────────────────
-const DeptItem = ({ dept, onDelete, onViewSeal, onEdit }) => {
-  return (
-    <div className="glass bg-white/80 p-3 lg:p-4 rounded-2xl border border-border/50 flex items-center justify-between group hover:border-primary/30 transition-all shadow-sm">
-      <div className="flex items-center space-x-4 min-w-0">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${dept.type === 'Strategic' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-muted border border-border/50 text-muted-foreground'
-          }`}>
-          <Building2 size={18} />
-        </div>
-        <div className="min-w-0">
-          <h4 className="text-sm font-bold text-foreground truncate">{dept.name}</h4>
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-            <p className="text-[9px] text-muted-foreground uppercase font-mono">{dept.type}</p>
-            {dept.headName && (
-              <span className="text-[9px] text-muted-foreground/70 italic truncate max-w-[120px]">{dept.headName}</span>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all shrink-0 ml-2">
-        <button
-          onClick={onEdit}
-          className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
-          title="Edit Department"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          onClick={onViewSeal}
-          className="p-2 text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-          title="View Department Seal"
-        >
-          <Eye size={14} />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-all"
-          title="Delete Department"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
-  );
-};
 
 // ── Edit Department Modal ─────────────────────────────────────────────────────
 const EditDeptModal = ({ dept, onClose, onSaved }) => {
@@ -392,8 +347,6 @@ const DepartmentManager = ({ onViewChange }) => {
   const [sealDept, setSealDept] = useState(null);
   const [newDeptData, setNewDeptData] = useState({ name: '', type: 'Operational', accessCode: '' });
 
-  const [isStrategicOpen, setIsStrategicOpen] = useState(true);
-  const [isOperationalOpen, setIsOperationalOpen] = useState(true);
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -559,268 +512,187 @@ const DepartmentManager = ({ onViewChange }) => {
           </div>
         </div>
 
-        {/* Dept Columns */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Strategic */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-border/50 pb-3">
-              <button onClick={() => setIsStrategicOpen(v => !v)} className="flex items-center space-x-2 text-base font-bold hover:text-primary transition-colors group">
-                {isStrategicOpen ? <ChevronDown size={18} className="text-primary" /> : <ChevronRight size={18} />}
-                <span>Strategic Control</span>
-              </button>
-              <div className="flex items-center gap-3">
-                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{strategic.length} Total</span>
-                <button onClick={() => { setNewDeptData({ name: '', type: 'Strategic', accessCode: '' }); setIsAddModalOpen(true); }}
-                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all">
-                  <Plus size={13} />
-                  <span className="text-[9px] font-bold uppercase">Add</span>
-                </button>
-              </div>
-            </div>
-            {isStrategicOpen && (
-              <div className="space-y-2.5 animate-in fade-in duration-300">
-                {filteredS.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic p-4 text-center">No strategic units found</p>
-                ) : filteredS.map(dept => (
-                  <DeptItem
-                    key={dept.id}
-                    dept={dept}
-                    onEdit={() => setEditingDept(dept)}
-                    onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
-                    onViewSeal={() => setSealDept(dept)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Operational */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-border/50 pb-3">
-              <button onClick={() => setIsOperationalOpen(v => !v)} className="flex items-center space-x-2 text-base font-bold hover:text-primary transition-colors group">
-                {isOperationalOpen ? <ChevronDown size={18} className="text-primary" /> : <ChevronRight size={18} />}
-                <span>Operational Units</span>
-              </button>
-              <div className="flex items-center gap-3">
-                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{operational.length} Total</span>
-                <button onClick={() => { setNewDeptData({ name: '', type: 'Operational', accessCode: '' }); setIsAddModalOpen(true); }}
-                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all">
-                  <Plus size={13} />
-                  <span className="text-[9px] font-bold uppercase">Add</span>
-                </button>
-              </div>
-            </div>
-            {isOperationalOpen && (
-              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar animate-in fade-in duration-300">
-                {filteredO.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic p-4 text-center">No operational units found</p>
-                ) : filteredO.map(dept => (
-                  <DeptItem
-                    key={dept.id}
-                    dept={dept}
-                    onEdit={() => setEditingDept(dept)}
-                    onDelete={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }}
-                    onViewSeal={() => setSealDept(dept)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Access Codes Table */}
-        <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-5">
+        {/* Unified Corporate Hierarchy Table */}
+        <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between mb-5 px-1">
             <div>
-              <h3 className="text-base font-bold text-foreground">Department Access Credentials</h3>
+              <h3 className="text-base font-bold text-foreground">Corporate Hierarchy & Credentials</h3>
               <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                A strikethrough means the department changed their own code. Click <strong>Edit</strong> to reset it for them.
+                Manage all units, their access codes, and official signatures in one centralized directory.
               </p>
             </div>
-            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{departments.length} Total</span>
+            <div className="flex items-center gap-4">
+               <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{departments.length} Units Synchronized</span>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse border-separate border-spacing-0">
               <thead>
-                <tr className="bg-muted/30 text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground border-b border-border/50">
-                  <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4">Login Code (Original)</th>
-                  <th className="py-3 px-4">Head</th>
-                  <th className="py-3 px-4">Seal</th>
-                  <th className="py-3 px-4">Action</th>
+                <tr className="bg-muted/30 text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                  <th className="py-4 px-4 rounded-tl-xl border-y border-l">Unit Name</th>
+                  <th className="py-4 px-4 border-y">Category</th>
+                  <th className="py-4 px-4 border-y">Login Code</th>
+                  <th className="py-4 px-4 border-y">Head Official</th>
+                  <th className="py-4 px-4 border-y">Official Email</th>
+                  <th className="py-4 px-4 border-y">Contact Phone</th>
+                  <th className="py-4 px-4 border-y">Office Address</th>
+                  <th className="py-4 px-4 rounded-tr-xl border-y border-r text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {departments.map((dept) => {
-                  // Show accessCodeLabel (admin set); fall back to legacy accessCode if label not yet set
-                  const displayCode = dept.accessCodeLabel || dept.accessCode || null;
-                  return (
-                    <tr key={dept.id} className="border-b border-border/30 hover:bg-muted/10 transition-colors group">
-                      <td className="py-3 px-4 text-xs font-bold text-foreground">{dept.name}</td>
-                      <td className="py-3 px-4">
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${dept.type === 'Strategic' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                          {dept.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {displayCode ? (
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-mono font-bold ${dept.codeChangedByDept ? 'line-through text-muted-foreground/40 decoration-red-400 decoration-2' : 'text-foreground'}`}>
-                              {displayCode}
-                            </span>
-                            {dept.codeChangedByDept && (
-                              <span className="text-[8px] font-black bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
-                                Code Changed
+              <tbody className="divide-y divide-border/20">
+                {departments
+                  .filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .map((dept) => {
+                    const displayCode = dept.accessCodeLabel || dept.accessCode || null;
+                    return (
+                      <tr key={dept.id} className="hover:bg-primary/[0.02] transition-colors group">
+                        <td className="py-4 px-4 text-xs font-bold text-foreground border-l border-border/10">{dept.name}</td>
+                        <td className="py-4 px-4">
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${dept.type === 'Strategic' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                            {dept.type}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          {displayCode ? (
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-mono font-bold ${dept.codeChangedByDept ? 'line-through text-muted-foreground/40 decoration-red-400 decoration-2' : 'text-foreground'}`}>
+                                {displayCode}
                               </span>
-                            )}
+                              {dept.codeChangedByDept && (
+                                <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Modified</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[9px] text-muted-foreground/40 italic">Not set</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4 text-xs text-muted-foreground font-medium">{dept.headName || '—'}</td>
+                        <td className="py-4 px-4 text-xs text-primary font-medium">{dept.headEmail || '—'}</td>
+                        <td className="py-4 px-4 text-xs text-muted-foreground font-medium">{dept.phone || '—'}</td>
+                        <td className="py-4 px-4 text-xs text-muted-foreground/60 font-medium truncate max-w-[150px]" title={dept.address}>{dept.address || '—'}</td>
+                        <td className="py-4 px-4 border-r border-border/10">
+                          <div className="flex items-center justify-center space-x-1">
+                            <button onClick={() => setEditingDept(dept)} className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all" title="Edit Unit">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => setSealDept(dept)} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all" title="View Seal">
+                              <Eye size={14} />
+                            </button>
+                            <button onClick={() => { setPendingDept(dept); setIsDeleteModalOpen(true); }} className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-all" title="Delete Unit">
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                        ) : (
-                          <span className="text-[9px] text-muted-foreground/40 italic">Not recorded</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-muted-foreground">{dept.headName || '—'}</td>
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={() => setSealDept(dept)}
-                          className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
-                          title="View Seal"
-                        >
-                          <Eye size={13} />
-                        </button>
-                      </td>
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={() => setEditingDept(dept)}
-                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                          title="Edit"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
+            {departments.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+               <div className="py-20 text-center">
+                  <p className="text-sm text-muted-foreground italic">No departments match your search criteria.</p>
+               </div>
+            )}
           </div>
         </div>
 
-        {/* ── Chairman/CEO Routing Access ── */}
-        <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-                <ShieldCheck size={18} className="text-amber-600" />
+        {/* Settings Section (Grid for side-by-side on large screens) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* ── Chairman/CEO Routing Access ── */}
+          <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm flex flex-col">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={18} className="text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Chairman / CEO Routing Access</h3>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Control direct routing capability.</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-foreground">Chairman / CEO Routing Access</h3>
-                <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                  Select which departments are allowed to send or forward requisitions directly to Chairman / CEO.
+              <button
+                onClick={saveChairmanSetting}
+                disabled={savingChairman}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-50 shadow-md shadow-amber-200 active:scale-[0.98]"
+              >
+                {savingChairman ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                Save
+              </button>
+            </div>
+
+            <div className="flex-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {departments.filter(d => !/ceo|chairman/i.test(d.name)).map(dept => {
+                const allowed = chairmanAllowedIds.includes(dept.id);
+                return (
+                  <button
+                    key={dept.id}
+                    onClick={() => toggleChairmanDept(dept.id)}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all ${allowed
+                      ? 'bg-amber-50 border-amber-300 text-amber-800'
+                      : 'bg-white border-border/40 text-muted-foreground hover:border-amber-200'
+                      }`}
+                  >
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${allowed ? 'bg-amber-500 border-amber-500' : 'border-border'}`}>
+                      {allowed && <CheckCircle2 size={10} className="text-white" />}
+                    </div>
+                    <span className="text-[11px] font-bold truncate">{dept.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── AI Features Toggle ── */}
+          <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm flex flex-col">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0">
+                  <Sparkles size={18} className="text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">AIGC Features</h3>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Control organization-wide AI tools.</p>
+                </div>
+              </div>
+              <button
+                onClick={saveAISetting}
+                disabled={savingAI}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-50 shadow-md shadow-purple-200 active:scale-[0.98]"
+              >
+                {savingAI ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                Save
+              </button>
+            </div>
+
+            <div className="flex-1 flex flex-col justify-center space-y-6">
+              <div className="flex items-center justify-between p-5 rounded-2xl border border-border/40 bg-white shadow-inner">
+                <div className="space-y-1">
+                  <p className="text-xs font-black text-foreground uppercase tracking-tight">
+                    {aiToggle ? 'Neural Engines Active' : 'Neural Engines Suspended'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    {aiToggle
+                      ? 'AI Refinement and Voice Dictation are enabled across the entire hierarchy.'
+                      : 'Organization-wide AI capabilities have been restricted.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAiToggle(v => !v)}
+                  className={`relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none shadow-inner ${aiToggle ? 'bg-purple-600' : 'bg-muted-foreground/30'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-lg transition-transform duration-300 ${aiToggle ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
+              </div>
+              <div className="p-4 bg-muted/20 rounded-xl border border-border/10 flex items-start gap-3">
+                <Info size={14} className="text-muted-foreground shrink-0 mt-0.5" />
+                <p className="text-[10px] text-muted-foreground/80 font-medium italic">
+                  Changes to AI status propogate to all active department sessions within seconds and do not require a system reboot.
                 </p>
               </div>
             </div>
-            <button
-              onClick={saveChairmanSetting}
-              disabled={savingChairman}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50 shadow-md shadow-amber-200 active:scale-[0.98] shrink-0"
-            >
-              {savingChairman ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              {savingChairman ? 'Saving…' : 'Save'}
-            </button>
           </div>
-
-          {/* Exclude Chairman/CEO dept itself from the list */}
-          {(() => {
-            const selectable = departments.filter(d => !/ceo|chairman/i.test(d.name));
-            return selectable.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic text-center py-4">No departments found.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {selectable.map(dept => {
-                  const allowed = chairmanAllowedIds.includes(dept.id);
-                  return (
-                    <button
-                      key={dept.id}
-                      onClick={() => toggleChairmanDept(dept.id)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${allowed
-                        ? 'bg-amber-50 border-amber-300 text-amber-800'
-                        : 'bg-white border-border/50 text-muted-foreground hover:border-amber-200 hover:bg-amber-50/40'
-                        }`}
-                    >
-                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${allowed ? 'bg-amber-500 border-amber-500' : 'border-border'
-                        }`}>
-                        {allowed && <CheckCircle2 size={12} className="text-white" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold truncate">{dept.name}</p>
-                        <p className={`text-[9px] uppercase font-mono ${allowed ? 'text-amber-600' : 'text-muted-foreground/60'}`}>
-                          {dept.type}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
-
-          <p className="text-[10px] text-muted-foreground/60 mt-4 italic">
-            Departments not selected here will not see Chairman / CEO in their routing dropdown.
-          </p>
         </div>
-
-        {/* ── AI Features Toggle ── */}
-        <div className="glass bg-white/70 rounded-3xl border border-border/50 p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0">
-                <Sparkles size={18} className="text-purple-600" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-foreground">AI Features</h3>
-                <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                  Control whether departments can use AI refinement and voice dictation when creating or responding to requisitions.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={saveAISetting}
-              disabled={savingAI}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50 shadow-md shadow-purple-200 active:scale-[0.98] shrink-0"
-            >
-              {savingAI ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              {savingAI ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-
-          {/* Toggle Switch */}
-          <div className="flex items-center justify-between p-4 rounded-2xl border border-border/50 bg-white/80">
-            <div className="space-y-0.5">
-              <p className="text-sm font-bold text-foreground">
-                {aiToggle ? 'AI Features Enabled' : 'AI Features Disabled'}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                {aiToggle
-                  ? 'Departments can see and use AI refine + voice dictation.'
-                  : 'AI buttons and voice dictation are hidden from all departments.'}
-              </p>
-            </div>
-            <button
-              onClick={() => setAiToggle(v => !v)}
-              className={`relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none ${aiToggle ? 'bg-purple-600' : 'bg-muted-foreground/30'
-                }`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${aiToggle ? 'translate-x-7' : 'translate-x-0'
-                }`} />
-            </button>
-          </div>
-
-          <p className="text-[10px] text-muted-foreground/60 mt-4 italic">
-            Changes take effect within 15 seconds for active sessions without requiring a page reload.
-          </p>
-        </div>
-
       </div>
 
       {/* Seal View Modal */}
