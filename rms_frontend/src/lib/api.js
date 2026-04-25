@@ -284,6 +284,103 @@ export const memoAPI = {
     }),
 };
 
+export const hrAPI = {
+  // Dashboard
+  async getHRStats() {
+    return api.get('/hr/stats');
+  },
+
+  // Employees
+  async getEmployees() {
+    return api.get('/hr/employees');
+  },
+  async getEmployee(id) {
+    return api.get(`/hr/employees/${id}`);
+  },
+  async createEmployee(data) {
+    return api.post('/hr/employees', data);
+  },
+  async updateEmployee(id, data) {
+    return api.put(`/hr/employees/${id}`, data);
+  },
+  async deleteEmployee(id) {
+    return api.delete(`/hr/employees/${id}`);
+  },
+  async uploadEmployeePhoto(id, file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/hr/employees/${id}/photo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+
+  // Leave
+  async getLeaves(params = {}) {
+    return api.get('/hr/leaves', { params });
+  },
+  async createLeave(data) {
+    return api.post('/hr/leaves', data);
+  },
+  async approveLeave(id, remarks = '') {
+    return api.post(`/hr/leaves/${id}/approve`, { remarks });
+  },
+  async rejectLeave(id, remarks = '') {
+    return api.post(`/hr/leaves/${id}/reject`, { remarks });
+  },
+  async getLeaveBalances(employeeId) {
+    return api.get(`/hr/employees/${employeeId}/leave-balances`);
+  },
+
+  // Attendance
+  async getAttendance(params = {}) {
+    return api.get('/hr/attendance', { params });
+  },
+  async markAttendance(data) {
+    return api.post('/hr/attendance', data);
+  },
+  async updateAttendance(id, data) {
+    return api.put(`/hr/attendance/${id}`, data);
+  },
+
+  // Payroll
+  async getPayroll(params = {}) {
+    return api.get('/hr/payroll', { params });
+  },
+  async processPayroll(month, year) {
+    return api.post('/hr/payroll/process', { month, year });
+  },
+  async markPayslipPaid(id) {
+    return api.put(`/hr/payroll/${id}/mark-paid`);
+  },
+  async getPayslipData(employeeId, month, year) {
+    return api.get(`/hr/payroll/payslip`, { params: { employeeId, month, year } });
+  },
+
+  // Recruitment
+  async getJobs() {
+    return api.get('/hr/jobs');
+  },
+  async createJob(data) {
+    return api.post('/hr/jobs', data);
+  },
+  async updateJob(id, data) {
+    return api.put(`/hr/jobs/${id}`, data);
+  },
+  async closeJob(id) {
+    return api.put(`/hr/jobs/${id}/close`);
+  },
+  async deleteJob(id) {
+    return api.delete(`/hr/jobs/${id}`);
+  },
+  async getApplicants(jobId) {
+    return api.get(`/hr/jobs/${jobId}/applicants`);
+  },
+  async createApplicant(jobId, data) {
+    return api.post(`/hr/jobs/${jobId}/applicants`, data);
+  },
+  async updateApplicantStage(applicantId, stage) {
+    return api.put(`/hr/applicants/${applicantId}/stage`, { stage });
+  },
+};
+
 export const aiAPI = {
   async refineDraft(rawDescription, mode = 'auto') {
     try {

@@ -58,6 +58,14 @@ const MemoManagement = React.lazy(() => import('./components/MemoManagement'))
 const DepartmentProfile = React.lazy(() => import('./components/DepartmentProfile'))
 const MyActivity = React.lazy(() => import('./components/MyActivity'))
 
+// ── HR Portal modules ──────────────────────────────────────────────────────────
+const HRDashboard = React.lazy(() => import('./components/HRDashboard'))
+const EmployeeDirectory = React.lazy(() => import('./components/EmployeeDirectory'))
+const LeaveManagement = React.lazy(() => import('./components/LeaveManagement'))
+const AttendanceTracker = React.lazy(() => import('./components/AttendanceTracker'))
+const PayrollOverview = React.lazy(() => import('./components/PayrollOverview'))
+const RecruitmentPipeline = React.lazy(() => import('./components/RecruitmentPipeline'))
+
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AIFeaturesProvider } from './context/AIFeaturesContext'
 import { Toaster, toast } from 'react-hot-toast'
@@ -136,7 +144,9 @@ const NetworkProvider = ({ children }) => {
 const VALID_VIEWS = [
   'dashboard', 'requisitions', 'memos', 'activity',
   'workflow_builder', 'department_manager', 'audit_logs',
-  'document_studio', 'dept_profile'
+  'document_studio', 'dept_profile',
+  // HR Portal views
+  'hr_dashboard', 'hr_employees', 'hr_leaves', 'hr_attendance', 'hr_payroll', 'hr_recruitment'
 ];
 
 const getViewFromHash = () => {
@@ -209,9 +219,13 @@ const AppContent = () => {
 
   if (!user) return <Login />;
 
-  // Security Guard: Prevent department users from accessing admin views
+  // Security Guard: Prevent department users from accessing admin/HR views,
+  // and prevent non-HR users from accessing HR portal views.
   const isAdminView = ['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView);
-  const activeView = (user.role === 'department' && isAdminView) ? 'dashboard' : currentView;
+  const isHRView = ['hr_dashboard', 'hr_employees', 'hr_leaves', 'hr_attendance', 'hr_payroll', 'hr_recruitment'].includes(currentView);
+  const activeView = (user.role === 'department' && (isAdminView || isHRView)) ? 'dashboard'
+    : (user.role !== 'hr' && user.role !== 'global_admin' && isHRView) ? 'dashboard'
+    : currentView;
 
   const views = {
     dashboard: <Dashboard onViewChange={navigate} />,
@@ -222,7 +236,14 @@ const AppContent = () => {
     department_manager: <DepartmentManager onViewChange={navigate} />,
     audit_logs: <AuditLogs onViewChange={navigate} />,
     document_studio: <DocumentStudio user={user} onViewChange={navigate} />,
-    dept_profile: <DepartmentProfile user={user} onViewChange={navigate} />
+    dept_profile: <DepartmentProfile user={user} onViewChange={navigate} />,
+    // HR Portal
+    hr_dashboard:   <HRDashboard onViewChange={navigate} />,
+    hr_employees:   <EmployeeDirectory onViewChange={navigate} />,
+    hr_leaves:      <LeaveManagement onViewChange={navigate} />,
+    hr_attendance:  <AttendanceTracker onViewChange={navigate} />,
+    hr_payroll:     <PayrollOverview onViewChange={navigate} />,
+    hr_recruitment: <RecruitmentPipeline onViewChange={navigate} />,
   };
 
   return (

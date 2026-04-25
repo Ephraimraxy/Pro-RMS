@@ -5,7 +5,8 @@ import {
   LayoutDashboard, FileText, ClipboardCheck, History, Settings,
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
   ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw,
-  Building2, ShieldAlert
+  Building2, ShieldAlert, Users, CalendarDays, DollarSign, UserPlus,
+  HeartHandshake
 } from 'lucide-react';
 import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications, getRequisitions } from '../lib/store';
 import { reqAPI } from '../lib/api';
@@ -113,7 +114,13 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
                         currentView === 'document_studio' ? 'Document Studio' :
                           currentView === 'workflow_builder' ? 'Workflow Architecture' :
                             currentView === 'department_manager' ? 'Tenant Control' :
-                              currentView === 'audit_logs' ? 'Security Audit' : 'Portal'}
+                              currentView === 'audit_logs' ? 'Security Audit' :
+                                currentView === 'hr_dashboard' ? 'HR Overview' :
+                                  currentView === 'hr_employees' ? 'Employee Directory' :
+                                    currentView === 'hr_leaves' ? 'Leave Management' :
+                                      currentView === 'hr_attendance' ? 'Attendance Tracker' :
+                                        currentView === 'hr_payroll' ? 'Payroll Overview' :
+                                          currentView === 'hr_recruitment' ? 'Recruitment Pipeline' : 'Portal'}
             </span>
           </div>
         </div>
@@ -440,7 +447,23 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
             </div>
 
-            {user?.role !== 'department' && (
+            {(user?.role === 'hr' || user?.role === 'global_admin') && (
+              <div className="mt-10 space-y-2">
+                {!isCollapsed && (
+                  <p className="px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
+                    HR Portal
+                  </p>
+                )}
+                <SidebarItem icon={HeartHandshake} label="HR Overview" active={currentView === 'hr_dashboard'} onClick={() => onViewChange('hr_dashboard')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={Users} label="Employees" active={currentView === 'hr_employees'} onClick={() => onViewChange('hr_employees')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={CalendarDays} label="Leave" active={currentView === 'hr_leaves'} onClick={() => onViewChange('hr_leaves')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={Clock} label="Attendance" active={currentView === 'hr_attendance'} onClick={() => onViewChange('hr_attendance')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={DollarSign} label="Payroll" active={currentView === 'hr_payroll'} onClick={() => onViewChange('hr_payroll')} isCollapsed={isCollapsed} />
+                <SidebarItem icon={UserPlus} label="Recruitment" active={currentView === 'hr_recruitment'} onClick={() => onViewChange('hr_recruitment')} isCollapsed={isCollapsed} />
+              </div>
+            )}
+
+            {user?.role !== 'department' && user?.role !== 'hr' && (
               <div className="mt-10 space-y-2">
                 {!isCollapsed && (
                   <p className="px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
@@ -501,6 +524,16 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               </div>
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
               <SidebarItem icon={History} label="Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} mobile />
+            </>
+          ) : user?.role === 'hr' ? (
+            <>
+              <SidebarItem icon={HeartHandshake} label="HR Home" active={currentView === 'hr_dashboard'} onClick={() => onViewChange('hr_dashboard')} mobile />
+              <SidebarItem icon={Users} label="People" active={currentView === 'hr_employees'} onClick={() => onViewChange('hr_employees')} mobile />
+              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#206e33] shadow-lg hover:scale-110 transition-transform active:scale-95 -translate-y-4 border-4 border-[#FAF9F6] cursor-pointer" onClick={() => onViewChange('hr_leaves')}>
+                <CalendarDays size={20} />
+              </div>
+              <SidebarItem icon={DollarSign} label="Payroll" active={currentView === 'hr_payroll'} onClick={() => onViewChange('hr_payroll')} mobile />
+              <SidebarItem icon={UserPlus} label="Recruit" active={currentView === 'hr_recruitment'} onClick={() => onViewChange('hr_recruitment')} mobile />
             </>
           ) : (
             <>
