@@ -1364,9 +1364,9 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
 
         {/* Body Grid */}
         <div className="flex-1 overflow-hidden">
-          <div className="h-full grid lg:grid-cols-[1fr_300px] divide-x divide-border/50">
+          <div className="h-full grid lg:grid-cols-[1fr_300px]">
             {/* Left Content Column */}
-            <div className="overflow-y-auto custom-scrollbar p-4 lg:p-6 space-y-6">
+            <div className="overflow-y-auto custom-scrollbar p-4 lg:p-6 space-y-6 order-2 lg:order-1 lg:border-r border-border/50">
               
               {/* Description Section */}
               {req.description && (
@@ -1641,7 +1641,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
             </div>
 
             {/* Right Sidebar Column */}
-            <div className="bg-muted/10 overflow-y-auto custom-scrollbar p-4 space-y-5 flex flex-col">
+            <div className="bg-muted/10 overflow-y-auto custom-scrollbar p-4 space-y-5 flex flex-col order-1 lg:order-2">
               
               {/* Status & Alerts */}
               <div className="space-y-3">
