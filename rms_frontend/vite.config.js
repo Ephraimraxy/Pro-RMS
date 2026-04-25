@@ -24,7 +24,13 @@ export default defineConfig({
           },
           {
             src: 'CSS_Favicon.png',
-            sizes: '320x317',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: 'CSS_Favicon.png',
+            sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
           }

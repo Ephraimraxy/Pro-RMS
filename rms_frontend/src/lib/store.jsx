@@ -143,18 +143,28 @@ export async function flushSyncQueue({ force = false } = {}) {
       } else if (type === 'vettingAction') {
         await vettingAPI.vettingAction(entry.reqId, entry.payload);
       } else if (type === 'uploadAttachment') {
-        const files = (await Promise.all(entry.fileKeys.map(restoreFile))).filter(Boolean);
-        if (files.length > 0) {
-          const formData = new FormData();
-          files.forEach(f => formData.append('files', f));
-          const { stageName, stageKey, uploaderDept } = entry.meta || {};
-          if (stageName) formData.append('stageName', stageName);
-          if (stageKey) formData.append('stageKey', stageKey);
-          if (uploaderDept) formData.append('uploaderDept', uploaderDept);
-          await api.post(`/requisitions/${entry.requisitionId}/attachments`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
-          await cleanupFileBlobs(entry.fileKeys);
+        const done = new Set(entry.uploadedKeys || []);
+        const { stageName, stageKey, uploaderDept } = entry.meta || {};
+        for (const key of entry.fileKeys) {
+          if (done.has(key)) continue;
+          const file = await restoreFile(key);
+          if (file) {
+            const formData = new FormData();
+            formData.append('files', file);
+            if (stageName) formData.append('stageName', stageName);
+            if (stageKey) formData.append('stageKey', stageKey);
+            if (uploaderDept) formData.append('uploaderDept', uploaderDept);
+            await api.post(`/requisitions/${entry.requisitionId}/attachments`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+          }
+          done.add(key);
+          await cleanupFileBlobs([key]);
+          // Persist progress so a crash here resumes from the next file
+          entry.uploadedKeys = [...done];
+          const liveQueue = (await syncQueueStore.getItem('pending')) || [];
+          const idx = liveQueue.findIndex(e => e.clientId === entry.clientId);
+          if (idx !== -1) { liveQueue[idx] = { ...entry }; await syncQueueStore.setItem('pending', liveQueue); }
         }
       } else if (type === 'vettingActionWithFile') {
         const file = await restoreFile(entry.fileKey);
@@ -198,8 +208,10 @@ export async function uploadAttachments(requisitionId, files, { stageName, stage
     const queue = (await syncQueueStore.getItem('pending')) || [];
     queue.push({
       type: 'uploadAttachment',
+      clientId: generateClientId(),
       requisitionId,
       fileKeys,
+      uploadedKeys: [],
       meta: { stageName, stageKey, uploaderDept },
       retryCount: 0,
       nextAttemptAt: Date.now(),
@@ -566,7 +578,7 @@ const isNetworkError = (err) => {
 
 async function queueOfflineAction(type, reqId, payload) {
   const queue = (await syncQueueStore.getItem('pending')) || [];
-  queue.push({ type, reqId, payload, retryCount: 0, nextAttemptAt: Date.now(), lastError: null });
+  queue.push({ type, reqId, payload, clientId: generateClientId(), retryCount: 0, nextAttemptAt: Date.now(), lastError: null });
   await syncQueueStore.setItem('pending', queue);
   toast('Offline: Action queued — will sync when reconnected.');
 }
@@ -622,6 +634,7 @@ export async function vettingActionRequisition(reqId, { action, comment, nextDep
       const queue = (await syncQueueStore.getItem('pending')) || [];
       queue.push({
         type: 'vettingActionWithFile',
+        clientId: generateClientId(),
         reqId,
         fileKey,
         payload: { action, comment, nextDeptId },
