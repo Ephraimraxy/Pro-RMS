@@ -1638,6 +1638,11 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                   </div>
                 );
               })()}
+
+              {/* Mobile-only Close Document — sits below attachments */}
+              <button onClick={onClose} className="lg:hidden w-full text-[9px] text-muted-foreground hover:text-foreground font-black uppercase tracking-[0.2em] transition-colors py-3 border-t border-border/50 mt-2">
+                Close Document
+              </button>
             </div>
 
             {/* Right Sidebar Column */}
@@ -1781,7 +1786,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                       <Download size={14} /> Sign Voucher
                     </button>
                  )}
-                 <button onClick={onClose} className="w-full text-[9px] text-muted-foreground hover:text-foreground font-black uppercase tracking-[0.2em] transition-colors py-3">
+                 <button onClick={onClose} className="hidden lg:block w-full text-[9px] text-muted-foreground hover:text-foreground font-black uppercase tracking-[0.2em] transition-colors py-3">
                   Close Document
                  </button>
               </div>
