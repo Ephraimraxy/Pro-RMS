@@ -929,10 +929,22 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved }) => {
       authorityLabel = `Chairman / CEO (≥ ${fmt(chairman_min)})`;
   }
 
-  if (!authorityLabel) return null; // Not authorised for this amount band / type
+  if (!authorityLabel) return null;
 
-  // Don't show if already finally approved
-  if (detail?.finalApprovalStatus && detail.finalApprovalStatus !== 'none') return null;
+  // Already finally approved — show a guide note instead of hiding silently
+  if (detail?.finalApprovalStatus && detail.finalApprovalStatus !== 'none') {
+    return (
+      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+          <p className="text-xs font-black text-emerald-700 uppercase tracking-wide">Already Approved</p>
+        </div>
+        <p className="text-[11px] text-emerald-700/80 leading-relaxed">
+          This request has been finally approved. Use <strong>Forward</strong> below to send it to vetting (ICC / Audit → Account) to continue the process.
+        </p>
+      </div>
+    );
+  }
 
   const notifyAccount = async () => {
     const accountDept = departments.find(d => /\baccount/i.test(d.name));

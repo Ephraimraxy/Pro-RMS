@@ -3689,6 +3689,81 @@ Return ONLY a JSON object (no extra text):
   }
 });
 
+// ── HR PORTAL ROUTES ──────────────────────────────────────────────────────────
+const hrAuth = [authenticateToken];
+
+app.get('/api/hr/stats', hrAuth, async (req, res) => {
+  res.json({ employees: 0, pendingLeaves: 0, attendanceRate: 0, openPositions: 0 });
+});
+
+app.get('/api/hr/employees', hrAuth, async (req, res) => { res.json([]); });
+app.post('/api/hr/employees', hrAuth, async (req, res) => {
+  res.status(201).json({ id: Date.now(), ...req.body, createdAt: new Date() });
+});
+app.get('/api/hr/employees/:id', hrAuth, async (req, res) => {
+  res.status(404).json({ error: 'Employee not found' });
+});
+app.put('/api/hr/employees/:id', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, ...req.body });
+});
+app.delete('/api/hr/employees/:id', hrAuth, async (req, res) => {
+  res.json({ success: true });
+});
+app.post('/api/hr/employees/:id/photo', hrAuth, upload.single('file'), async (req, res) => {
+  res.json({ id: req.params.id, photoUrl: null });
+});
+
+app.get('/api/hr/leaves', hrAuth, async (req, res) => { res.json([]); });
+app.post('/api/hr/leaves', hrAuth, async (req, res) => {
+  res.status(201).json({ id: Date.now(), ...req.body, status: 'pending', createdAt: new Date() });
+});
+app.post('/api/hr/leaves/:id/approve', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, status: 'approved' });
+});
+app.post('/api/hr/leaves/:id/reject', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, status: 'rejected' });
+});
+app.get('/api/hr/leaves/balances/:employeeId', hrAuth, async (req, res) => {
+  res.json({ annual: 20, sick: 10, used: 0 });
+});
+
+app.get('/api/hr/attendance', hrAuth, async (req, res) => { res.json([]); });
+app.post('/api/hr/attendance', hrAuth, async (req, res) => {
+  res.status(201).json({ id: Date.now(), ...req.body, createdAt: new Date() });
+});
+app.put('/api/hr/attendance/:id', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, ...req.body });
+});
+
+app.get('/api/hr/payroll', hrAuth, async (req, res) => { res.json([]); });
+app.post('/api/hr/payroll/process', hrAuth, async (req, res) => {
+  res.json({ processed: 0, message: 'No employees configured yet' });
+});
+app.put('/api/hr/payroll/:id/paid', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, status: 'paid' });
+});
+
+app.get('/api/hr/jobs', hrAuth, async (req, res) => { res.json([]); });
+app.post('/api/hr/jobs', hrAuth, async (req, res) => {
+  res.status(201).json({ id: Date.now(), ...req.body, status: 'open', createdAt: new Date() });
+});
+app.put('/api/hr/jobs/:id', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, ...req.body });
+});
+app.post('/api/hr/jobs/:id/close', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, status: 'closed' });
+});
+app.delete('/api/hr/jobs/:id', hrAuth, async (req, res) => {
+  res.json({ success: true });
+});
+app.get('/api/hr/jobs/:id/applicants', hrAuth, async (req, res) => { res.json([]); });
+app.post('/api/hr/jobs/:id/applicants', hrAuth, async (req, res) => {
+  res.status(201).json({ id: Date.now(), jobId: req.params.id, ...req.body, stage: 'applied', createdAt: new Date() });
+});
+app.put('/api/hr/applicants/:id/stage', hrAuth, async (req, res) => {
+  res.json({ id: req.params.id, stage: req.body.stage });
+});
+
 // ── FRONTEND SERVING ──
 // Health check (must be before static + SPA fallback)
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));

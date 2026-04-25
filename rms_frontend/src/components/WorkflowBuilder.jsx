@@ -82,8 +82,9 @@ const WorkflowBuilder = ({ onViewChange }) => {
   const [savingRecord, setSavingRecord]     = useState(false);
 
   // ── Feature flags ──────────────────────────────────────────────────────────
-  const [studioEnabled, setStudioEnabled]   = useState(true);
-  const [savingFeatures, setSavingFeatures] = useState(false);
+  const [studioEnabled, setStudioEnabled]     = useState(true);
+  const [hrPortalEnabled, setHrPortalEnabled] = useState(true);
+  const [savingFeatures, setSavingFeatures]   = useState(false);
 
   const loadData = async () => {
     const [workflowData, typeData] = await Promise.all([
@@ -125,15 +126,24 @@ const WorkflowBuilder = ({ onViewChange }) => {
 
   const loadFeatureFlags = async () => {
     try {
-      const res = await settingsAPI.get('document_studio_enabled');
-      if (res?.value !== undefined) setStudioEnabled(res.value !== 'false');
+      const [studioRes, hrRes] = await Promise.allSettled([
+        settingsAPI.get('document_studio_enabled'),
+        settingsAPI.get('hr_portal_enabled'),
+      ]);
+      if (studioRes.status === 'fulfilled' && studioRes.value?.value !== undefined)
+        setStudioEnabled(studioRes.value.value !== 'false');
+      if (hrRes.status === 'fulfilled' && hrRes.value?.value !== undefined)
+        setHrPortalEnabled(hrRes.value.value !== 'false');
     } catch {}
   };
 
   const saveFeatureFlags = async () => {
     setSavingFeatures(true);
     try {
-      await settingsAPI.set('document_studio_enabled', String(studioEnabled));
+      await Promise.all([
+        settingsAPI.set('document_studio_enabled', String(studioEnabled)),
+        settingsAPI.set('hr_portal_enabled', String(hrPortalEnabled)),
+      ]);
       toast.success('Feature settings saved.');
     } catch {
       toast.error('Failed to save. Please try again.');
@@ -492,13 +502,38 @@ const WorkflowBuilder = ({ onViewChange }) => {
                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${studioEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
+
+                {/* HR Portal toggle */}
+                <div className="flex items-center justify-between p-5 rounded-2xl border-2 border-border/50 bg-white/80 hover:border-primary/30 transition-all">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-black text-foreground">HR Portal</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Grants the HR department access to the HR management portal (employees, leave, attendance, payroll, recruitment).
+                      When disabled the HR Portal button is hidden from the sidebar.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setHrPortalEnabled(v => !v)}
+                    className={`relative ml-6 shrink-0 w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none ${hrPortalEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${hrPortalEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
               </div>
 
-              <div className="pt-2 flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${studioEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
-                <p className="text-xs text-muted-foreground font-medium">
-                  Document Studio is currently <strong className={studioEnabled ? 'text-emerald-600' : 'text-red-500'}>{studioEnabled ? 'enabled' : 'disabled'}</strong>
-                </p>
+              <div className="pt-2 space-y-1.5">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${studioEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Document Studio is currently <strong className={studioEnabled ? 'text-emerald-600' : 'text-red-500'}>{studioEnabled ? 'enabled' : 'disabled'}</strong>
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${hrPortalEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                  <p className="text-xs text-muted-foreground font-medium">
+                    HR Portal is currently <strong className={hrPortalEnabled ? 'text-emerald-600' : 'text-red-500'}>{hrPortalEnabled ? 'enabled' : 'disabled'}</strong>
+                  </p>
+                </div>
               </div>
 
               <button

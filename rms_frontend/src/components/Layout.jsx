@@ -4,12 +4,12 @@ import { useNetwork } from '../App';
 import {
   LayoutDashboard, FileText, ClipboardCheck, History, Settings,
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
-  ChevronLeft, ChevronRight, Menu, Inbox, Clock, WifiOff, RefreshCcw,
+  ChevronLeft, ChevronRight, ChevronDown, Menu, Inbox, Clock, WifiOff, RefreshCcw,
   Building2, ShieldAlert, Users, CalendarDays, DollarSign, UserPlus,
   HeartHandshake
 } from 'lucide-react';
 import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications, getRequisitions } from '../lib/store';
-import { reqAPI } from '../lib/api';
+import { reqAPI, settingsAPI } from '../lib/api';
 
 const normalizeRole = (r) => (r || '').toLowerCase().replace(/\s+/g, '_');
 
@@ -99,7 +99,6 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
         </div>
         <div className="flex flex-col">
           <h1 className="text-[10px] font-black text-foreground tracking-[0.2em] uppercase flex items-center leading-none">
-            <span className="text-primary italic ml-1">RMS</span>
             <span className="ml-2 px-1.5 py-0.5 rounded-md bg-primary/5 border border-primary/10 text-[7px] text-primary/60 font-mono hidden md:inline-block">V1.0.4</span>
           </h1>
           <div className="flex items-center gap-1.5 mt-1">
@@ -378,9 +377,29 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
     localStorage.setItem('rms_sidebar_collapsed', isCollapsed);
   }, [isCollapsed]);
 
+  const [hrPortalOpen, setHrPortalOpen] = useState(false);
+  const [hrPortalEnabled, setHrPortalEnabled] = useState(true);
+  const [studioEnabled, setStudioEnabled] = useState(true);
+
+  useEffect(() => {
+    const loadFeatureFlags = async () => {
+      try {
+        const [hrRes, studioRes] = await Promise.allSettled([
+          settingsAPI.get('hr_portal_enabled'),
+          settingsAPI.get('document_studio_enabled'),
+        ]);
+        if (hrRes.status === 'fulfilled' && hrRes.value?.value !== undefined)
+          setHrPortalEnabled(hrRes.value.value !== 'false');
+        if (studioRes.status === 'fulfilled' && studioRes.value?.value !== undefined)
+          setStudioEnabled(studioRes.value.value !== 'false');
+      } catch {}
+    };
+    loadFeatureFlags();
+  }, []);
+
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
   const isHRDept = /\bhr\b|human\s*resource/i.test(user?.name || '');
-  const showHRPortal = user?.role === 'hr' || user?.role === 'global_admin' || isHRDept;
+  const showHRPortal = (user?.role === 'hr' || user?.role === 'global_admin' || isHRDept) && hrPortalEnabled;
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-foreground selection:bg-primary/30 font-sans antialiased overflow-x-hidden">
@@ -446,22 +465,37 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
 
               <SidebarItem icon={FileText} label="MEMO" active={currentView === 'memos'} onClick={() => onViewChange('memos')} isCollapsed={isCollapsed} />
               <SidebarItem icon={History} label="My Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} isCollapsed={isCollapsed} />
-              <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
+              {studioEnabled && (
+                <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
+              )}
             </div>
 
             {showHRPortal && (
-              <div className="mt-10 space-y-2">
-                {!isCollapsed && (
-                  <p className="px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
-                    HR Portal
-                  </p>
+              <div className="mt-10 space-y-1">
+                {/* HR Portal toggle button */}
+                <button
+                  onClick={() => setHrPortalOpen(v => !v)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-white/70 hover:text-white hover:bg-white/10 ${hrPortalOpen ? 'bg-white/10 text-white' : ''}`}
+                >
+                  <HeartHandshake size={18} className="shrink-0" />
+                  {!isCollapsed && (
+                    <>
+                      <span className="flex-1 text-left text-[11px] font-black uppercase tracking-[0.15em]">HR Portal</span>
+                      <ChevronDown size={14} className={`transition-transform duration-200 ${hrPortalOpen ? 'rotate-180' : ''}`} />
+                    </>
+                  )}
+                </button>
+                {/* Collapsible items */}
+                {hrPortalOpen && (
+                  <div className="space-y-1 pl-2 animate-in slide-in-from-top-1 duration-200">
+                    <SidebarItem icon={HeartHandshake} label="HR Overview" active={currentView === 'hr_dashboard'} onClick={() => onViewChange('hr_dashboard')} isCollapsed={isCollapsed} />
+                    <SidebarItem icon={Users} label="Employees" active={currentView === 'hr_employees'} onClick={() => onViewChange('hr_employees')} isCollapsed={isCollapsed} />
+                    <SidebarItem icon={CalendarDays} label="Leave" active={currentView === 'hr_leaves'} onClick={() => onViewChange('hr_leaves')} isCollapsed={isCollapsed} />
+                    <SidebarItem icon={Clock} label="Attendance" active={currentView === 'hr_attendance'} onClick={() => onViewChange('hr_attendance')} isCollapsed={isCollapsed} />
+                    <SidebarItem icon={DollarSign} label="Payroll" active={currentView === 'hr_payroll'} onClick={() => onViewChange('hr_payroll')} isCollapsed={isCollapsed} />
+                    <SidebarItem icon={UserPlus} label="Recruitment" active={currentView === 'hr_recruitment'} onClick={() => onViewChange('hr_recruitment')} isCollapsed={isCollapsed} />
+                  </div>
                 )}
-                <SidebarItem icon={HeartHandshake} label="HR Overview" active={currentView === 'hr_dashboard'} onClick={() => onViewChange('hr_dashboard')} isCollapsed={isCollapsed} />
-                <SidebarItem icon={Users} label="Employees" active={currentView === 'hr_employees'} onClick={() => onViewChange('hr_employees')} isCollapsed={isCollapsed} />
-                <SidebarItem icon={CalendarDays} label="Leave" active={currentView === 'hr_leaves'} onClick={() => onViewChange('hr_leaves')} isCollapsed={isCollapsed} />
-                <SidebarItem icon={Clock} label="Attendance" active={currentView === 'hr_attendance'} onClick={() => onViewChange('hr_attendance')} isCollapsed={isCollapsed} />
-                <SidebarItem icon={DollarSign} label="Payroll" active={currentView === 'hr_payroll'} onClick={() => onViewChange('hr_payroll')} isCollapsed={isCollapsed} />
-                <SidebarItem icon={UserPlus} label="Recruitment" active={currentView === 'hr_recruitment'} onClick={() => onViewChange('hr_recruitment')} isCollapsed={isCollapsed} />
               </div>
             )}
 
@@ -521,9 +555,13 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
             <>
               <SidebarItem icon={LayoutDashboard} label="Dashboard" active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} mobile />
               <SidebarItem icon={FileText} label="MEMO" active={currentView === 'memos'} onClick={() => onViewChange('memos')} mobile />
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#206e33] shadow-lg hover:scale-110 transition-transform active:scale-95 -translate-y-4 border-4 border-[#FAF9F6] cursor-pointer" onClick={() => onViewChange('document_studio')}>
-                <PenTool size={20} />
-              </div>
+              {studioEnabled ? (
+                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#206e33] shadow-lg hover:scale-110 transition-transform active:scale-95 -translate-y-4 border-4 border-[#FAF9F6] cursor-pointer" onClick={() => onViewChange('document_studio')}>
+                  <PenTool size={20} />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-white/30 -translate-y-4 border-4 border-[#FAF9F6]" />
+              )}
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
               <SidebarItem icon={History} label="Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} mobile />
             </>
