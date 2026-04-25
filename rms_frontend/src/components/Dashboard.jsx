@@ -5,15 +5,15 @@ import { reqAPI } from '../lib/api';
 import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, Eye, AlertTriangle, ShieldCheck, ArrowRight } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
-  <div onClick={onClick} className="glass p-5 rounded-[2rem] border border-border/40 relative overflow-hidden group hover:border-primary/40 transition-all cursor-pointer bg-white/70 shadow-sm hover:shadow-xl hover:shadow-primary/5 active:scale-[0.98]">
-    <div className={`absolute top-0 right-0 w-32 h-32 bg-${color}-500/5 blur-[80px] rounded-full translate-x-12 -translate-y-12`}></div>
-    <div className="flex flex-col gap-4 relative z-10">
-      <div className={`w-12 h-12 rounded-2xl bg-${color}-500/10 border border-${color}-500/20 text-${color}-600 flex items-center justify-center group-hover:bg-${color}-500 group-hover:text-white transition-all duration-500 shadow-inner`}>
-        <Icon size={24} />
+  <div onClick={onClick} className="glass p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-border/40 relative overflow-hidden group hover:border-primary/40 transition-all cursor-pointer bg-white/70 shadow-sm hover:shadow-xl hover:shadow-primary/5 active:scale-[0.98]">
+    <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-500/5 blur-[60px] rounded-full translate-x-8 -translate-y-8`}></div>
+    <div className="flex flex-col gap-2.5 sm:gap-4 relative z-10">
+      <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-${color}-500/10 border border-${color}-500/20 text-${color}-600 flex items-center justify-center group-hover:bg-${color}-500 group-hover:text-white transition-all duration-500 shadow-inner`}>
+        <Icon size={18} />
       </div>
       <div>
-        <p className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.2em] mb-1">{label}</p>
-        <h3 className="text-4xl font-black text-foreground tracking-tighter leading-none">{value}</h3>
+        <p className="text-[8px] sm:text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-0.5 sm:mb-1 leading-tight">{label}</p>
+        <h3 className="text-2xl sm:text-4xl font-black text-foreground tracking-tighter leading-none">{value}</h3>
       </div>
     </div>
   </div>
@@ -124,7 +124,7 @@ const Dashboard = ({ onViewChange }) => {
         )}
 
         <div className="space-y-1">
-          <h1 className="text-4xl font-black text-foreground tracking-tighter leading-tight">
+          <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tighter leading-tight">
             {user?.role === 'department' ? (
               <span>{user.name} <span className="text-primary italic font-serif">Unit Portal</span></span>
             ) : (
@@ -138,7 +138,7 @@ const Dashboard = ({ onViewChange }) => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           <StatCard label="Pending Approval" value={String(stats.pending).padStart(2, '0')} icon={Clock} color="orange" onClick={() => onViewChange('requisitions')} />
           <StatCard label="Total Approved" value={String(stats.approved).padStart(2, '0')} icon={CheckCircle2} color="emerald" onClick={() => onViewChange('requisitions')} />
           <StatCard label="Rejected" value={String(stats.rejected).padStart(2, '0')} icon={XCircle} color="red" onClick={() => onViewChange('requisitions')} />
