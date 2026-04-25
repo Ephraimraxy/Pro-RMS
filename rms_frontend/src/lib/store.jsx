@@ -10,6 +10,27 @@ const workflowStore = localforage.createInstance({ name: 'CSS_RMS', storeName: '
 const departmentStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'departments' });
 const syncQueueStore    = localforage.createInstance({ name: 'CSS_RMS', storeName: 'sync_queue' });
 const notificationStore = localforage.createInstance({ name: 'CSS_RMS', storeName: 'notifications' });
+const fileUploadStore   = localforage.createInstance({ name: 'CSS_RMS', storeName: 'file_uploads' });
+
+// ── File blob helpers for offline queuing ──
+const OFFLINE_FILE_SIZE_LIMIT = 50 * 1024 * 1024; // 50 MB total guard
+
+async function storeFileBlob(file) {
+  const key = `file_${generateClientId()}`;
+  const buffer = await file.arrayBuffer();
+  await fileUploadStore.setItem(key, { name: file.name, type: file.type, size: file.size, buffer });
+  return key;
+}
+
+async function restoreFile(key) {
+  const stored = await fileUploadStore.getItem(key);
+  if (!stored) return null;
+  return new File([stored.buffer], stored.name, { type: stored.type });
+}
+
+async function cleanupFileBlobs(keys) {
+  await Promise.all(keys.map(k => fileUploadStore.removeItem(k)));
+}
 
 // ── Seed data ──
 const SEED_REQUISITIONS = [];
@@ -121,6 +142,24 @@ export async function flushSyncQueue({ force = false } = {}) {
         await vettingAPI.sendToVetting(entry.reqId, entry.payload.vettingDeptId);
       } else if (type === 'vettingAction') {
         await vettingAPI.vettingAction(entry.reqId, entry.payload);
+      } else if (type === 'uploadAttachment') {
+        const files = (await Promise.all(entry.fileKeys.map(restoreFile))).filter(Boolean);
+        if (files.length > 0) {
+          const formData = new FormData();
+          files.forEach(f => formData.append('files', f));
+          const { stageName, stageKey, uploaderDept } = entry.meta || {};
+          if (stageName) formData.append('stageName', stageName);
+          if (stageKey) formData.append('stageKey', stageKey);
+          if (uploaderDept) formData.append('uploaderDept', uploaderDept);
+          await api.post(`/requisitions/${entry.requisitionId}/attachments`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          await cleanupFileBlobs(entry.fileKeys);
+        }
+      } else if (type === 'vettingActionWithFile') {
+        const file = await restoreFile(entry.fileKey);
+        await vettingAPI.vettingAction(entry.reqId, { ...entry.payload, file });
+        await cleanupFileBlobs([entry.fileKey]);
       }
       synced += 1;
     } catch (err) {
@@ -150,9 +189,27 @@ export async function getSyncQueueStatus() {
 
 export async function uploadAttachments(requisitionId, files, { stageName, stageKey, uploaderDept } = {}) {
   if (!navigator.onLine) {
-    toast.error("Attachments require an active connection");
-    throw new Error('Offline - attachments blocked');
+    const totalSize = files.reduce((s, f) => s + f.size, 0);
+    if (totalSize > OFFLINE_FILE_SIZE_LIMIT) {
+      toast.error('Files too large to queue offline (max 50 MB total)');
+      throw new Error('Offline — files exceed 50 MB limit');
+    }
+    const fileKeys = await Promise.all(files.map(storeFileBlob));
+    const queue = (await syncQueueStore.getItem('pending')) || [];
+    queue.push({
+      type: 'uploadAttachment',
+      requisitionId,
+      fileKeys,
+      meta: { stageName, stageKey, uploaderDept },
+      retryCount: 0,
+      nextAttemptAt: Date.now(),
+      lastError: null
+    });
+    await syncQueueStore.setItem('pending', queue);
+    toast('Offline: Files saved locally — will upload when reconnected.');
+    return null;
   }
+
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
   if (stageName) formData.append('stageName', stageName);
@@ -550,19 +607,34 @@ export async function sendToVettingRequisition(reqId, vettingDeptId) {
   }
 }
 
-// File attachments cannot be serialised to IndexedDB — block them offline.
 export async function vettingActionRequisition(reqId, { action, comment, nextDeptId, file } = {}) {
-  if (file && !navigator.onLine) {
-    toast.error('File attachments require an active connection.');
-    throw new Error('Offline — file attachments blocked');
-  }
   try {
     return await vettingAPI.vettingAction(reqId, { action, comment, nextDeptId, file });
   } catch (err) {
-    if (!file && isNetworkError(err)) {
-      await queueOfflineAction('vettingAction', reqId, { action, comment, nextDeptId });
+    if (!isNetworkError(err)) throw err;
+
+    if (file) {
+      if (file.size > OFFLINE_FILE_SIZE_LIMIT) {
+        toast.error('File too large to queue offline (max 50 MB)');
+        throw new Error('Offline — file exceeds 50 MB limit');
+      }
+      const fileKey = await storeFileBlob(file);
+      const queue = (await syncQueueStore.getItem('pending')) || [];
+      queue.push({
+        type: 'vettingActionWithFile',
+        reqId,
+        fileKey,
+        payload: { action, comment, nextDeptId },
+        retryCount: 0,
+        nextAttemptAt: Date.now(),
+        lastError: null
+      });
+      await syncQueueStore.setItem('pending', queue);
+      toast('Offline: Vetting action with file queued — will sync when reconnected.');
       return null;
     }
-    throw err;
+
+    await queueOfflineAction('vettingAction', reqId, { action, comment, nextDeptId });
+    return null;
   }
 }
