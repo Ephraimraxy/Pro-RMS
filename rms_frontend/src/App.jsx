@@ -219,12 +219,14 @@ const AppContent = () => {
 
   if (!user) return <Login />;
 
-  // Security Guard: Prevent department users from accessing admin/HR views,
-  // and prevent non-HR users from accessing HR portal views.
   const isAdminView = ['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView);
   const isHRView = ['hr_dashboard', 'hr_employees', 'hr_leaves', 'hr_attendance', 'hr_payroll', 'hr_recruitment'].includes(currentView);
-  const activeView = (user.role === 'department' && (isAdminView || isHRView)) ? 'dashboard'
-    : (user.role !== 'hr' && user.role !== 'global_admin' && isHRView) ? 'dashboard'
+  // HR department users log in with role='department' — detect them by name
+  const isHRDept = /\bhr\b|human\s*resource/i.test(user?.name || '');
+  const canAccessHR    = user.role === 'hr' || user.role === 'global_admin' || isHRDept;
+  const canAccessAdmin = user.role === 'global_admin';
+  const activeView = (isAdminView && !canAccessAdmin) ? 'dashboard'
+    : (isHRView && !canAccessHR) ? 'dashboard'
     : currentView;
 
   const views = {

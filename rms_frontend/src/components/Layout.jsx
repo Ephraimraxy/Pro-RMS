@@ -379,6 +379,8 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
   }, [isCollapsed]);
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
+  const isHRDept = /\bhr\b|human\s*resource/i.test(user?.name || '');
+  const showHRPortal = user?.role === 'hr' || user?.role === 'global_admin' || isHRDept;
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-foreground selection:bg-primary/30 font-sans antialiased overflow-x-hidden">
@@ -447,7 +449,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               <SidebarItem icon={PenTool} label="Studio" active={currentView === 'document_studio'} onClick={() => onViewChange('document_studio')} isCollapsed={isCollapsed} />
             </div>
 
-            {(user?.role === 'hr' || user?.role === 'global_admin') && (
+            {showHRPortal && (
               <div className="mt-10 space-y-2">
                 {!isCollapsed && (
                   <p className="px-4 text-[9px] font-black text-white/30 uppercase tracking-[0.25em] mb-4 ml-1 animate-in fade-in slide-in-from-left-2 duration-700">
@@ -525,7 +527,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
               <SidebarItem icon={ClipboardCheck} label="Requisitions" active={currentView === 'requisitions'} onClick={() => onViewChange('requisitions')} mobile />
               <SidebarItem icon={History} label="Activity" active={currentView === 'activity'} onClick={() => onViewChange('activity')} mobile />
             </>
-          ) : user?.role === 'hr' ? (
+          ) : showHRPortal ? (
             <>
               <SidebarItem icon={HeartHandshake} label="HR Home" active={currentView === 'hr_dashboard'} onClick={() => onViewChange('hr_dashboard')} mobile />
               <SidebarItem icon={Users} label="People" active={currentView === 'hr_employees'} onClick={() => onViewChange('hr_employees')} mobile />
