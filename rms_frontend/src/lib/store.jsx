@@ -142,6 +142,10 @@ export async function flushSyncQueue({ force = false } = {}) {
         await vettingAPI.sendToVetting(entry.reqId, entry.payload.vettingDeptId);
       } else if (type === 'vettingAction') {
         await vettingAPI.vettingAction(entry.reqId, entry.payload);
+      } else if (type === 'updateStatus') {
+        const { newStatus, remarks } = entry.payload;
+        if (newStatus === 'approved') await reqAPI.approveRequisition(entry.reqId, remarks);
+        else if (newStatus === 'rejected') await reqAPI.rejectRequisition(entry.reqId, remarks);
       } else if (type === 'uploadAttachment') {
         const done = new Set(entry.uploadedKeys || []);
         const { stageName, stageKey, uploaderDept } = entry.meta || {};
@@ -248,29 +252,39 @@ export async function getAttachments(requisitionId) {
 }
 
 export async function updateRequisitionStatus(id, newStatus, remarks = '') {
-  let updated;
-  if (newStatus === 'approved') {
-    updated = await reqAPI.approveRequisition(id, remarks);
-  } else if (newStatus === 'rejected') {
-    updated = await reqAPI.rejectRequisition(id, remarks);
-  } else {
-    return;
+  if (!['approved', 'rejected'].includes(newStatus)) return;
+
+  try {
+    const updated = newStatus === 'approved'
+      ? await reqAPI.approveRequisition(id, remarks)
+      : await reqAPI.rejectRequisition(id, remarks);
+
+    const all = await requisitionStore.getItem('all') || [];
+    const idx = all.findIndex(r => r.id === id);
+    if (idx !== -1) {
+      all[idx] = { ...all[idx], ...updated, status: updated.status || newStatus };
+      await requisitionStore.setItem('all', all);
+    }
+    await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
+    window.dispatchEvent(new CustomEvent('requisitionUpdated'));
+    toast.success(`${id} has been ${newStatus}`, {
+      icon: <img src="/CSS_Group.png" className="w-8 h-5 object-cover rounded" alt="" />
+    });
+  } catch (err) {
+    if (!isNetworkError(err)) throw err;
+
+    // Optimistically update local cache so UI reflects the action immediately
+    const all = await requisitionStore.getItem('all') || [];
+    const idx = all.findIndex(r => r.id === id);
+    if (idx !== -1) {
+      all[idx] = { ...all[idx], status: newStatus };
+      await requisitionStore.setItem('all', all);
+    }
+    await queueOfflineAction('updateStatus', id, { newStatus, remarks });
+    await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition (offline)`, `${id} queued for sync`);
+    window.dispatchEvent(new CustomEvent('requisitionUpdated'));
+    toast(`Offline: ${newStatus === 'approved' ? 'Approval' : 'Rejection'} queued — will sync when reconnected.`);
   }
-
-  const all = await getRequisitions();
-  const idx = all.findIndex(r => r.id === id);
-  if (idx !== -1) {
-    all[idx] = { ...all[idx], ...updated, status: updated.status || newStatus };
-    await requisitionStore.setItem('all', all);
-  }
-  await logActivity(`${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)} Requisition`, `${id} status changed to ${newStatus}`);
-
-  // Dispatch event for global listeners (like Action Alert)
-  window.dispatchEvent(new CustomEvent('requisitionUpdated'));
-
-  toast.success(`${id} has been ${newStatus}`, {
-    icon: <img src="/CSS_Group.png" className="w-8 h-5 object-cover rounded" alt="" />
-  });
 }
 
 export async function downloadSignedPdf(id) {
