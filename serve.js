@@ -1446,6 +1446,13 @@ app.post('/api/requisitions', authenticateToken, generalLimiter, async (req, res
 
       // Validate target department if supplied
       let targetDepartmentId = data.targetDepartmentId ? parseInt(data.targetDepartmentId) : null;
+
+      // Non-admin, non-draft submissions must always specify a target department
+      const isAdminSender = normalizeRole(req.user.role) === 'global_admin';
+      if (!isDraft && !isAdminSender && !targetDepartmentId) {
+        return res.status(400).json({ error: 'Please select a department to send this request to.' });
+      }
+
       if (targetDepartmentId) {
         const targetDept = await prisma.department.findUnique({ where: { id: targetDepartmentId } });
         if (!targetDept) {

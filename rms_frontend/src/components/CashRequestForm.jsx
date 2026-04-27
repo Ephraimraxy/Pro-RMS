@@ -67,6 +67,9 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
     if (type === 'Material' && !comment.trim()) {
       toast.error('Please describe material needs in the description box'); return;
     }
+    if (!isDraft && !targetDeptId) {
+      toast.error('Please select a department to send this request to'); return;
+    }
 
     setSubmitting(true);
     try {
