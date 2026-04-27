@@ -1325,76 +1325,82 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
   const forwardEvents = detail?.forwardEvents || [];
   const verCode     = detail?.approvals?.slice(-1)[0]?.signature?.verificationCode;
 
-  // Shared Brief + Items block — rendered after Current Status (mobile) and in left column (desktop)
-  const briefAndItems = (() => {
-    let parsedContent = null;
-    if (req.content) { try { parsedContent = JSON.parse(req.content); } catch {} }
-    const fmt = n => `₦${Number(n || 0).toLocaleString()}`;
-    return (
-      <div className="space-y-4">
-        {req.description && (
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <FileText size={15} className="text-primary" />
-              <p className="text-xs font-black text-foreground uppercase tracking-[0.1em]">Requisition Brief</p>
-            </div>
-            <p className="text-base font-semibold text-foreground leading-relaxed bg-[#FAF9F6]/50 p-4 rounded-xl border border-border/40 shadow-inner">
-              {req.description}
-            </p>
-          </div>
-        )}
-        {parsedContent?.itemized && Array.isArray(parsedContent.items) && parsedContent.items.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Paperclip size={15} className="text-primary" />
-              <p className="text-xs font-black text-foreground uppercase tracking-[0.1em]">Item Details</p>
-            </div>
-            {parsedContent.comment && <p className="text-sm text-muted-foreground italic px-1">{parsedContent.comment}</p>}
-            <div className="overflow-x-auto rounded-xl border border-border/50 shadow-sm">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/60 border-b border-border/50">
-                    <th className="text-left px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider w-8">S/N</th>
-                    <th className="text-left px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider w-12">Qty</th>
-                    <th className="text-left px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Item Description</th>
-                    <th className="text-right px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Unit Price</th>
-                    <th className="text-right px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {parsedContent.items.map((item, idx) => (
-                    <tr key={idx} className="bg-white hover:bg-muted/20 transition-colors">
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground font-mono">{idx + 1}</td>
-                      <td className="px-3 py-2.5 text-xs font-semibold">{item.qty}</td>
-                      <td className="px-3 py-2.5 text-sm font-medium text-foreground">{item.description}</td>
-                      <td className="px-3 py-2.5 text-xs text-right font-mono text-muted-foreground">{fmt(item.amount)}</td>
-                      <td className="px-3 py-2.5 text-xs text-right font-mono font-bold text-foreground">{fmt(item.lineTotal)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-primary/5 border-t-2 border-primary/20">
-                    <td colSpan={4} className="px-3 py-2.5 text-xs font-black text-right uppercase tracking-widest text-primary">Grand Total</td>
-                    <td className="px-3 py-2.5 text-sm font-black text-right font-mono text-primary">{fmt(parsedContent.total)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
-        {parsedContent && !parsedContent.itemized && parsedContent.description && (
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <FileText size={15} className="text-primary" />
-              <p className="text-xs font-black text-foreground uppercase tracking-[0.1em]">Material Description</p>
-            </div>
-            <p className="text-sm text-foreground leading-relaxed bg-[#FAF9F6]/50 p-4 rounded-xl border border-border/40 shadow-inner whitespace-pre-wrap">
-              {parsedContent.description}
-            </p>
-          </div>
-        )}
+  // Split content into brief-only and items-only for independent mobile slot placement
+  const _parsedContent = (() => {
+    if (!req.content) return null;
+    try { return JSON.parse(req.content); } catch { return null; }
+  })();
+  const _fmt = n => `₦${Number(n || 0).toLocaleString()}`;
+
+  const briefBlock = req.description ? (
+    <div className="space-y-2">
+      <div className="flex items-center space-x-2">
+        <FileText size={15} className="text-primary" />
+        <p className="text-xs font-black text-foreground uppercase tracking-[0.1em]">Requisition Brief</p>
       </div>
-    );
+      <p className="text-base font-semibold text-foreground leading-relaxed bg-[#FAF9F6]/50 p-4 rounded-xl border border-border/40 shadow-inner">
+        {req.description}
+      </p>
+    </div>
+  ) : null;
+
+  const itemsBlock = (() => {
+    if (!_parsedContent) return null;
+    if (_parsedContent.itemized && Array.isArray(_parsedContent.items) && _parsedContent.items.length > 0) {
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <Paperclip size={15} className="text-primary" />
+            <p className="text-xs font-black text-foreground uppercase tracking-[0.1em]">Item Details</p>
+          </div>
+          {_parsedContent.comment && <p className="text-sm text-muted-foreground italic px-1">{_parsedContent.comment}</p>}
+          <div className="overflow-x-auto rounded-xl border border-border/50 shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/60 border-b border-border/50">
+                  <th className="text-left px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider w-8">S/N</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider w-12">Qty</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Item Description</th>
+                  <th className="text-right px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Unit Price</th>
+                  <th className="text-right px-3 py-2.5 text-[10px] font-black text-muted-foreground uppercase tracking-wider">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {_parsedContent.items.map((item, idx) => (
+                  <tr key={idx} className="bg-white hover:bg-muted/20 transition-colors">
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground font-mono">{idx + 1}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold">{item.qty}</td>
+                    <td className="px-3 py-2.5 text-sm font-medium text-foreground">{item.description}</td>
+                    <td className="px-3 py-2.5 text-xs text-right font-mono text-muted-foreground">{_fmt(item.amount)}</td>
+                    <td className="px-3 py-2.5 text-xs text-right font-mono font-bold text-foreground">{_fmt(item.lineTotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-primary/5 border-t-2 border-primary/20">
+                  <td colSpan={4} className="px-3 py-2.5 text-xs font-black text-right uppercase tracking-widest text-primary">Grand Total</td>
+                  <td className="px-3 py-2.5 text-sm font-black text-right font-mono text-primary">{_fmt(_parsedContent.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      );
+    }
+    if (!_parsedContent.itemized && _parsedContent.description) {
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <FileText size={15} className="text-primary" />
+            <p className="text-xs font-black text-foreground uppercase tracking-[0.1em]">Material Description</p>
+          </div>
+          <p className="text-sm text-foreground leading-relaxed bg-[#FAF9F6]/50 p-4 rounded-xl border border-border/40 shadow-inner whitespace-pre-wrap">
+            {_parsedContent.description}
+          </p>
+        </div>
+      );
+    }
+    return null;
   })();
 
   return (
@@ -1499,8 +1505,8 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
             {/* Left Content Column */}
             <div className="overflow-y-auto custom-scrollbar p-4 lg:p-6 space-y-6 order-2 lg:order-1 lg:border-r border-border/50">
               
-              {/* Brief + Items — desktop only (mobile shows them in the sidebar slot below Current Status) */}
-              <div className="hidden lg:block">{briefAndItems}</div>
+              {/* Brief + Items — desktop only; mobile renders each in its own sidebar slot */}
+              <div className="hidden lg:block space-y-6">{briefBlock}{itemsBlock}</div>
 
               {/* Action Panels */}
               {isReturnedToCreator && req.status === 'pending' && !loading && (
@@ -1818,8 +1824,8 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                  )}
               </div>
 
-              {/* Brief + Items — mobile only (desktop shows them in the wider left column) */}
-              <div className="lg:hidden border-t border-border/30 pt-4">{briefAndItems}</div>
+              {/* Brief only — mobile slot 1: appears between Current Status and Processing Chain */}
+              {briefBlock && <div className="lg:hidden border-t border-border/30 pt-4">{briefBlock}</div>}
 
               {/* Processing Chain (for inter-dept) OR Approval Trail */}
               <div className="space-y-3 flex-1">
@@ -1853,6 +1859,9 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                   </>
                 ) : null}
               </div>
+
+              {/* Items — mobile slot 2: appears after Processing Chain */}
+              {itemsBlock && <div className="lg:hidden border-t border-border/30 pt-4">{itemsBlock}</div>}
 
               {/* Vetting Chain History */}
               {detail?.vettingEvents?.length > 0 && (
