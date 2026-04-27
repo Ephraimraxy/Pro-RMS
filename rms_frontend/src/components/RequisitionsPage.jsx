@@ -2354,7 +2354,11 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                                 // Sub-workflow Statuses
                                 if (norm.finalState === 'published') return { label: 'Published', color: statusColors.published };
                                 if (norm.finalState === 'treated')   return { label: 'Treated', color: statusColors.treated };
-                                if (norm.finalState === 'vetting')   return { label: 'Vetting', color: statusColors.vetting };
+                                if (norm.finalState === 'vetting') {
+                                  const cvId = r.currentVettingDeptId ? parseInt(r.currentVettingDeptId) : null;
+                                  const cvDeptName = cvId ? departments.find(d => d.id === cvId)?.name : null;
+                                  return { label: 'Vetting', color: statusColors.vetting, sub: cvDeptName ? `now in ${cvDeptName}` : null };
+                                }
                                 if (norm.finalState === 'approved' && norm.status === 'approved') return { label: 'Final Approved', color: statusColors.approved };
                                 
                                 if (norm.status === 'approved') return { label: 'Approved (Internal)', color: statusColors.approved };
