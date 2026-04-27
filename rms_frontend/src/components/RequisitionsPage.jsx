@@ -1541,24 +1541,6 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                 </div>
               )}
 
-              {/* Final Approve Panel — for dept users (Chairman/CEO, GM, HR) */}
-              {user?.role === 'department' && detail && !loading && (
-                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
-                  <FinalApprovePanel
-                    req={req}
-                    detail={detail}
-                    user={user}
-                    departments={departments}
-                    onApproveCheck={setApproveChecked}
-                    onApproved={() => {
-                      setApproveChecked(false);
-                      getRequisitionDetail(req.id).then(d => setDetail(d));
-                      onAction();
-                    }}
-                  />
-                </div>
-              )}
-
               {/* Vetting Panel — for ICC, Audit, Account and Chairman */}
               {user?.role === 'department' && detail && !loading &&
                detail.finalApprovalStatus && detail.finalApprovalStatus !== 'none' &&
@@ -1761,6 +1743,24 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                   </div>
                 );
               })()}
+
+              {/* Final Approve Panel — below Attach Documents, for dept authority users */}
+              {user?.role === 'department' && detail && !loading && (
+                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
+                  <FinalApprovePanel
+                    req={req}
+                    detail={detail}
+                    user={user}
+                    departments={departments}
+                    onApproveCheck={setApproveChecked}
+                    onApproved={() => {
+                      setApproveChecked(false);
+                      getRequisitionDetail(req.id).then(d => setDetail(d));
+                      onAction();
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Mobile-only Close Document — sits below attachments */}
               <button onClick={onClose} className="lg:hidden w-full text-[9px] text-muted-foreground hover:text-foreground font-black uppercase tracking-[0.2em] transition-colors py-3 border-t border-border/50 mt-2">
