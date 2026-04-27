@@ -311,7 +311,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
 
         // Items actively waiting for MY action (Red Pulse: folder is on your desk)
         const pendingForMe = all.filter(r => {
-          const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
+          const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
           const needsFinal = isExecutive && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
           const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
           return isTargeted || needsFinal || isVetting;

@@ -2092,7 +2092,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     const parsed = z.object({
       action: z.enum(['forward', 'treated', 'return']),
       comment: z.string().optional(),
-      nextDeptId: z.number().optional()
+      nextDeptId: z.union([z.string(), z.number()]).transform(v => parseInt(String(v))).optional()
     }).safeParse(body || {});
     if (!parsed.success) return res.status(400).json({ error: 'Invalid vetting payload' });
     const { action, comment, nextDeptId } = parsed.data;
