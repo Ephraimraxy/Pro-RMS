@@ -2353,7 +2353,11 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                                 
                                 // Sub-workflow Statuses
                                 if (norm.finalState === 'published') return { label: 'Published', color: statusColors.published };
-                                if (norm.finalState === 'treated')   return { label: 'Treated', color: statusColors.treated };
+                                if (norm.finalState === 'treated') {
+                                  const tbId = r.treatedByDeptId ? parseInt(r.treatedByDeptId) : null;
+                                  const tbName = tbId ? departments.find(d => d.id === tbId)?.name : null;
+                                  return { label: 'Treated', color: statusColors.treated, sub: tbName ? `by ${tbName}` : null };
+                                }
                                 if (norm.finalState === 'vetting') {
                                   const cvId = r.currentVettingDeptId ? parseInt(r.currentVettingDeptId) : null;
                                   const cvDeptName = cvId ? departments.find(d => d.id === cvId)?.name : null;
