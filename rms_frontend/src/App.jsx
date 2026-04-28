@@ -185,6 +185,15 @@ const AppContent = () => {
     navigate('dashboard');
     setDeptProfile(null);
     setShowDeptModal(false);
+
+    // Handle push-notification deep link: /?req=123
+    const params = new URLSearchParams(window.location.search);
+    const reqId = params.get('req');
+    if (reqId && user) {
+      window.history.replaceState({}, '', window.location.hash || '/');
+      setDeepLinkReqId(parseInt(reqId));
+      setCurrentView('requisitions');
+    }
   }, [user?.id]);
 
   useEffect(() => {

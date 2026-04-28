@@ -569,7 +569,7 @@ app.post('/api/requisitions/:id/tag', authenticateToken, async (req, res) => {
       await sendPushNotification(newlyTagged, {
         title: 'Tagged as Observer',
         body: `You can now follow Requisition #${reqId}: ${requisition.title || ''}`,
-        url: '/'
+        url: `/?req=${reqId}`
       });
     }
 
@@ -2208,7 +2208,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
     }
 
     broadcastUpdate(parseInt(id));
-    pushToTaggedDepts(parseInt(id), { title: 'Requisition Updated', body: `Req #${id} has been ${returnToSender ? 'returned' : 'forwarded'}.`, url: '/' });
+    pushToTaggedDepts(parseInt(id), { title: 'Requisition Updated', body: `Req #${id} has been ${returnToSender ? 'returned' : 'forwarded'}.`, url: `/?req=${id}` });
     res.json(updated);
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2272,7 +2272,7 @@ app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, r
     });
 
     broadcastUpdate(reqId);
-    pushToTaggedDepts(reqId, { title: 'Requisition Finally Approved', body: `Req #${id} has been finally approved.`, url: '/' });
+    pushToTaggedDepts(reqId, { title: 'Requisition Finally Approved', body: `Req #${id} has been finally approved.`, url: `/?req=${reqId}` });
     res.json(updated);
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2345,7 +2345,7 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
     });
 
     broadcastUpdate(reqId);
-    pushToTaggedDepts(reqId, { title: 'Requisition Sent to Vetting', body: `Req #${id} has been sent for vetting.`, url: '/' });
+    pushToTaggedDepts(reqId, { title: 'Requisition Sent to Vetting', body: `Req #${id} has been sent for vetting.`, url: `/?req=${reqId}` });
     res.json({ success: true });
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2542,7 +2542,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     });
 
     broadcastUpdate(reqId);
-    pushToTaggedDepts(reqId, { title: 'Vetting Update', body: `Req #${id} vetting action: ${action} by ${actingDeptName}.`, url: '/' });
+    pushToTaggedDepts(reqId, { title: 'Vetting Update', body: `Req #${id} vetting action: ${action} by ${actingDeptName}.`, url: `/?req=${reqId}` });
     res.json({ success: true });
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2604,7 +2604,7 @@ app.post('/api/requisitions/:id/approve', authenticateToken, approvalLimiter, as
     if (!parsed.success) return res.status(400).json({ error: 'Invalid approval payload' });
     const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'approved', remarks: parsed.data.remarks, user: req.user });
     broadcastUpdate(parseInt(id));
-    pushToTaggedDepts(parseInt(id), { title: 'Requisition Approved', body: `Req #${id} has been approved at a workflow stage.`, url: '/' });
+    pushToTaggedDepts(parseInt(id), { title: 'Requisition Approved', body: `Req #${id} has been approved at a workflow stage.`, url: `/?req=${id}` });
     res.json(updated);
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });
@@ -2618,7 +2618,7 @@ app.post('/api/requisitions/:id/reject', authenticateToken, approvalLimiter, asy
     if (!parsed.success) return res.status(400).json({ error: 'Invalid rejection payload' });
     const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'rejected', remarks: parsed.data.remarks, user: req.user });
     broadcastUpdate(parseInt(id));
-    pushToTaggedDepts(parseInt(id), { title: 'Requisition Rejected', body: `Req #${id} has been rejected.`, url: '/' });
+    pushToTaggedDepts(parseInt(id), { title: 'Requisition Rejected', body: `Req #${id} has been rejected.`, url: `/?req=${id}` });
     res.json(updated);
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });

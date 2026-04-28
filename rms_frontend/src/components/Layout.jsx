@@ -280,8 +280,29 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       } catch (err) { console.error("Notif fetch error:", err); }
     };
     fetchNotifs();
+    // Fallback poll — catches anything SSE misses (e.g. reconnect gaps)
     const interval = setInterval(fetchNotifs, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Global SSE — refresh notification bell instantly on any requisition update
+  useEffect(() => {
+    const token = localStorage.getItem('rms_token');
+    if (!token) return;
+    let es;
+    let reconnectTimer;
+    const connect = () => {
+      es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+      es.addEventListener('requisition_updated', () => {
+        getNotifications().then(data => setNotifications(data)).catch(() => {});
+      });
+      es.onerror = () => {
+        es.close();
+        reconnectTimer = setTimeout(connect, 8000);
+      };
+    };
+    connect();
+    return () => { es?.close(); clearTimeout(reconnectTimer); };
   }, []);
 
   const [deptStatus, setDeptStatus] = useState({ isReady: true });
@@ -351,27 +372,32 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
     };
   }, [user?.deptId]);
 
-  // PWA push notification subscription — ask once after login
+  // PWA push notification subscription — register/refresh on every login
   useEffect(() => {
     if (!user) return;
     const subscribeToPush = async () => {
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
       try {
         const { key } = await fetch('/api/push/vapid-public').then(r => r.json());
-        if (!key) return; // VAPID not configured yet
-        const reg = await navigator.serviceWorker.ready;
-        const existing = await reg.pushManager.getSubscription();
-        if (existing) return; // Already subscribed
+        if (!key) return; // VAPID not configured — skip silently
+
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') return;
-        const sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: (() => {
-            const b64 = key.replace(/-/g, '+').replace(/_/g, '/');
-            const raw = atob(b64);
-            return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
-          })()
-        });
+
+        const appKey = (() => {
+          const b64 = key.replace(/-/g, '+').replace(/_/g, '/');
+          const raw = atob(b64);
+          return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+        })();
+
+        const reg = await navigator.serviceWorker.ready;
+        // Reuse existing subscription or create a new one
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+        }
+
+        // Always re-POST so the server has the latest deptId/userId binding
         const { endpoint, keys } = sub.toJSON();
         await fetch('/api/push/subscribe', {
           method: 'POST',

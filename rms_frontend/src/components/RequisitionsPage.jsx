@@ -2196,9 +2196,18 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
         const { id } = JSON.parse(e.data);
         // Silent background refresh of list
         loadData(true);
+        setSyncStale(false);
         // If this exact req is open, fetch fresh detail immediately
         if (selectedReqRef.current?.id === id) {
           reqAPI.getRequisition(id).then(fresh => setSelectedReq(normalizeReq(fresh))).catch(() => {});
+        } else {
+          // Show a subtle in-app toast so user knows something changed
+          toast(`Requisition #${id} was updated`, {
+            icon: '🔔',
+            duration: 3000,
+            style: { fontSize: '12px' },
+            id: `req-update-${id}` // deduplicate rapid fires
+          });
         }
       });
       es.onerror = () => {
