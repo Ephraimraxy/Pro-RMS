@@ -237,6 +237,12 @@ export const reqAPI = {
     return api.post('/department/signature', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
+  },
+  async getRequisitionTags(id) {
+    return api.get(`/requisitions/${id}/tags`);
+  },
+  async tagRequisitionDepts(id, deptIds) {
+    return api.post(`/requisitions/${id}/tag`, { deptIds });
   }
 };
 

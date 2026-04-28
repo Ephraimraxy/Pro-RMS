@@ -411,6 +411,173 @@ app.delete('/api/push/subscribe', authenticateToken, async (req, res) => {
 
 const normalizeRole = (role) => (role || '').toLowerCase();
 
+// ── Broadcast push + in-app to ALL departments involved in a requisition ──────
+// Covers: creator dept, target dept, forward chain, vetting chain, tagged depts.
+// This is the single function to call after any mutation — replaces pushToTaggedDepts.
+async function broadcastPushToInvolved(reqId, payload) {
+  try {
+    const req = await prisma.requisition.findUnique({
+      where: { id: reqId },
+      select: { departmentId: true, targetDepartmentId: true }
+    });
+    if (!req) return;
+    const deptIds = new Set([req.departmentId, req.targetDepartmentId].filter(Boolean));
+
+    // Vetting-related depts
+    try {
+      const ext = await prisma.$queryRaw`
+        SELECT "currentVettingDeptId", "finalApprovedByDeptId", "treatedByDeptId"
+        FROM "Requisition" WHERE id = ${reqId} LIMIT 1
+      `;
+      const e = ext?.[0] || {};
+      if (e.currentVettingDeptId) deptIds.add(parseInt(e.currentVettingDeptId));
+      if (e.finalApprovedByDeptId) deptIds.add(parseInt(e.finalApprovedByDeptId));
+      if (e.treatedByDeptId) deptIds.add(parseInt(e.treatedByDeptId));
+    } catch (_) {}
+
+    // Forward chain depts
+    try {
+      const fwds = await prisma.forwardEvent.findMany({
+        where: { requisitionId: reqId },
+        select: { fromDeptId: true, toDeptId: true }
+      });
+      for (const f of fwds) {
+        if (f.fromDeptId) deptIds.add(f.fromDeptId);
+        if (f.toDeptId) deptIds.add(f.toDeptId);
+      }
+    } catch (_) {}
+
+    // Vetting chain depts
+    try {
+      const vrows = await prisma.$queryRaw`SELECT DISTINCT "deptId" FROM "VettingEvent" WHERE "requisitionId" = ${reqId}`;
+      for (const v of (vrows || [])) if (v.deptId) deptIds.add(parseInt(v.deptId));
+    } catch (_) {}
+
+    // Tagged observer depts
+    try {
+      const tags = await prisma.requisitionTag.findMany({ where: { requisitionId: reqId }, select: { deptId: true } });
+      for (const t of tags) deptIds.add(t.deptId);
+    } catch (_) {}
+
+    const ids = [...deptIds];
+    if (ids.length === 0) return;
+
+    // In-app notifications for all involved depts (skip creator's own dept for minor updates to reduce noise)
+    for (const deptId of ids) {
+      await prisma.notification.create({
+        data: { departmentId: deptId, content: payload.body || payload.title, link: payload.url || '/' }
+      }).catch(() => {});
+    }
+
+    // PWA push to all subscribed devices
+    await sendPushNotification(ids, payload);
+  } catch (_) {}
+}
+
+// Keep backward-compatible alias for tagged-only pushes
+async function pushToTaggedDepts(reqId, payload) {
+  return broadcastPushToInvolved(reqId, payload);
+}
+
+// ── Tag endpoints ─────────────────────────────────────────────────────────────
+app.get('/api/requisitions/:id/tags', authenticateToken, async (req, res) => {
+  try {
+    const reqId = parseInt(req.params.id);
+    const tags = await prisma.requisitionTag.findMany({
+      where: { requisitionId: reqId },
+      include: { requisition: { select: { departmentId: true } } }
+    });
+    const depts = await prisma.department.findMany({
+      where: { id: { in: tags.map(t => t.deptId) } },
+      select: { id: true, name: true }
+    });
+    const deptMap = new Map(depts.map(d => [d.id, d.name]));
+    res.json(tags.map(t => ({ ...t, deptName: deptMap.get(t.deptId) || '' })));
+  } catch (err) { sendError(res, 500, err.message); }
+});
+
+app.post('/api/requisitions/:id/tag', authenticateToken, async (req, res) => {
+  try {
+    const reqId = parseInt(req.params.id);
+    const { deptIds } = req.body || {};
+    if (!Array.isArray(deptIds) || deptIds.length === 0) return res.status(400).json({ error: 'No departments selected' });
+
+    const requisition = await prisma.requisition.findUnique({ where: { id: reqId }, select: { id: true, departmentId: true, title: true } });
+    if (!requisition) return res.status(404).json({ error: 'Requisition not found' });
+
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
+    if (!isAdmin) {
+      let isInChain = userDeptId === requisition.departmentId || userDeptId === requisition.targetDepartmentId;
+      if (!isInChain) {
+        try {
+          const extRow = await prisma.$queryRaw`
+            SELECT "currentVettingDeptId", "finalApprovedByDeptId", "treatedByDeptId"
+            FROM "Requisition" WHERE id = ${reqId} LIMIT 1
+          `;
+          const ext = extRow?.[0] || {};
+          const cvId = ext.currentVettingDeptId ? parseInt(ext.currentVettingDeptId) : null;
+          const faId = ext.finalApprovedByDeptId ? parseInt(ext.finalApprovedByDeptId) : null;
+          const tbId = ext.treatedByDeptId ? parseInt(ext.treatedByDeptId) : null;
+          if (userDeptId === cvId || userDeptId === faId || userDeptId === tbId) isInChain = true;
+        } catch (_) {}
+      }
+      if (!isInChain) {
+        const fwdRow = await prisma.forwardEvent.findFirst({
+          where: { requisitionId: reqId, OR: [{ fromDeptId: userDeptId }, { toDeptId: userDeptId }] }
+        });
+        if (fwdRow) isInChain = true;
+      }
+      if (!isInChain) {
+        try {
+          const vRows = await prisma.$queryRaw`
+            SELECT 1 FROM "VettingEvent" WHERE "requisitionId" = ${reqId} AND "deptId" = ${userDeptId} LIMIT 1
+          `;
+          if (Array.isArray(vRows) && vRows.length > 0) isInChain = true;
+        } catch (_) {}
+      }
+      if (!isInChain) {
+        return res.status(403).json({ error: 'Only departments in the processing chain can tag observers.' });
+      }
+    }
+
+    const newlyTagged = [];
+    for (const deptId of deptIds) {
+      const id = parseInt(deptId);
+      if (!id) continue;
+      try {
+        await prisma.requisitionTag.create({
+          data: { requisitionId: reqId, deptId: id, taggedByDeptId: userDeptId }
+        });
+        newlyTagged.push(id);
+      } catch { /* duplicate — already tagged */ }
+    }
+
+    // In-app notifications for newly tagged depts
+    for (const deptId of newlyTagged) {
+      await prisma.notification.create({
+        data: {
+          departmentId: deptId,
+          content: `📎 You have been tagged as an observer on Requisition #${reqId}: "${requisition.title || 'Untitled'}"`,
+          link: `/requisitions/${reqId}`
+        }
+      }).catch(() => {});
+    }
+
+    // PWA push to newly tagged depts
+    if (newlyTagged.length > 0) {
+      await sendPushNotification(newlyTagged, {
+        title: 'Tagged as Observer',
+        body: `You can now follow Requisition #${reqId}: ${requisition.title || ''}`,
+        url: '/'
+      });
+    }
+
+    broadcastUpdate(reqId);
+    res.json({ ok: true, tagged: newlyTagged.length });
+  } catch (err) { sendError(res, 500, err.message); }
+});
+
 // ── Central friendly error responder ─────────────────────────────────────────
 // 4xx errors: pass the message through (already human-readable).
 // 5xx errors: never expose raw DB / system internals — use a safe fallback.
@@ -2041,6 +2208,7 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
     }
 
     broadcastUpdate(parseInt(id));
+    pushToTaggedDepts(parseInt(id), { title: 'Requisition Updated', body: `Req #${id} has been ${returnToSender ? 'returned' : 'forwarded'}.`, url: '/' });
     res.json(updated);
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2104,6 +2272,7 @@ app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, r
     });
 
     broadcastUpdate(reqId);
+    pushToTaggedDepts(reqId, { title: 'Requisition Finally Approved', body: `Req #${id} has been finally approved.`, url: '/' });
     res.json(updated);
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2176,6 +2345,7 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
     });
 
     broadcastUpdate(reqId);
+    pushToTaggedDepts(reqId, { title: 'Requisition Sent to Vetting', body: `Req #${id} has been sent for vetting.`, url: '/' });
     res.json({ success: true });
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2372,6 +2542,7 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
     });
 
     broadcastUpdate(reqId);
+    pushToTaggedDepts(reqId, { title: 'Vetting Update', body: `Req #${id} vetting action: ${action} by ${actingDeptName}.`, url: '/' });
     res.json({ success: true });
   } catch (error) { sendError(res, 500, error.message); }
 });
@@ -2433,6 +2604,7 @@ app.post('/api/requisitions/:id/approve', authenticateToken, approvalLimiter, as
     if (!parsed.success) return res.status(400).json({ error: 'Invalid approval payload' });
     const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'approved', remarks: parsed.data.remarks, user: req.user });
     broadcastUpdate(parseInt(id));
+    pushToTaggedDepts(parseInt(id), { title: 'Requisition Approved', body: `Req #${id} has been approved at a workflow stage.`, url: '/' });
     res.json(updated);
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });
@@ -2446,6 +2618,7 @@ app.post('/api/requisitions/:id/reject', authenticateToken, approvalLimiter, asy
     if (!parsed.success) return res.status(400).json({ error: 'Invalid rejection payload' });
     const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'rejected', remarks: parsed.data.remarks, user: req.user });
     broadcastUpdate(parseInt(id));
+    pushToTaggedDepts(parseInt(id), { title: 'Requisition Rejected', body: `Req #${id} has been rejected.`, url: '/' });
     res.json(updated);
   } catch (error) {
     res.status(error.status || 500).json({ error: error.message });
@@ -2672,7 +2845,12 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
         `;
         wasVetter = Array.isArray(vettingRows) && vettingRows.length > 0;
       } catch (_) { /* VettingEvent table not yet created */ }
-      if (!wasVetter && currentVettingDeptId !== userDeptId && finalApprovedByDeptId !== userDeptId && treatedByDeptId !== userDeptId) {
+      let isTaggedCheck = false;
+      try {
+        const tagRow = await prisma.requisitionTag.findFirst({ where: { requisitionId: parseInt(id), deptId: userDeptId } });
+        isTaggedCheck = !!tagRow;
+      } catch (_) {}
+      if (!wasVetter && currentVettingDeptId !== userDeptId && finalApprovedByDeptId !== userDeptId && treatedByDeptId !== userDeptId && !isTaggedCheck) {
         return res.status(403).json({ error: 'You do not have permission to perform this action.' });
       }
     }
@@ -2683,7 +2861,16 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
         SELECT * FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} ORDER BY "createdAt" ASC
       `;
     } catch (_) { /* VettingEvent table not yet created */ }
-    res.json({ ...requisition, ...ext, vettingEvents: vettingEvents || [] });
+    // Fetch tags + isTagged
+    let tags = [];
+    let isTagged = false;
+    try {
+      tags = await prisma.requisitionTag.findMany({ where: { requisitionId: parseInt(id) }, select: { deptId: true, taggedByDeptId: true, taggedAt: true } });
+      if (req.user.role === 'department' && req.user.deptId) {
+        isTagged = tags.some(t => t.deptId === parseInt(req.user.deptId));
+      }
+    } catch (_) {}
+    res.json({ ...requisition, ...ext, vettingEvents: vettingEvents || [], tags, isTagged });
   } catch (error) { sendError(res, 500, error.message); }
 });
 
@@ -3520,11 +3707,17 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
         `;
         extraIds = (vettingIds || []).map(r => parseInt(r.id));
       } catch (_) { /* columns not yet migrated — ignore */ }
+      let taggedReqIds = [];
+      try {
+        const tagged = await prisma.requisitionTag.findMany({ where: { deptId }, select: { requisitionId: true } });
+        taggedReqIds = tagged.map(t => t.requisitionId);
+      } catch (_) {}
       where = {
         OR: [
           { departmentId: deptId },
           { targetDepartmentId: deptId },
-          ...(extraIds.length > 0 ? [{ id: { in: extraIds } }] : [])
+          ...(extraIds.length > 0 ? [{ id: { in: extraIds } }] : []),
+          ...(taggedReqIds.length > 0 ? [{ id: { in: taggedReqIds } }] : [])
         ]
       };
     }
@@ -3541,7 +3734,8 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
           targetDepartment: { select: { name: true, headEmail: true } },
           creator: { select: { name: true } },
           currentStage: true,
-          attachments: { select: { id: true, filename: true, size: true, mimeType: true } }
+          attachments: { select: { id: true, filename: true, size: true, mimeType: true } },
+          tags: { select: { deptId: true } }
         },
         orderBy: { createdAt: 'desc' },
         skip,

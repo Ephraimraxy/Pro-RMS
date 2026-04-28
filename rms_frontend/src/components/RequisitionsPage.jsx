@@ -643,6 +643,104 @@ const PrintStageModal = ({ req, detail, onClose }) => {
   );
 };
 
+// ── Tag Observer Modal ─────────────────────────────────────────────────────────
+const TagModal = ({ reqId, departments, onClose, onTagged }) => {
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState([]);
+  const [existing, setExisting] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    reqAPI.getRequisitionTags(reqId).then(tags => {
+      setExisting(tags.map(t => t.deptId));
+    }).catch(() => {});
+  }, [reqId]);
+
+  const filtered = departments.filter(d =>
+    d.name.toLowerCase().includes(search.toLowerCase()) &&
+    !existing.includes(d.id)
+  );
+
+  const toggle = (id) => setSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  const handleSubmit = async () => {
+    if (!selected.length) return;
+    setSubmitting(true);
+    try {
+      await reqAPI.tagRequisitionDepts(reqId, selected);
+      toast.success(`${selected.length} department(s) tagged as observers.`);
+      onTagged?.();
+      onClose();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Could not tag departments.');
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+        <div className="p-5 border-b border-border/50 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-0.5">CC / Tag Observer</p>
+            <h3 className="text-lg font-black text-foreground">Select Departments</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Tagged departments can view and print this requisition as read-only observers.</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-muted transition-all"><X size={18} /></button>
+        </div>
+        <div className="p-4 border-b border-border/30">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search departments..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-border/50 text-sm bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
+          {existing.length > 0 && (
+            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-2">
+              Already Tagged ({existing.length}): {departments.filter(d => existing.includes(d.id)).map(d => d.name).join(', ')}
+            </p>
+          )}
+          {filtered.length === 0 && (
+            <p className="text-center text-xs text-muted-foreground py-4">No departments found.</p>
+          )}
+          {filtered.map(d => (
+            <label key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selected.includes(d.id) ? 'border-primary bg-primary/5' : 'border-border/40 hover:border-primary/30 hover:bg-muted/20'}`}>
+              <input
+                type="checkbox"
+                checked={selected.includes(d.id)}
+                onChange={() => toggle(d.id)}
+                className="text-primary w-4 h-4 rounded"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-foreground truncate">{d.name}</p>
+                {d.type && <p className="text-[9px] text-muted-foreground uppercase tracking-wide">{d.type}</p>}
+              </div>
+            </label>
+          ))}
+        </div>
+        <div className="p-4 border-t border-border/30 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">{selected.length} selected</p>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl border border-border/50 text-sm font-bold hover:bg-muted transition-all">Cancel</button>
+            <button
+              onClick={handleSubmit}
+              disabled={!selected.length || submitting}
+              className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all disabled:opacity-40 flex items-center gap-2"
+            >
+              {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+              Tag & Notify
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Creator Clarification Panel (shown when requisition is returned to creator) ──
 const CreatorCommentPanel = ({ req, departments, onDone }) => {
   const [comment, setComment] = useState('');
@@ -1256,6 +1354,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
   const [newFiles, setNewFiles]     = useState([]);
   const [uploading, setUploading]   = useState(false);
   const [approveChecked, setApproveChecked] = useState(false);
+  const [tagModal, setTagModal]     = useState(false);
   const fileInputRef                = React.useRef(null);
 
   useEffect(() => {
@@ -1284,6 +1383,10 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
 
   // Is this an incoming (target dept) requisition for the current user?
   const isIncoming = user?.deptId && detail?.targetDepartmentId === user.deptId;
+  // Is current user a tagged read-only observer?
+  const isTaggedObserver = !!(detail?.isTagged);
+  // Can current user tag other departments? (must be in chain and not tagged observer)
+  const canTag = !isTaggedObserver && user?.role === 'department' && detail;
   // Is this a direct inter-department request (no admin workflow)?
   const isInterDept = detail?.targetDepartmentId && !detail?.currentStageId;
   // Can current user take approval action (not dept user, requisition is pending)
@@ -1416,6 +1519,17 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
           Back to Directory
         </button>
 
+        {canTag && (
+          <button
+            onClick={() => setTagModal(true)}
+            title="Tag departments as observers"
+            className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-primary hover:border-primary/40 rounded-xl transition-all flex items-center gap-2 font-bold text-xs uppercase tracking-wider shadow-sm"
+          >
+            <Paperclip size={16} />
+            CC Dept
+          </button>
+        )}
+
         <button
           onClick={() => setPrintModal(true)}
           title="Print Stage Report"
@@ -1442,6 +1556,11 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               {isIncoming && (
                 <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-blue-500 border border-blue-600 text-white shadow-lg shadow-blue-500/20">
                   Incoming Action
+                </span>
+              )}
+              {isTaggedObserver && (
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-amber-500 border border-amber-600 text-white shadow-lg shadow-amber-500/20 flex items-center gap-1">
+                  <Paperclip size={9} /> Tagged Observer
                 </span>
               )}
               {detail?.finalApprovalStatus === 'approved' && (
@@ -1509,7 +1628,21 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               <div className="hidden lg:block space-y-6">{briefBlock}{itemsBlock}</div>
 
               {/* Action Panels */}
-              {isReturnedToCreator && req.status === 'pending' && !loading && (
+              {/* Tagged Observer notice — replaces all action panels */}
+              {isTaggedObserver && (
+                <div className="animate-in fade-in slide-in-from-bottom-5 duration-500 border border-amber-200 rounded-2xl p-5 bg-amber-50/60 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-amber-400" />
+                  <div className="flex items-center gap-2 pl-1 mb-2">
+                    <Paperclip size={14} className="text-amber-700" />
+                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Tagged Observer — Read Only</p>
+                  </div>
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    Your department has been CC'd on this requisition. You can view all details, attachments, and history, and print the record — but you cannot take any action.
+                  </p>
+                </div>
+              )}
+
+              {!isTaggedObserver && isReturnedToCreator && req.status === 'pending' && !loading && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                   <CreatorCommentPanel
                     req={req}
@@ -1519,7 +1652,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                 </div>
               )}
 
-              {!approveChecked && !isReturnedToCreator && isIncoming && req.status === 'pending' && !loading &&
+              {!isTaggedObserver && !approveChecked && !isReturnedToCreator && isIncoming && req.status === 'pending' && !loading &&
                !(detail?.finalApprovalStatus === 'treated' && /\baccount/i.test(user?.name || '')) && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                    <RespondPanel
@@ -1531,7 +1664,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                 </div>
               )}
 
-              {canApprove && (
+              {!isTaggedObserver && canApprove && (
                 <div className="space-y-3 pt-4 border-t border-border/50">
                   <div className="flex items-center space-x-2">
                      <ShieldCheck size={13} className="text-primary" />
@@ -1548,7 +1681,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               )}
 
               {/* Vetting Panel — for ICC, Audit, Account and Chairman */}
-              {user?.role === 'department' && detail && !loading &&
+              {!isTaggedObserver && user?.role === 'department' && detail && !loading &&
                detail.finalApprovalStatus && detail.finalApprovalStatus !== 'none' &&
                detail.finalApprovalStatus !== 'treated' && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
@@ -1650,7 +1783,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               )}
 
               {/* ── Post-Creation Attachment Upload ── */}
-              {!approveChecked && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
+              {!isTaggedObserver && !approveChecked && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
                 // Compute stage context for tagging
                 const fwdEvents = detail?.forwardEvents || [];
                 const approvals = detail?.approvals || [];
@@ -1751,7 +1884,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               })()}
 
               {/* Final Approve Panel — below Attach Documents, for dept authority users */}
-              {user?.role === 'department' && detail && !loading && (
+              {!isTaggedObserver && user?.role === 'department' && detail && !loading && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                   <FinalApprovePanel
                     req={req}
@@ -1969,6 +2102,15 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
       {previewFile && <FilePreviewModal attachment={previewFile} onClose={() => setPreviewFile(null)} />}
       {/* Print Stage Modal */}
       {printModal && <PrintStageModal req={req} detail={detail} onClose={() => setPrintModal(false)} />}
+      {/* Tag Observer Modal */}
+      {tagModal && (
+        <TagModal
+          reqId={req.id}
+          departments={departments}
+          onClose={() => setTagModal(false)}
+          onTagged={() => getRequisitionDetail(req.id).then(d => setDetail(d))}
+        />
+      )}
     </div>
   );
 };
@@ -2317,12 +2459,19 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                         <td className="py-3 px-4 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">
                           <div className="space-y-0.5">
                             <p className="text-[12px] font-bold text-foreground max-w-xs truncate">{r.title}</p>
-                            {r.urgency && r.urgency !== 'normal' && (
-                              <div className={`flex items-center gap-1 text-[9px] font-black uppercase ${urgencyColors[r.urgency]}`}>
-                                <div className={`w-1 h-1 rounded-full ${r.urgency === 'critical' ? 'bg-red-500' : 'bg-amber-500'} animate-pulse`} />
-                                {r.urgency} Priority
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {r.urgency && r.urgency !== 'normal' && (
+                                <div className={`flex items-center gap-1 text-[9px] font-black uppercase ${urgencyColors[r.urgency]}`}>
+                                  <div className={`w-1 h-1 rounded-full ${r.urgency === 'critical' ? 'bg-red-500' : 'bg-amber-500'} animate-pulse`} />
+                                  {r.urgency} Priority
+                                </div>
+                              )}
+                              {r.tags?.some(t => t.deptId === user?.deptId) && (
+                                <span className="flex items-center gap-0.5 text-[8px] font-black uppercase text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                  <Paperclip size={7} /> CC'd
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="py-3 px-4 bg-white/50 border-y border-border/30 group-hover:bg-white transition-colors">

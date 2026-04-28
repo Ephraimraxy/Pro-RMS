@@ -104,6 +104,7 @@ model Requisition {
   treatedByDeptId       Int?
   treatedAt             DateTime?
   vettingEvents         VettingEvent[]
+  tags                  RequisitionTag[]
 
   publishStartAt     DateTime?
   publishEndAt       DateTime?
@@ -303,4 +304,15 @@ model PushSubscription {
   deptId    Int?
   userId    Int?
   createdAt DateTime @default(now())
+}
+
+model RequisitionTag {
+  id             Int         @id @default(autoincrement())
+  requisitionId  Int
+  requisition    Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  deptId         Int
+  taggedByDeptId Int?
+  taggedAt       DateTime    @default(now())
+
+  @@unique([requisitionId, deptId])
 }
