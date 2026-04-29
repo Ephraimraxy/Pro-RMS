@@ -983,6 +983,7 @@ const DEFAULT_THRESHOLDS = { hr_ceiling: 50000, chairman_min: 100000 };
 const FinalApprovePanel = ({ req, detail, user, departments, onApproved, onApproveCheck }) => {
   const [note, setNote]               = useState('');
   const [acting, setActing]           = useState(false);
+  const [treating, setTreating]       = useState(false);
   const [showModal, setShowModal]     = useState(false);
   const [thresholds, setThresholds]   = useState(DEFAULT_THRESHOLDS);
   const [approveChecked, setApproveChecked] = useState(false);
@@ -1012,26 +1013,40 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved, onAppro
   const fmt = (n) => `₦${Number(n).toLocaleString()}`;
   const isMaterial = /^material/i.test(req.type || '');
 
+  // Hierarchical authority: Chairman > GM > HR
+  // Chairman approves any amount; GM covers HR + GM bands; HR covers HR band only
   let authorityLabel = null;
   if (isMaterial) {
-    if (isHR)            authorityLabel = 'HR Authority';
+    if (isChairman)      authorityLabel = 'Chairman / CEO Authority';
     else if (isGM)       authorityLabel = 'GM Authority';
-    else if (isChairman) authorityLabel = 'Chairman / CEO Authority';
+    else if (isHR)       authorityLabel = 'HR Authority';
   } else {
-    if (isHR && amount <= hr_ceiling)
+    if (isChairman)
+      authorityLabel = `Chairman / CEO (All Amounts)`;
+    else if (isGM && amount < chairman_min)
+      authorityLabel = `GM Authority (< ${fmt(chairman_min)})`;
+    else if (isHR && amount <= hr_ceiling)
       authorityLabel = `HR Authority (≤ ${fmt(hr_ceiling)})`;
-    else if (isGM && amount > hr_ceiling && amount < chairman_min)
-      authorityLabel = `GM Authority (${fmt(hr_ceiling + 1)} – ${fmt(chairman_min - 1)})`;
-    else if (isChairman && amount >= chairman_min)
-      authorityLabel = `Chairman / CEO (≥ ${fmt(chairman_min)})`;
   }
 
   if (!authorityLabel) return null;
 
   const finalStatus = detail?.finalApprovalStatus;
 
-  // ── Already approved: show signed badge + Send to Vet ───────────────────────
+  const handleSelfTreat = async () => {
+    setTreating(true);
+    try {
+      const result = await vettingActionRequisition(req.id, { action: 'treated' });
+      if (result !== null) toast.success('Requisition marked as treated!');
+      onApproved();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Could not mark as treated.');
+    } finally { setTreating(false); }
+  };
+
+  // ── Already approved: show signed badge + Send to Vet (+ Chairman self-treat) ─
   if (finalStatus && finalStatus !== 'none') {
+
     return (
       <>
         <div className="space-y-3 border border-emerald-200 rounded-2xl p-4 bg-emerald-50/60 shadow-sm relative overflow-hidden">
@@ -1042,20 +1057,33 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved, onAppro
             <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-[9px] font-black text-emerald-700 uppercase">{authorityLabel}</span>
           </div>
           <p className="text-[11px] text-emerald-700/80 leading-relaxed pl-1">
-            Your approval has been recorded. Forward the document, or send it directly to vetting below.
+            Your approval has been recorded. Forward the document, send it to vetting, or treat it directly.
           </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-md shadow-emerald-500/20"
-          >
-            <Send size={15} />
-            Send to Vet
-          </button>
+          <div className={`grid gap-2 ${isChairman ? 'grid-cols-2' : ''}`}>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-md shadow-emerald-500/20"
+            >
+              <Send size={15} />
+              Send to Vet
+            </button>
+            {isChairman && finalStatus === 'approved' && (
+              <button
+                onClick={handleSelfTreat}
+                disabled={treating}
+                className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition-all disabled:opacity-50 text-sm shadow-md shadow-purple-500/20"
+              >
+                {treating ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                Mark Treated
+              </button>
+            )}
+          </div>
         </div>
 
         {showModal && (
           <VettingSelectionModal
             reqId={req.id}
+            user={user}
             departments={departments}
             onClose={() => setShowModal(false)}
             onDone={() => { setShowModal(false); onApproved(); }}
@@ -1152,21 +1180,30 @@ const FinalApprovePanel = ({ req, detail, user, departments, onApproved, onAppro
 };
 
 // ── Vetting Selection Modal ────────────────────────────────────────────────────
-const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
+const VettingSelectionModal = ({ reqId, user, departments, onClose, onDone }) => {
   const [selectedId, setSelectedId] = useState('');
   const [acting, setActing]         = useState(false);
 
-  // Offer ICC and Audit as starting points (Account is never a start)
-  const vettingDepts = departments.filter(d =>
-    /\bicc\b|integrity|compliance|audit/i.test(d.name || '')
-  );
+  const approverName = user?.name || '';
+  const isGMOrAbove  = /general\s*manager|\bgm\b|ceo|chairman/i.test(approverName);
 
-  const selectedDept = vettingDepts.find(d => String(d.id) === String(selectedId));
-  const isAuditDirect = selectedDept && /audit/i.test(selectedDept.name);
+  // GM and Chairman can route directly to Account; others start at ICC or Audit
+  const vettingDepts = departments.filter(d => {
+    const n = d.name || '';
+    if (/\bicc\b|integrity|compliance|audit/i.test(n)) return true;
+    if (isGMOrAbove && /\baccount\b/i.test(n)) return true;
+    return false;
+  });
+
+  const selectedDept    = vettingDepts.find(d => String(d.id) === String(selectedId));
+  const isAccountDirect = selectedDept && /\baccount\b/i.test(selectedDept.name);
+  const isAuditDirect   = selectedDept && /audit/i.test(selectedDept.name);
   const pathHint = !selectedId ? null
-    : isAuditDirect
-      ? 'ICC skipped — flow will be: Audit → Account'
-      : 'Full chain — flow will be: ICC → Audit → Account';
+    : isAccountDirect
+      ? 'Direct to Account — no further forwarding needed'
+      : isAuditDirect
+        ? 'ICC skipped — flow will be: Audit → Account'
+        : 'Full chain — flow will be: ICC → Audit → Account';
 
   const handleSend = async () => {
     if (!selectedId) { toast.error('Please select a department.'); return; }
@@ -1189,7 +1226,7 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
           </div>
           <div>
             <h3 className="text-base font-black text-foreground">Send to Vetting</h3>
-            <p className="text-xs text-muted-foreground">Choose where vetting starts (ICC or Audit directly)</p>
+            <p className="text-xs text-muted-foreground">{isGMOrAbove ? 'Choose start point — or route directly to Account' : 'Choose where vetting starts (ICC or Audit directly)'}</p>
           </div>
           <button onClick={onClose} className="ml-auto p-2 rounded-xl hover:bg-muted transition-colors">
             <X size={16} className="text-muted-foreground" />
@@ -1210,7 +1247,11 @@ const VettingSelectionModal = ({ reqId, departments, onClose, onDone }) => {
             {vettingDepts.length === 0 && <option disabled>No vetting departments found</option>}
           </select>
           {pathHint && (
-            <p className={`text-[11px] font-semibold px-3 py-2 rounded-lg ${isAuditDirect ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+            <p className={`text-[11px] font-semibold px-3 py-2 rounded-lg ${
+              isAccountDirect ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : isAuditDirect ? 'bg-blue-50 text-blue-700 border border-blue-200'
+              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}>
               {pathHint}
             </p>
           )}
@@ -1250,16 +1291,19 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
   if (!finalApprovalStatus || finalApprovalStatus === 'none') return null;
   if (finalApprovalStatus === 'treated') return null;
 
-  const isICC     = /\bicc\b|integrity|compliance/i.test(deptName);
-  const isAudit   = /\baudit\b/i.test(deptName);
-  const isAccount = /\baccount\b/i.test(deptName);
+  const isICC      = /\bicc\b|integrity|compliance/i.test(deptName);
+  const isAudit    = /\baudit\b/i.test(deptName);
+  const isAccount  = /\baccount\b/i.test(deptName);
+  const isChairman = /ceo|chairman/i.test(deptName);
+  // Account and Chairman always treat — regardless of who routed to them
+  const canTreat   = isAccount || isChairman;
 
   // Auto-resolve next/return dept from departments list (no dropdown needed)
   const auditDept   = departments.find(d => /\baudit\b/i.test(d.name));
   const accountDept = departments.find(d => /\baccount\b/i.test(d.name));
 
   // Role-specific labels
-  const roleLabel      = isICC ? 'ICC Vetting' : isAudit ? 'Audit Vetting' : isAccount ? 'Account Vetting' : 'Vetting Review';
+  const roleLabel      = isICC ? 'ICC Vetting' : isAudit ? 'Audit Vetting' : isAccount ? 'Account Vetting' : isChairman ? 'Chairman / CEO Vetting' : 'Vetting Review';
   const primaryLabel   = isICC ? 'Submit to Audit' : isAudit ? 'Forward to Account' : 'Mark Treated';
   const primaryDisabled = (isICC && !auditDept) || (isAudit && !accountDept);
 
@@ -1298,7 +1342,7 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
       <textarea
         value={comment}
         onChange={e => setComment(e.target.value)}
-        placeholder={isAccount ? 'Treatment remarks...' : 'Vetting comment or return reason (required to return)...'}
+        placeholder={canTreat ? 'Treatment remarks...' : 'Vetting comment or return reason (required to return)...'}
         className="w-full bg-white border border-blue-200 rounded-xl p-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-300 min-h-[72px] resize-none shadow-inner"
       />
 
@@ -1319,8 +1363,8 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
       </div>
 
       <div className="grid grid-cols-2 gap-2 pt-1">
-        {/* Primary action: ICC→Submit, Audit→Forward, Account→Treated */}
-        {!isAccount ? (
+        {/* Primary action: ICC→Submit, Audit→Forward, Account/Chairman→Treated */}
+        {!canTreat ? (
           <button onClick={() => act('forward')} disabled={acting || primaryDisabled}
             className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-all disabled:opacity-50 text-sm shadow-sm">
             {acting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}

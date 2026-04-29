@@ -94,6 +94,10 @@ async function sendPushNotification(deptIds, { title, body, url }) {
 
 // ── Final Approval Authority ──────────────────────────────────────────────────
 // Returns: 'hr' | 'gm' | 'chairman' | null (no authority)
+// Hierarchy: Chairman > GM > HR
+//   Chairman → approves at ANY amount (full authority over all bands)
+//   GM       → approves amounts below chairman_min (covers HR + GM bands)
+//   HR       → approves amounts within HR band only (< 50,000)
 const checkFinalApproveAuthority = (deptName, amount, isMaterial = false) => {
   const n = (deptName || '').toLowerCase();
   const amt = parseFloat(amount) || 0;
@@ -109,12 +113,11 @@ const checkFinalApproveAuthority = (deptName, amount, isMaterial = false) => {
     return null;
   }
 
-  // Cash threshold-based:
-  // HR  → below ₦50,000
-  // GM  → ₦50,000 – ₦99,999
-  // Chairman/CEO → ₦100,000 and above
-  if (isChairman && amt >= 100000) return 'chairman';
-  if (isGM && amt >= 50000 && amt < 100000) return 'gm';
+  // Chairman has full authority over all amount levels
+  if (isChairman) return 'chairman';
+  // GM covers HR + GM bands (any amount below chairman_min = 100,000)
+  if (isGM && amt < 100000) return 'gm';
+  // HR covers HR band only
   if (isHR && amt < 50000) return 'hr';
   return null; // Not authorised for this amount band
 };
@@ -2459,23 +2462,29 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
           resetVetting = true;
         }
       } else if (myChainIdx === 2) {
-        // Account → return to Audit (intra-vetting)
-        returnToDeptId = auditDept?.id || null;
+        // Account → return to Audit if Audit was in chain, else reset to approving authority
+        const auditWasPresent = auditDept && await prisma.vettingEvent.findFirst({
+          where: { requisitionId: reqId, deptId: auditDept.id }
+        });
+        if (auditWasPresent) {
+          returnToDeptId = auditDept.id;
+        } else {
+          returnToDeptId = requisition.finalApprovedByDeptId;
+          resetVetting = true;
+        }
       }
 
       if (!returnToDeptId) return res.status(400).json({ error: 'Could not determine return destination.' });
 
       if (resetVetting) {
-        // Send back to approving authority — reset approval so they can re-evaluate
+        // Send back to approving authority — keep 'approved' so they can re-route to vetting
         await prisma.requisition.update({
           where: { id: reqId },
           data: {
-            finalApprovalStatus: 'none',
+            finalApprovalStatus: 'approved',
             currentVettingDeptId: null,
-            finalApprovedByDeptId: null,
-            finalApprovedAt: null,
-            finalApprovedNote: null,
             targetDepartmentId: returnToDeptId
+            // finalApprovedByDeptId / At / Note preserved so they can re-trigger send-to-vetting
           }
         });
       } else {
