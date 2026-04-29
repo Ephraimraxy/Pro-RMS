@@ -2036,6 +2036,13 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               {detail?.vettingEvents?.length > 0 && (() => {
                 const evts = detail.vettingEvents; // ascending from server
                 const displayed = [...evts].reverse(); // newest first
+
+                // Resolve the dept that sent to vetting (for legacy events where actorName is a user name)
+                const finalApproverDeptId = detail?.finalApprovedByDeptId ? parseInt(detail.finalApprovedByDeptId) : null;
+                const finalApproverDeptName = finalApproverDeptId
+                  ? (departments.find(d => d.id === finalApproverDeptId)?.name || null)
+                  : null;
+
                 return (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -2057,33 +2064,38 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                         let fromLabel, toLabel, badgeText, badgeColor, iconColor, description;
 
                         if (isSentToVetting) {
-                          fromLabel = ev.actorName || 'System';
+                          // Use finalApproverDeptName for existing records where actorName stored user's personal name
+                          fromLabel = finalApproverDeptName || ev.actorName || 'System';
                           toLabel = ev.deptName;
-                          badgeText = 'Sent to Vetting';
+                          badgeText = 'Vetting Started';
                           badgeColor = 'bg-indigo-100 text-indigo-700';
                           iconColor = 'bg-indigo-500';
-                          description = 'Requisition entered the vetting process';
+                          description = `${fromLabel} submitted this requisition to ${toLabel} to begin the vetting review.`;
                         } else if (isForward) {
                           fromLabel = ev.deptName;
                           toLabel = nextEvt?.deptName || null;
                           badgeText = 'Forwarded';
                           badgeColor = 'bg-blue-100 text-blue-700';
                           iconColor = 'bg-blue-500';
-                          description = ev.comment || null;
+                          description = toLabel
+                            ? `${fromLabel} reviewed and forwarded to ${toLabel}.${ev.comment ? ` Note: "${ev.comment}"` : ''}`
+                            : ev.comment || null;
                         } else if (isReturn) {
                           fromLabel = ev.deptName;
                           toLabel = evts[origIdx - 1]?.deptName || null;
                           badgeText = 'Returned';
                           badgeColor = 'bg-amber-100 text-amber-700';
                           iconColor = 'bg-amber-500';
-                          description = ev.comment || null;
+                          description = toLabel
+                            ? `${fromLabel} returned the document to ${toLabel}.${ev.comment ? ` Reason: "${ev.comment}"` : ''}`
+                            : ev.comment || null;
                         } else if (isTreated) {
                           fromLabel = ev.deptName;
                           toLabel = null;
                           badgeText = 'Treated';
                           badgeColor = 'bg-teal-100 text-teal-700';
                           iconColor = 'bg-teal-500';
-                          description = ev.comment || 'Requisition has been fully processed and treated.';
+                          description = `${fromLabel} completed final processing and marked this requisition as treated.${ev.comment && ev.comment !== 'Done' ? ` Note: "${ev.comment}"` : ''}`;
                         } else {
                           fromLabel = ev.deptName;
                           toLabel = null;

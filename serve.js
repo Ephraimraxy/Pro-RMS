@@ -2314,6 +2314,13 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
       }
     });
 
+    // Resolve sender's dept name for a clear "Dept A → Dept B" display
+    let senderDeptName = '';
+    if (userDeptId) {
+      const sd = await prisma.department.findUnique({ where: { id: userDeptId }, select: { name: true } });
+      senderDeptName = sd?.name || '';
+    }
+
     // Log the vetting start event using standard model
     await prisma.vettingEvent.create({
       data: {
@@ -2321,8 +2328,8 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
         deptId: vettingDeptId,
         deptName: vettingDept.name,
         action: 'sent_to_vetting',
-        comment: 'Sent to vetting chain',
-        actorName: req.user?.name || 'System'
+        comment: senderDeptName || req.user?.name || 'System', // store sender dept in comment for display
+        actorName: senderDeptName || req.user?.name || 'System'
       }
     });
 
