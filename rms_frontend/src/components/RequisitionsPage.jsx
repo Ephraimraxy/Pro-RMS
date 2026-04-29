@@ -2033,39 +2033,107 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               {itemsBlock && <div className="lg:hidden border-t border-border/30 pt-4">{itemsBlock}</div>}
 
               {/* Vetting Chain History */}
-              {detail?.vettingEvents?.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Vetting History</p>
+              {detail?.vettingEvents?.length > 0 && (() => {
+                const evts = detail.vettingEvents; // ascending from server
+                const displayed = [...evts].reverse(); // newest first
+                return (
                   <div className="space-y-2">
-                    {[...detail.vettingEvents].reverse().map((ev, i) => (
-                      <div key={ev.id || i} className="flex gap-2 p-2.5 bg-white rounded-xl border border-border/30 shadow-sm">
-                        <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <Award size={11} className="text-purple-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-black text-foreground truncate">{ev.deptName || 'Dept'}</span>
-                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${
-                              ev.action === 'treated' ? 'bg-teal-100 text-teal-700' :
-                              ev.action === 'forward' ? 'bg-blue-100 text-blue-700' :
-                              'bg-muted text-muted-foreground'
-                            }`}>{ev.action?.replace(/_/g, ' ')}</span>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Vetting Chain</p>
+                      <div className="w-5 h-5 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-600 text-[9px] font-bold">{evts.length}</div>
+                    </div>
+                    <div className="space-y-2">
+                      {displayed.map((ev, displayIdx) => {
+                        // original ascending index of this event
+                        const origIdx = evts.length - 1 - displayIdx;
+                        const nextEvt = evts[origIdx + 1]; // next chronologically = where it forwarded to
+
+                        // Build the direction line
+                        const isSentToVetting = ev.action === 'sent_to_vetting';
+                        const isForward = ev.action === 'forward';
+                        const isReturn = ev.action === 'return';
+                        const isTreated = ev.action === 'treated';
+
+                        let fromLabel, toLabel, badgeText, badgeColor, iconColor, description;
+
+                        if (isSentToVetting) {
+                          fromLabel = ev.actorName || 'System';
+                          toLabel = ev.deptName;
+                          badgeText = 'Sent to Vetting';
+                          badgeColor = 'bg-indigo-100 text-indigo-700';
+                          iconColor = 'bg-indigo-500';
+                          description = 'Requisition entered the vetting process';
+                        } else if (isForward) {
+                          fromLabel = ev.deptName;
+                          toLabel = nextEvt?.deptName || null;
+                          badgeText = 'Forwarded';
+                          badgeColor = 'bg-blue-100 text-blue-700';
+                          iconColor = 'bg-blue-500';
+                          description = ev.comment || null;
+                        } else if (isReturn) {
+                          fromLabel = ev.deptName;
+                          toLabel = evts[origIdx - 1]?.deptName || null;
+                          badgeText = 'Returned';
+                          badgeColor = 'bg-amber-100 text-amber-700';
+                          iconColor = 'bg-amber-500';
+                          description = ev.comment || null;
+                        } else if (isTreated) {
+                          fromLabel = ev.deptName;
+                          toLabel = null;
+                          badgeText = 'Treated';
+                          badgeColor = 'bg-teal-100 text-teal-700';
+                          iconColor = 'bg-teal-500';
+                          description = ev.comment || 'Requisition has been fully processed and treated.';
+                        } else {
+                          fromLabel = ev.deptName;
+                          toLabel = null;
+                          badgeText = ev.action?.replace(/_/g, ' ');
+                          badgeColor = 'bg-muted text-muted-foreground';
+                          iconColor = 'bg-purple-500';
+                          description = ev.comment || null;
+                        }
+
+                        return (
+                          <div key={ev.id || displayIdx} className={`flex gap-2.5 p-3 rounded-xl border shadow-sm ${isTreated ? 'bg-teal-50/40 border-teal-200/60' : isReturn ? 'bg-amber-50/40 border-amber-200/60' : 'bg-white border-border/30'}`}>
+                            <div className={`w-6 h-6 rounded-full ${iconColor} flex items-center justify-center shrink-0 mt-0.5 shadow-sm`}>
+                              {isTreated ? <CheckCircle2 size={11} className="text-white" /> :
+                               isReturn ? <RotateCcw size={11} className="text-white" /> :
+                               isSentToVetting ? <Send size={11} className="text-white" /> :
+                               <ArrowRightCircle size={11} className="text-white" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              {/* Direction row */}
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                <span className="text-[11px] font-black text-foreground">{fromLabel}</span>
+                                {toLabel && (
+                                  <>
+                                    <ArrowRight size={10} className="text-muted-foreground/50 shrink-0" />
+                                    <span className="text-[11px] font-black text-foreground">{toLabel}</span>
+                                  </>
+                                )}
+                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${badgeColor}`}>{badgeText}</span>
+                              </div>
+                              {/* Description */}
+                              {description && (
+                                <p className="text-[10px] text-muted-foreground leading-relaxed">{description}</p>
+                              )}
+                              {ev.attachmentName && (
+                                <p className="text-[9px] text-primary/70 mt-0.5 flex items-center gap-1">
+                                  <Paperclip size={9} /> {ev.attachmentName}
+                                </p>
+                              )}
+                              {/* Timestamp */}
+                              <p className="text-[8px] text-muted-foreground/50 mt-1 font-mono">
+                                {ev.createdAt ? new Date(ev.createdAt).toLocaleString() : ''}
+                              </p>
+                            </div>
                           </div>
-                          {ev.comment && <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">{ev.comment}</p>}
-                          {ev.attachmentName && (
-                            <p className="text-[9px] text-primary/70 mt-0.5 flex items-center gap-1">
-                              <Paperclip size={9} /> {ev.attachmentName}
-                            </p>
-                          )}
-                          <p className="text-[8px] text-muted-foreground/50 mt-0.5 font-mono">
-                            {ev.actorName && `${ev.actorName} · `}{ev.createdAt ? new Date(ev.createdAt).toLocaleString() : ''}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Identity & Verification */}
               {verCode && (
