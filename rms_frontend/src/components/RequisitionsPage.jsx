@@ -1389,7 +1389,7 @@ const VettingPanel = ({ req, detail, user, departments, onDone }) => {
 };
 
 // ── Detail Modal ─────────────────────────────────────────────────────────────
-const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) => {
+const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onEditDraft }) => {
   const [detail, setDetail]         = useState(null);
   const [loading, setLoading]       = useState(true);
   const [acting, setActing]         = useState(false);
@@ -1555,13 +1555,23 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
       
       {/* Top Header / Back Button Navigation */}
       <div className="flex items-center justify-between">
-        <button 
-          onClick={onClose} 
+        <button
+          onClick={onClose}
           className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
         >
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
           Back to Directory
         </button>
+
+        {req.status === 'draft' && onEditDraft && (
+          <button
+            onClick={() => onEditDraft(req)}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm"
+          >
+            <FileText size={16} />
+            Continue Editing
+          </button>
+        )}
 
         {canTag && (
           <button
@@ -2051,10 +2061,20 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                         )}
                      </div>
                    )
+                 ) : req.status === 'draft' ? (
+                   <div className="p-3 rounded-xl bg-muted/40 border border-border/60 flex items-center gap-2 text-muted-foreground">
+                      <FileText size={16} />
+                      <span className="text-xs font-bold">Draft — Not Yet Submitted</span>
+                   </div>
                  ) : req.status === 'approved' ? (
                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-emerald-700">
                       <ShieldCheck size={16} />
                       <span className="text-xs font-bold">Document Fully Authenticated</span>
+                   </div>
+                 ) : req.status === 'rejected' ? (
+                   <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center gap-2 text-destructive">
+                      <AlertTriangle size={16} />
+                      <span className="text-xs font-bold">Rejected</span>
                    </div>
                  ) : (
                    <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center gap-2 text-destructive">
@@ -2276,6 +2296,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
   const [search, setSearch]             = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [isFormOpen, setIsFormOpen]     = useState(null);
+  const [editDraft, setEditDraft]       = useState(null);
   const [selectedReq, setSelectedReq]   = useState(null);
   const [selectedIds, setSelectedIds]   = useState([]);
   const [deleting, setDeleting]         = useState(false);
@@ -2474,7 +2495,12 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
         }
       />
       {isFormOpen ? (
-        <CashRequestForm type={isFormOpen} isOpen={!!isFormOpen} onClose={() => { setIsFormOpen(null); loadData(); }} />
+        <CashRequestForm
+          type={isFormOpen}
+          isOpen={!!isFormOpen}
+          editDraft={editDraft}
+          onClose={() => { setIsFormOpen(null); setEditDraft(null); loadData(); }}
+        />
       ) : selectedReq ? (
         <RequisitionDetailModal
           req={selectedReq}
@@ -2482,6 +2508,12 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
           departments={departments}
           onClose={() => setSelectedReq(null)}
           onAction={() => { setSelectedReq(null); loadData(); }}
+          onEditDraft={(req) => {
+            if (/^memo/i.test(req.type)) return; // Memo drafts handled in Memo page
+            setEditDraft(req);
+            setIsFormOpen(req.type);
+            setSelectedReq(null);
+          }}
         />
       ) : (
       <div className="max-w-full mx-auto space-y-5 pb-20 animate-slide-up">

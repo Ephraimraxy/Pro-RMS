@@ -17,12 +17,13 @@ const statusColors = {
 };
 
 // ── Memo Create Form ──────────────────────────────────────────────────────────
-const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
+const MemoCreateForm = ({ user, departments, onClose, onCreated, editDraft = null }) => {
   const deptName = user?.name || '';
   const isHR  = /\bhr\b|human\s*resource/i.test(deptName);
   const isGM  = /general\s*manager|\bgm\b/i.test(deptName);
   const isCEO = /ceo|chairman/i.test(deptName);
   const isPublisher = isHR || isGM || isCEO;
+  const isEditing = !!editDraft;
 
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -49,12 +50,16 @@ const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
     return false; // CEO/Chairman can only publish
   });
 
-  // Auto-select if only one target available
+  // Pre-populate from draft or auto-select single target
   useEffect(() => {
-    if (!isPublisher && targetOptions.length === 1 && !targetDeptId) {
+    if (editDraft) {
+      setSubject(editDraft.title || '');
+      setMessage(editDraft.description || '');
+      if (editDraft.targetDepartmentId) setTargetDeptId(String(editDraft.targetDepartmentId));
+    } else if (!isPublisher && targetOptions.length === 1 && !targetDeptId) {
       setTargetDeptId(String(targetOptions[0].id));
     }
-  }, [departments]);
+  }, [departments, editDraft?.id]);
 
   const handleSubmit = async () => {
     if (!subject.trim()) { toast.error('Subject is required'); return; }
@@ -64,29 +69,34 @@ const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
     }
     setSubmitting(true);
     try {
-      const { addRequisition } = await import('../lib/store');
-      const result = await addRequisition({
+      const payload = {
         title: subject, description: message, type: 'Memo',
         ...(user?.deptId != null && { departmentId: user.deptId }),
         ...(targetMode === 'dept' && targetDeptId ? { targetDepartmentId: parseInt(targetDeptId) } : {}),
-      });
+      };
 
-      const createdId = Array.isArray(result) ? result[0]?.id : result?.id;
+      let savedId;
+      if (isEditing) {
+        await reqAPI.updateRequisition(editDraft.id, payload);
+        savedId = editDraft.id;
+      } else {
+        const { addRequisition } = await import('../lib/store');
+        const result = await addRequisition(payload);
+        savedId = Array.isArray(result) ? result[0]?.id : result?.id;
+      }
 
-      // Upload attachments if any
-      if (createdId && files.length > 0) {
-        try { await reqAPI.uploadAttachments(createdId, files); }
+      if (savedId && files.length > 0) {
+        try { await reqAPI.uploadAttachments(savedId, files); }
         catch { toast.error('Memo submitted but some attachments failed to upload.'); }
       }
 
-      // If publishing directly, call the publish endpoint
       if (targetMode === 'publish') {
-        if (createdId) {
-          try { await memoAPI.publish(createdId); toast.success('Memo published to all departments!'); }
+        if (savedId) {
+          try { await memoAPI.publish(savedId); toast.success('Memo published to all departments!'); }
           catch { toast.success('Memo created. You can publish from the detail view.'); }
         }
       } else {
-        toast.success('Memo submitted successfully.');
+        toast.success(isEditing ? 'Draft updated successfully.' : 'Memo submitted successfully.');
       }
       onCreated();
     } catch (err) {
@@ -111,11 +121,13 @@ const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
           <div className="space-y-2">
             <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tighter leading-tight flex items-center space-x-3">
               <Send size={28} className="text-primary" />
-              <span>New Memo</span>
+              <span>{isEditing ? 'Edit Memo Draft' : 'New Memo'}</span>
             </h2>
             <div className="flex items-center space-x-2 pt-1">
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-primary/80">Official Administrative Communication</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-primary/80">
+                {isEditing ? `Editing Draft #${editDraft.id}` : 'Official Administrative Communication'}
+              </span>
             </div>
           </div>
         </div>
@@ -240,7 +252,7 @@ const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
             className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-white text-sm font-black disabled:opacity-50 shadow-xl shadow-primary/30 hover:bg-primary/90 hover:shadow-primary/40 active:scale-95 transition-all"
           >
             {submitting ? <Loader2 size={20} className="animate-spin" /> : (targetMode === 'publish' ? <Globe size={20} /> : <Send size={20} />)}
-            {targetMode === 'publish' ? 'Broadcast Memo to All' : 'Submit for Review'}
+            {isEditing ? 'Update & Submit' : targetMode === 'publish' ? 'Broadcast Memo to All' : 'Submit for Review'}
           </button>
         </div>
       </div>
@@ -249,7 +261,7 @@ const MemoCreateForm = ({ user, departments, onClose, onCreated }) => {
 };
 
 // ── Memo Detail View ──────────────────────────────────────────────────────────
-const MemoDetailView = ({ memo, user, departments, onBack, onRefresh }) => {
+const MemoDetailView = ({ memo, user, departments, onBack, onRefresh, onEditDraft }) => {
   const [detail, setDetail]     = useState(null);
   const [loading, setLoading]   = useState(true);
   const [acting, setActing]     = useState(false);
@@ -346,11 +358,22 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 w-full max-w-7xl mx-auto pb-10">
-      <button onClick={onBack}
-        className="flex items-center gap-2 text-xs font-black text-muted-foreground hover:text-foreground transition-all px-4 py-2 rounded-xl bg-white border border-border/50 shadow-sm uppercase tracking-wider group">
-        <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-        Back to Memos
-      </button>
+      <div className="flex items-center gap-3">
+        <button onClick={onBack}
+          className="flex items-center gap-2 text-xs font-black text-muted-foreground hover:text-foreground transition-all px-4 py-2 rounded-xl bg-white border border-border/50 shadow-sm uppercase tracking-wider group">
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+          Back to Memos
+        </button>
+        {memo.status === 'draft' && onEditDraft && (
+          <button
+            onClick={() => onEditDraft(memo)}
+            className="flex items-center gap-2 text-xs font-black text-white bg-amber-500 hover:bg-amber-600 transition-all px-4 py-2 rounded-xl shadow-sm uppercase tracking-wider"
+          >
+            <FileText size={16} />
+            Continue Editing
+          </button>
+        )}
+      </div>
 
       <div className="glass bg-white/95 rounded-[2.5rem] border border-border/40 shadow-xl overflow-hidden flex flex-col">
         {/* Header */}
@@ -495,6 +518,7 @@ const MemoManagement = ({ onViewChange }) => {
   const [departments, setDepts]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [draftToEdit, setDraftToEdit] = useState(null);
   const [selectedMemo, setSelectedMemo] = useState(null);
   const [tab, setTab]             = useState('all'); // 'all' | 'incoming' | 'published'
 
@@ -551,8 +575,9 @@ const MemoManagement = ({ onViewChange }) => {
           <MemoCreateForm
             user={user}
             departments={departments}
-            onClose={() => setShowCreate(false)}
-            onCreated={() => { setShowCreate(false); loadMemos(); }}
+            editDraft={draftToEdit}
+            onClose={() => { setShowCreate(false); setDraftToEdit(null); }}
+            onCreated={() => { setShowCreate(false); setDraftToEdit(null); loadMemos(); }}
           />
         ) : selectedMemo ? (
           <MemoDetailView
@@ -561,6 +586,7 @@ const MemoManagement = ({ onViewChange }) => {
             departments={departments}
             onBack={() => setSelectedMemo(null)}
             onRefresh={loadMemos}
+            onEditDraft={(m) => { setSelectedMemo(null); setDraftToEdit(m); setShowCreate(true); }}
           />
         ) : (
           <div className="space-y-8">

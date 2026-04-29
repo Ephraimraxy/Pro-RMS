@@ -5,7 +5,7 @@ import { reqAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
-const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
+const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) => {
   const { user } = useAuth();
   const [departments, setDepartments] = useState([]);
   const [subject, setSubject] = useState('');
@@ -16,6 +16,8 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
   const [files, setFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef(null);
+
+  const isEditing = !!editDraft;
 
   // ── Creator role ──────────────────────────────────────────────────────────
   const creatorName = user?.name || '';
@@ -48,8 +50,32 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
       const all = d.filter(dept => dept.id !== user?.deptId);
       setDepartments(all);
     });
-    setSubject(''); setComment(''); setItems([{ qty: 1, description: '', amount: '' }]); setTargetDeptId(''); setUrgency('normal'); setFiles([]);
-  }, [isOpen]);
+
+    if (editDraft) {
+      // Pre-populate from existing draft
+      setSubject(editDraft.title || '');
+      setUrgency(editDraft.urgency || 'normal');
+      setTargetDeptId(editDraft.targetDepartmentId ? String(editDraft.targetDepartmentId) : '');
+      try {
+        const parsed = editDraft.content ? JSON.parse(editDraft.content) : {};
+        setComment(parsed.comment || parsed.description || '');
+        if (parsed.itemized && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setItems(parsed.items.map(i => ({
+            qty: i.qty ?? 1,
+            description: i.description ?? '',
+            amount: i.amount ?? ''
+          })));
+        } else {
+          setItems([{ qty: 1, description: '', amount: '' }]);
+        }
+      } catch {
+        setComment(''); setItems([{ qty: 1, description: '', amount: '' }]);
+      }
+    } else {
+      setSubject(''); setComment(''); setItems([{ qty: 1, description: '', amount: '' }]); setTargetDeptId(''); setUrgency('normal');
+    }
+    setFiles([]);
+  }, [isOpen, editDraft?.id]);
 
   const addFiles = (newFiles) => {
     setFiles(prev => {
@@ -99,7 +125,7 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
 
       const reqDescription = type === 'Material' ? comment.trim() : subject;
 
-      const result = await addRequisition({
+      const payload = {
         title: subject,
         description: reqDescription,
         type,
@@ -109,16 +135,20 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
         ...(type === 'Cash' && total > 0 && { amount: total }),
         ...(user?.deptId != null && { departmentId: user.deptId }),
         ...(targetDeptId && { targetDepartmentId: parseInt(targetDeptId) }),
-      });
+      };
 
-      // Upload any attached files after the requisition is created
-      const createdId = Array.isArray(result) ? result[0]?.id : result?.id;
-      if (createdId && files.length > 0) {
-        try {
-          await reqAPI.uploadAttachments(createdId, files);
-        } catch {
-          toast.error('Request submitted but some attachments failed to upload.');
-        }
+      let savedId;
+      if (isEditing) {
+        await reqAPI.updateRequisition(editDraft.id, payload);
+        savedId = editDraft.id;
+      } else {
+        const result = await addRequisition(payload);
+        savedId = Array.isArray(result) ? result[0]?.id : result?.id;
+      }
+
+      if (savedId && files.length > 0) {
+        try { await reqAPI.uploadAttachments(savedId, files); }
+        catch { toast.error('Request submitted but some attachments failed to upload.'); }
       }
 
       toast.success(isDraft ? 'Draft saved.' : `${type} request submitted successfully.`);
@@ -148,12 +178,12 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
           <div className="space-y-2">
             <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tighter leading-tight flex items-center space-x-3">
               <Send size={28} className="text-primary" />
-              <span>New {type} Request</span>
+              <span>{isEditing ? `Edit ${type} Draft` : `New ${type} Request`}</span>
             </h2>
             <div className="flex items-center space-x-2 pt-1">
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
               <span className="text-[10px] font-black uppercase tracking-widest text-primary/80">
-                {type === 'Cash' ? 'Itemized Financial Requisition' : 'Material & Supply Requisition'}
+                {isEditing ? `Editing Draft #${editDraft.id}` : type === 'Cash' ? 'Itemized Financial Requisition' : 'Material & Supply Requisition'}
               </span>
             </div>
           </div>
@@ -368,7 +398,7 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose }) => {
             className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-white text-sm font-black transition-all disabled:opacity-50 shadow-xl shadow-primary/30 hover:bg-primary/90 hover:shadow-primary/40 active:scale-95"
           >
             {submitting ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-            Submit {type} Request
+            {isEditing ? 'Update & Submit' : `Submit ${type} Request`}
           </button>
         </div>
       </div>
