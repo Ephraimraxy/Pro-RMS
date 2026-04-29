@@ -15,7 +15,7 @@ import {
   ArrowRightCircle, CornerDownLeft, Loader2, Send, Trash2, Printer,
   Building2, ArrowRight, ArrowLeft, History, Download, AlertTriangle,
   ExternalLink, ArrowDownToLine, MessageSquare, RotateCcw, Forward as ForwardIcon,
-  CheckCircle2, Award, ChevronDown, Gavel, Zap
+  CheckCircle2, Award, ChevronDown, Gavel, Zap, Trash
 } from 'lucide-react';
 import { reqAPI } from '../lib/api';
 
@@ -1739,46 +1739,73 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
                      <Paperclip size={13} className="text-primary" />
                      <p className="text-[10px] font-black text-foreground uppercase tracking-[0.1em]">Enclosures ({attachments.length})</p>
                   </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    {attachments.map(a => (
-                      <div key={a.id} className="flex items-center gap-2 p-3 bg-muted/20 rounded-xl border border-border/30 text-xs hover:border-primary/20 transition-all group">
-                        <FileText size={13} className="text-primary shrink-0" />
-                        <div className="flex-1 min-w-0">
-                           <p className="truncate text-foreground font-bold text-[11px]">{a.filename}</p>
-                           <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                             <span className="text-[9px] text-muted-foreground font-mono">{a.size ? `${(a.size / 1024).toFixed(0)} KB` : 'N/A'}</span>
-                             {(a.uploadedBy?.name || a.uploaderDept) && (
-                               <span className="text-[9px] text-primary/70 font-bold uppercase tracking-wide">
-                                 {a.uploaderDept || a.uploadedBy?.department?.name || ''}
-                                 {a.uploadedBy?.name ? ` · ${a.uploadedBy.name}` : ''}
-                               </span>
-                             )}
-                             {a.stageName && (
-                               <span className="text-[9px] text-muted-foreground/60 italic">{a.stageName}</span>
-                             )}
-                             {a.createdAt && (
-                               <span className="text-[9px] text-muted-foreground/50 font-mono">{new Date(a.createdAt).toLocaleDateString()}</span>
-                             )}
-                           </div>
-                        </div>
-                        <button
-                          onClick={() => setPreviewFile(a)}
-                          title="Preview"
-                          className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <a
-                          href={`/api/attachments/${a.id}/download?token=${localStorage.getItem('rms_token')}`}
-                          download
-                          title="Download"
-                          className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"
-                        >
-                          <Download size={14} />
-                        </a>
+                  {(() => {
+                    // Delete is allowed only for creator dept and only before the req has been forwarded
+                    const canDeleteAttachments = user?.role === 'department' &&
+                      parseInt(user.deptId) === detail?.departmentId &&
+                      (detail?.forwardEvents?.length === 0 || detail?.status === 'draft');
+                    return (
+                      <div className="grid grid-cols-1 gap-2">
+                        {attachments.map(a => (
+                          <div key={a.id} className="flex items-center gap-2 p-3 bg-muted/20 rounded-xl border border-border/30 text-xs hover:border-primary/20 transition-all group">
+                            <FileText size={13} className="text-primary shrink-0" />
+                            <div className="flex-1 min-w-0">
+                               <p className="truncate text-foreground font-bold text-[11px]">{a.filename}</p>
+                               <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                 <span className="text-[9px] text-muted-foreground font-mono">{a.size ? `${(a.size / 1024).toFixed(0)} KB` : 'N/A'}</span>
+                                 {(a.uploadedBy?.name || a.uploaderDept) && (
+                                   <span className="text-[9px] text-primary/70 font-bold uppercase tracking-wide">
+                                     {a.uploaderDept || a.uploadedBy?.department?.name || ''}
+                                     {a.uploadedBy?.name ? ` · ${a.uploadedBy.name}` : ''}
+                                   </span>
+                                 )}
+                                 {a.stageName && (
+                                   <span className="text-[9px] text-muted-foreground/60 italic">{a.stageName}</span>
+                                 )}
+                                 {a.createdAt && (
+                                   <span className="text-[9px] text-muted-foreground/50 font-mono">{new Date(a.createdAt).toLocaleDateString()}</span>
+                                 )}
+                               </div>
+                            </div>
+                            <button
+                              onClick={() => setPreviewFile(a)}
+                              title="Preview"
+                              className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <a
+                              href={`/api/attachments/${a.id}/download?token=${localStorage.getItem('rms_token')}`}
+                              download
+                              title="Download"
+                              className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"
+                            >
+                              <Download size={14} />
+                            </a>
+                            {canDeleteAttachments && (
+                              <button
+                                title="Delete attachment"
+                                onClick={async () => {
+                                  if (!window.confirm(`Delete "${a.filename}"? This cannot be undone.`)) return;
+                                  try {
+                                    await reqAPI.deleteAttachment(a.id);
+                                    const updated = await getRequisitionDetail(req.id);
+                                    setDetail(updated);
+                                    toast.success('Attachment deleted.');
+                                  } catch (err) {
+                                    toast.error(err?.response?.data?.error || 'Could not delete attachment.');
+                                  }
+                                }}
+                                className="p-1.5 text-muted-foreground hover:text-red-500 transition-all rounded-lg hover:bg-red-50 shrink-0"
+                              >
+                                <Trash size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
 

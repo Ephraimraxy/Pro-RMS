@@ -26,6 +26,7 @@ const logger = pino({
 const multer = require('multer');
 const {
   putObject,
+  deleteObject,
   getObjectStream,
   getObjectBuffer,
   generateStorageKey
@@ -3865,6 +3866,42 @@ app.get('/api/attachments/:id/preview', authenticateToken, async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="${attachment.filename}"`);
     stream.pipe(res);
   } catch (error) { sendError(res, 500, error.message); }
+});
+
+// ── Delete Attachment (creator dept only, before any forwarding) ──────────────
+app.delete('/api/attachments/:id', authenticateToken, async (req, res) => {
+  try {
+    const attachId = parseInt(req.params.id);
+    const attachment = await prisma.attachment.findUnique({
+      where: { id: attachId },
+      include: { requisition: { select: { id: true, departmentId: true, forwardEvents: { select: { id: true } } } } }
+    });
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+
+    const req_ = attachment.requisition;
+    if (!req_) return res.status(400).json({ error: 'Attachment has no associated requisition' });
+
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
+
+    // Only creator dept, and only before the req has been forwarded (sent)
+    if (!isAdmin) {
+      if (userDeptId !== req_.departmentId) {
+        return res.status(403).json({ error: 'Only the requesting department can delete attachments.' });
+      }
+      if (req_.forwardEvents?.length > 0) {
+        return res.status(403).json({ error: 'Attachments cannot be deleted after a requisition has been submitted.' });
+      }
+    }
+
+    // Remove from storage
+    if (attachment.storageKey) {
+      await deleteObject(attachment.storageKey).catch(() => {});
+    }
+
+    await prisma.attachment.delete({ where: { id: attachId } });
+    res.json({ ok: true });
+  } catch (err) { sendError(res, 500, err.message); }
 });
 
 // ── EMAIL TEST ENDPOINT (Admin only) ──

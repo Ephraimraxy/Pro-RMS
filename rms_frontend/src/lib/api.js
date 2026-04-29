@@ -238,6 +238,9 @@ export const reqAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
+  async deleteAttachment(attachmentId) {
+    return api.delete(`/attachments/${attachmentId}`);
+  },
   async getRequisitionTags(id) {
     return api.get(`/requisitions/${id}/tags`);
   },
