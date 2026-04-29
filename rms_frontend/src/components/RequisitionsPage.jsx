@@ -1653,7 +1653,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               )}
 
               {!isTaggedObserver && !approveChecked && !isReturnedToCreator && isIncoming && req.status === 'pending' && !loading &&
-               !(detail?.finalApprovalStatus === 'treated' && /\baccount/i.test(user?.name || '')) && (
+               !['treated', 'published'].includes(detail?.finalApprovalStatus) && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                    <RespondPanel
                      req={req}
@@ -1783,7 +1783,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               )}
 
               {/* ── Post-Creation Attachment Upload ── */}
-              {!isTaggedObserver && !approveChecked && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
+              {!isTaggedObserver && !approveChecked && !['treated', 'published'].includes(detail?.finalApprovalStatus) && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
                 // Compute stage context for tagging
                 const fwdEvents = detail?.forwardEvents || [];
                 const approvals = detail?.approvals || [];
@@ -1884,7 +1884,8 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction }) =
               })()}
 
               {/* Final Approve Panel — below Attach Documents, for dept authority users */}
-              {!isTaggedObserver && user?.role === 'department' && detail && !loading && (
+              {!isTaggedObserver && user?.role === 'department' && detail && !loading &&
+               !['treated', 'published'].includes(detail?.finalApprovalStatus) && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                   <FinalApprovePanel
                     req={req}

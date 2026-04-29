@@ -327,9 +327,13 @@ export async function getDashboardStats(user) {
     /ceo|chairman/i.test(userDeptName) ||
     /general\s*manager|\bgm\b/i.test(userDeptName);
 
-  // "Pending" on dashboard now means "Personal Action Items"
+  const DONE_STATES = ['treated', 'published'];
+  // "Pending" on dashboard means items still awaiting this dept's action
   const pendingActions = all.filter(r => {
-    const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
+    if (DONE_STATES.includes(r.finalApprovalStatus)) return false; // fully processed
+    const isTargeted = Number(r.targetDepartmentId) === userDeptId &&
+      r.status === 'pending' &&
+      (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
     const needsFinal = isExecutive && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
     const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
     return isTargeted || needsFinal || isVetting;

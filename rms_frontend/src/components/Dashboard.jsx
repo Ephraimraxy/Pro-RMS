@@ -68,14 +68,17 @@ const Dashboard = ({ onViewChange }) => {
                       /ceo|chairman/i.test(userDeptName) ||
                       /general\s*manager|\bgm\b/i.test(userDeptName);
 
+    const DONE_STATES = ['treated', 'published'];
     const pendingForMe = all.filter(r => {
-      // 1. Standard internal approval path
-      const isTargeted = Number(r.targetDepartmentId) === userDeptId && r.status === 'pending';
+      if (DONE_STATES.includes(r.finalApprovalStatus)) return false; // fully processed
+      // 1. Standard internal approval path (not yet in any sub-workflow)
+      const isTargeted = Number(r.targetDepartmentId) === userDeptId &&
+        r.status === 'pending' &&
+        (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
       // 2. Final Approval path (for Chairman/GM/Admin)
       const needsFinal = isExecutive && r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none');
       // 3. Vetting path
       const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
-
       return isTargeted || needsFinal || isVetting;
     });
     setRecentPending(pendingForMe.slice(0, 5));
