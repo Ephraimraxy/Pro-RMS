@@ -230,17 +230,7 @@ const Dashboard = ({ onViewChange }) => {
 
               {(() => {
                 const filtered = typeFilter === 'All' ? recentPending : recentPending.filter(r => r.type === typeFilter);
-                return filtered.length === 0 ? (
-                <div className="py-20 text-center space-y-4">
-                  <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                    <CheckCircle2 size={32} />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xl font-black text-foreground tracking-tight">Governance Clear</p>
-                    <p className="text-sm text-muted-foreground font-medium">All administrative items have been synchronized.</p>
-                  </div>
-                </div>
-              ) : (
+                return filtered.length === 0 ? null : (
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-separate border-spacing-y-2">
                     <thead>
