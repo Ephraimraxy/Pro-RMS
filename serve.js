@@ -3227,9 +3227,15 @@ app.get('/api/requisitions/:id/dynamic-pdf', authenticateToken, async (req, res)
         const logoBytes = fs.readFileSync(logoPath);
         const logoImage = await embedSafe(logoBytes);
         if (logoImage) {
-          const logoDims = logoImage.scale(0.2);
-          // Far top left
-          page.drawImage(logoImage, { x: margin, y: y - logoDims.height + 14, width: logoDims.width, height: logoDims.height });
+          const logoBox = { width: 70, height: 43 };
+          const logoScale = Math.min(logoBox.width / logoImage.width, logoBox.height / logoImage.height);
+          const logoDims = logoImage.scale(logoScale);
+          page.drawImage(logoImage, {
+            x: margin + 6,
+            y: y - logoDims.height - 2,
+            width: logoDims.width,
+            height: logoDims.height
+          });
         }
       }
     } catch (e) { /* logo skip */ }
