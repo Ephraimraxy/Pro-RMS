@@ -2402,6 +2402,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
   const [deletePendingAction, setDeletePendingAction] = useState(null);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [syncStale, setSyncStale]       = useState(false);
+  const [flashedIds, setFlashedIds]     = useState(new Set());
   const selectedReqRef = React.useRef(null);
 
   // Normalize a requisition so department/creator are always strings, not nested objects.
@@ -2473,20 +2474,39 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
         const { ticket } = await reqAPI.getSseTicket();
         es = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
         es.addEventListener('requisition_updated', (e) => {
-          const { id } = JSON.parse(e.data);
+          const { id, action, fromDept, toDept } = JSON.parse(e.data);
+
+          // Build a descriptive message from action metadata
+          const label = (() => {
+            if (!action) return `Req #${id} was updated`;
+            if (action === 'forwarded')       return `📤 ${fromDept} forwarded Req #${id}${toDept ? ` → ${toDept}` : ''}`;
+            if (action === 'returned')        return `↩️ ${fromDept} returned Req #${id}${toDept ? ` to ${toDept}` : ''}`;
+            if (action === 'approved')        return `✅ ${fromDept} approved Req #${id}`;
+            if (action === 'rejected')        return `❌ ${fromDept} rejected Req #${id}`;
+            if (action === 'finally_approved') return `🏆 ${fromDept} finally approved Req #${id}`;
+            if (action === 'sent_to_vetting') return `📋 Req #${id} sent to vetting${toDept ? ` → ${toDept}` : ''}`;
+            if (action === 'vetting_forwarded') return `📋 ${fromDept} forwarded Req #${id} in vetting`;
+            if (action === 'treated')         return `✅ ${fromDept} treated Req #${id}`;
+            return `Req #${id} was updated`;
+          })();
+
           // Silent background refresh of list
           loadData(true);
           setSyncStale(false);
-          // If this exact req is open, fetch fresh detail immediately
+
+          // Flash the row in the table so the user notices the change
+          setFlashedIds(prev => new Set([...prev, id]));
+          setTimeout(() => setFlashedIds(prev => { const s = new Set(prev); s.delete(id); return s; }), 4000);
+
+          // If this exact req is open, fetch fresh detail immediately — no toast needed
           if (selectedReqRef.current?.id === id) {
             reqAPI.getRequisition(id).then(fresh => setSelectedReq(normalizeReq(fresh))).catch(() => {});
           } else {
-            // Show a subtle in-app toast so user knows something changed
-            toast(`Requisition #${id} was updated`, {
-              icon: '🔔',
-              duration: 3000,
-              style: { fontSize: '12px' },
-              id: `req-update-${id}` // deduplicate rapid fires
+            toast(label, {
+              icon: null,
+              duration: 5000,
+              style: { fontSize: '12px', fontWeight: '600' },
+              id: `req-update-${id}`
             });
           }
         });
@@ -2737,7 +2757,7 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                       <tr
                         key={r.id}
                         onClick={() => setSelectedReq(normalizeReq(r))}
-                        className="group cursor-pointer transition-all"
+                        className={`group cursor-pointer transition-all ${flashedIds.has(r.id) ? 'animate-pulse ring-2 ring-primary/30 ring-inset rounded-xl' : ''}`}
                       >
                         <td className="py-3 px-4 bg-white/50 border-y border-l border-border/30 rounded-l-xl group-hover:bg-white transition-colors" onClick={e => e.stopPropagation()}>
                           <input type="checkbox" className="rounded-md border-border/50 text-primary focus:ring-primary" checked={selectedIds.includes(r.id)} onChange={() => toggleSelect(r.id)} />

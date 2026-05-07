@@ -71,9 +71,9 @@ setInterval(() => {
   for (const [k, v] of sseTickets) { if (now > v.expiresAt) sseTickets.delete(k); }
 }, 120_000);
 
-async function broadcastUpdate(reqId) {
+async function broadcastUpdate(reqId, meta = {}) {
   const involvedDeptIds = await getInvolvedDeptIds(reqId).catch(() => new Set());
-  const payload = `event: requisition_updated\ndata: ${JSON.stringify({ id: reqId, ts: Date.now() })}\n\n`;
+  const payload = `event: requisition_updated\ndata: ${JSON.stringify({ id: reqId, ts: Date.now(), ...meta })}\n\n`;
   for (const [, { res, user }] of sseClients) {
     const role = normalizeRole(user?.role);
     if (role !== 'department' || involvedDeptIds.has(toIntOrNull(user?.deptId))) {
@@ -2408,7 +2408,13 @@ app.post('/api/requisitions/:id/forward', authenticateToken, async (req, res) =>
       });
     }
 
-    broadcastUpdate(parseInt(id));
+    broadcastUpdate(parseInt(id), {
+      action: returnToSender ? 'returned' : 'forwarded',
+      fromDept: requisition.targetDepartment?.name || req.user?.name || 'Department',
+      toDept: returnToSender
+        ? (updated.department?.name || 'Originator')
+        : (updated.targetDepartment?.name || 'Department')
+    });
     pushToTaggedDepts(parseInt(id), { title: 'Requisition Updated', body: `Req #${id} has been ${returnToSender ? 'returned' : 'forwarded'}.`, url: `/?req=${id}` });
     res.json(updated);
   } catch (error) { sendError(res, 500, error.message); }
@@ -2472,7 +2478,7 @@ app.post('/api/requisitions/:id/final-approve', authenticateToken, async (req, r
       }
     });
 
-    broadcastUpdate(reqId);
+    broadcastUpdate(reqId, { action: 'finally_approved', fromDept: deptName });
     pushToTaggedDepts(reqId, { title: 'Requisition Finally Approved', body: `Req #${id} has been finally approved.`, url: `/?req=${reqId}` });
     res.json(updated);
   } catch (error) { sendError(res, 500, error.message); }
@@ -2552,7 +2558,7 @@ app.post('/api/requisitions/:id/send-to-vetting', authenticateToken, async (req,
       }
     });
 
-    broadcastUpdate(reqId);
+    broadcastUpdate(reqId, { action: 'sent_to_vetting', fromDept: req.user?.name || 'Department', toDept: vettingDept.name });
     pushToTaggedDepts(reqId, { title: 'Requisition Sent to Vetting', body: `Req #${id} has been sent for vetting.`, url: `/?req=${reqId}` });
     res.json({ success: true });
   } catch (error) { sendError(res, 500, error.message); }
@@ -2787,7 +2793,10 @@ app.post('/api/requisitions/:id/vetting-action', authenticateToken, upload.singl
       }
     });
 
-    broadcastUpdate(reqId);
+    broadcastUpdate(reqId, {
+      action: action === 'treated' ? 'treated' : action === 'return' ? 'returned' : 'vetting_forwarded',
+      fromDept: actingDeptName
+    });
     pushToTaggedDepts(reqId, { title: 'Vetting Update', body: `Req #${id} vetting action: ${action} by ${actingDeptName}.`, url: `/?req=${reqId}` });
     res.json({ success: true });
   } catch (error) { sendError(res, 500, error.message); }
@@ -2849,7 +2858,7 @@ app.post('/api/requisitions/:id/approve', authenticateToken, approvalLimiter, as
     const parsed = z.object({ remarks: z.string().optional() }).safeParse(req.body || {});
     if (!parsed.success) return res.status(400).json({ error: 'Invalid approval payload' });
     const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'approved', remarks: parsed.data.remarks, user: req.user });
-    broadcastUpdate(parseInt(id));
+    broadcastUpdate(parseInt(id), { action: 'approved', fromDept: req.user?.name || 'Department' });
     pushToTaggedDepts(parseInt(id), { title: 'Requisition Approved', body: `Req #${id} has been approved at a workflow stage.`, url: `/?req=${id}` });
     res.json(updated);
   } catch (error) {
@@ -2863,7 +2872,7 @@ app.post('/api/requisitions/:id/reject', authenticateToken, approvalLimiter, asy
     const parsed = z.object({ remarks: z.string().optional() }).safeParse(req.body || {});
     if (!parsed.success) return res.status(400).json({ error: 'Invalid rejection payload' });
     const updated = await processApprovalAction({ requisitionId: parseInt(id), action: 'rejected', remarks: parsed.data.remarks, user: req.user });
-    broadcastUpdate(parseInt(id));
+    broadcastUpdate(parseInt(id), { action: 'rejected', fromDept: req.user?.name || 'Department' });
     pushToTaggedDepts(parseInt(id), { title: 'Requisition Rejected', body: `Req #${id} has been rejected.`, url: `/?req=${id}` });
     res.json(updated);
   } catch (error) {
