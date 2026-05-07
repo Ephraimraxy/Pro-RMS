@@ -281,15 +281,6 @@ app.get('/api/events', (req, res) => {
   req.on('close', () => { clearInterval(heartbeat); sseClients.delete(clientId); });
 });
 
-// Issue a short-lived (30 s) single-use SSE ticket so the JWT never appears in
-// query strings / server logs. The client POSTs here with the normal Bearer
-// token, gets back a ticket, and opens EventSource with ?ticket=<value>.
-app.post('/api/events/ticket', authenticateToken, (req, res) => {
-  const ticket = crypto.randomUUID();
-  sseTickets.set(ticket, { user: req.user, expiresAt: Date.now() + 30_000 });
-  res.json({ ticket });
-});
-
 // ── Push subscription endpoints ───────────────────────────────────────────────
 app.get('/api/push/vapid-public', (req, res) => {
   res.json({ key: VAPID_PUBLIC || null });
@@ -463,6 +454,15 @@ const getNumericUserId = (user) => {
   if (typeof user.id === 'number') return user.id;
   return null;
 };
+
+// Issue a short-lived (30 s) single-use SSE ticket so the JWT never appears in
+// query strings / server logs. The client POSTs here with the normal Bearer
+// token, gets back a ticket, and opens EventSource with ?ticket=<value>.
+app.post('/api/events/ticket', authenticateToken, (req, res) => {
+  const ticket = crypto.randomUUID();
+  sseTickets.set(ticket, { user: req.user, expiresAt: Date.now() + 30_000 });
+  res.json({ ticket });
+});
 
 // ── Push subscription endpoints (placed here: after authenticateToken) ────────
 app.post('/api/push/subscribe', authenticateToken, async (req, res) => {
