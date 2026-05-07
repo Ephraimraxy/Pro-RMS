@@ -17,14 +17,22 @@ api.interceptors.response.use(
     if (error.response?.status !== 422) {
       console.error("API Error Response:", error);
     }
-    const originalRequest = error.config;
+    const originalRequest = error.config || {};
+    const status = error.response?.status;
+    const errorMessage = String(error.response?.data?.error || error.response?.data?.message || '');
     
     // Prevent infinite loops on authenticating/refresh requests
     if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/dept-login') || originalRequest.url?.includes('/auth/refresh')) {
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (status === 403 && /session is invalid|session.*expired/i.test(errorMessage)) {
+      localStorage.removeItem('rms_user');
+      window.location.reload();
+      return Promise.reject(error);
+    }
+
+    if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
         // Server rotates the HttpOnly cookie and returns updated user data
@@ -39,7 +47,7 @@ api.interceptors.response.use(
         localStorage.removeItem('rms_user');
         window.location.reload();
       }
-    } else if (error.response?.status === 401) {
+    } else if (status === 401) {
       localStorage.removeItem('rms_user');
       window.location.reload();
     }

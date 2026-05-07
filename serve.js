@@ -71,10 +71,14 @@ setInterval(() => {
   for (const [k, v] of sseTickets) { if (now > v.expiresAt) sseTickets.delete(k); }
 }, 120_000);
 
-function broadcastUpdate(reqId) {
+async function broadcastUpdate(reqId) {
+  const involvedDeptIds = await getInvolvedDeptIds(reqId).catch(() => new Set());
   const payload = `event: requisition_updated\ndata: ${JSON.stringify({ id: reqId, ts: Date.now() })}\n\n`;
-  for (const [, res] of sseClients) {
-    try { res.write(payload); } catch (_) {}
+  for (const [, { res, user }] of sseClients) {
+    const role = normalizeRole(user?.role);
+    if (role !== 'department' || involvedDeptIds.has(toIntOrNull(user?.deptId))) {
+      try { res.write(payload); } catch (_) {}
+    }
   }
 }
 
@@ -272,7 +276,7 @@ app.get('/api/events', (req, res) => {
   res.write(':connected\n\n');
 
   const clientId = `${user.id || user.deptId || 'anon'}-${Date.now()}`;
-  sseClients.set(clientId, res);
+  sseClients.set(clientId, { res, user });
 
   const heartbeat = setInterval(() => {
     try { res.write(':ping\n\n'); } catch (_) { clearInterval(heartbeat); }
@@ -442,7 +446,7 @@ const authenticateToken = (req, res, next) => {
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Your session is invalid or has expired. Please log in again.' });
+    if (err) return res.status(401).json({ error: 'Your session is invalid or has expired. Please log in again.' });
     req.user = user;
     req.token = token; // Stash for logout
     next();
@@ -491,65 +495,161 @@ app.delete('/api/push/subscribe', authenticateToken, async (req, res) => {
 
 const normalizeRole = (role) => (role || '').toLowerCase();
 
+const toIntOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number.parseInt(String(value), 10);
+  return Number.isNaN(n) ? null : n;
+};
+
+async function getDepartmentLinkedRequisitionIds(deptId) {
+  const departmentId = toIntOrNull(deptId);
+  if (!departmentId) return [];
+
+  const ids = new Set();
+  const addId = (value) => {
+    const id = toIntOrNull(value);
+    if (id) ids.add(id);
+  };
+
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT id FROM "Requisition"
+      WHERE "currentVettingDeptId" = ${departmentId}
+         OR "finalApprovedByDeptId" = ${departmentId}
+         OR "treatedByDeptId" = ${departmentId}
+    `;
+    for (const row of rows || []) addId(row.id);
+  } catch (_) {}
+
+  try {
+    const rows = await prisma.forwardEvent.findMany({
+      where: { OR: [{ fromDeptId: departmentId }, { toDeptId: departmentId }] },
+      select: { requisitionId: true }
+    });
+    for (const row of rows || []) addId(row.requisitionId);
+  } catch (_) {}
+
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT DISTINCT "requisitionId" FROM "VettingEvent"
+      WHERE "deptId" = ${departmentId}
+    `;
+    for (const row of rows || []) addId(row.requisitionId);
+  } catch (_) {}
+
+  try {
+    const rows = await prisma.requisitionTag.findMany({
+      where: { deptId: departmentId },
+      select: { requisitionId: true }
+    });
+    for (const row of rows || []) addId(row.requisitionId);
+  } catch (_) {}
+
+  return [...ids];
+}
+
+async function getInvolvedDeptIds(reqId) {
+  const deptIds = new Set();
+  try {
+    const r = await prisma.requisition.findUnique({
+      where: { id: reqId },
+      select: { departmentId: true, targetDepartmentId: true }
+    });
+    if (r?.departmentId) deptIds.add(r.departmentId);
+    if (r?.targetDepartmentId) deptIds.add(r.targetDepartmentId);
+  } catch (_) {}
+  try {
+    const ext = await prisma.$queryRaw`
+      SELECT "currentVettingDeptId", "finalApprovedByDeptId", "treatedByDeptId"
+      FROM "Requisition" WHERE id = ${reqId} LIMIT 1
+    `;
+    const e = ext?.[0] || {};
+    if (e.currentVettingDeptId) deptIds.add(parseInt(e.currentVettingDeptId));
+    if (e.finalApprovedByDeptId) deptIds.add(parseInt(e.finalApprovedByDeptId));
+    if (e.treatedByDeptId) deptIds.add(parseInt(e.treatedByDeptId));
+  } catch (_) {}
+  try {
+    const fwds = await prisma.forwardEvent.findMany({
+      where: { requisitionId: reqId },
+      select: { fromDeptId: true, toDeptId: true }
+    });
+    for (const f of fwds) {
+      if (f.fromDeptId) deptIds.add(f.fromDeptId);
+      if (f.toDeptId) deptIds.add(f.toDeptId);
+    }
+  } catch (_) {}
+  try {
+    const vrows = await prisma.$queryRaw`SELECT DISTINCT "deptId" FROM "VettingEvent" WHERE "requisitionId" = ${reqId}`;
+    for (const v of (vrows || [])) if (v.deptId) deptIds.add(parseInt(v.deptId));
+  } catch (_) {}
+  try {
+    const tags = await prisma.requisitionTag.findMany({ where: { requisitionId: reqId }, select: { deptId: true } });
+    for (const t of tags) deptIds.add(t.deptId);
+  } catch (_) {}
+  return deptIds;
+}
+
+async function canReadRequisition(requisition, user) {
+  const userRole = normalizeRole(user?.role);
+  if (userRole === 'global_admin' || userRole !== 'department') return true;
+
+  const deptId = toIntOrNull(user?.deptId);
+  const reqId = toIntOrNull(requisition?.id);
+  if (!deptId || !reqId) return false;
+
+  const directDeptIds = [
+    requisition.departmentId,
+    requisition.targetDepartmentId,
+    requisition.currentVettingDeptId,
+    requisition.finalApprovedByDeptId,
+    requisition.treatedByDeptId
+  ].map(toIntOrNull);
+
+  if (directDeptIds.includes(deptId)) return true;
+
+  try {
+    const forwardEvent = await prisma.forwardEvent.findFirst({
+      where: { requisitionId: reqId, OR: [{ fromDeptId: deptId }, { toDeptId: deptId }] },
+      select: { id: true }
+    });
+    if (forwardEvent) return true;
+  } catch (_) {}
+
+  try {
+    const vettingRows = await prisma.$queryRaw`
+      SELECT 1 FROM "VettingEvent"
+      WHERE "requisitionId" = ${reqId} AND "deptId" = ${deptId}
+      LIMIT 1
+    `;
+    if (Array.isArray(vettingRows) && vettingRows.length > 0) return true;
+  } catch (_) {}
+
+  try {
+    const tag = await prisma.requisitionTag.findFirst({
+      where: { requisitionId: reqId, deptId },
+      select: { id: true }
+    });
+    if (tag) return true;
+  } catch (_) {}
+
+  return false;
+}
+
 // ── Broadcast push + in-app to ALL departments involved in a requisition ──────
 // Covers: creator dept, target dept, forward chain, vetting chain, tagged depts.
 // This is the single function to call after any mutation — replaces pushToTaggedDepts.
 async function broadcastPushToInvolved(reqId, payload) {
   try {
-    const req = await prisma.requisition.findUnique({
-      where: { id: reqId },
-      select: { departmentId: true, targetDepartmentId: true }
-    });
-    if (!req) return;
-    const deptIds = new Set([req.departmentId, req.targetDepartmentId].filter(Boolean));
-
-    // Vetting-related depts
-    try {
-      const ext = await prisma.$queryRaw`
-        SELECT "currentVettingDeptId", "finalApprovedByDeptId", "treatedByDeptId"
-        FROM "Requisition" WHERE id = ${reqId} LIMIT 1
-      `;
-      const e = ext?.[0] || {};
-      if (e.currentVettingDeptId) deptIds.add(parseInt(e.currentVettingDeptId));
-      if (e.finalApprovedByDeptId) deptIds.add(parseInt(e.finalApprovedByDeptId));
-      if (e.treatedByDeptId) deptIds.add(parseInt(e.treatedByDeptId));
-    } catch (_) {}
-
-    // Forward chain depts
-    try {
-      const fwds = await prisma.forwardEvent.findMany({
-        where: { requisitionId: reqId },
-        select: { fromDeptId: true, toDeptId: true }
-      });
-      for (const f of fwds) {
-        if (f.fromDeptId) deptIds.add(f.fromDeptId);
-        if (f.toDeptId) deptIds.add(f.toDeptId);
-      }
-    } catch (_) {}
-
-    // Vetting chain depts
-    try {
-      const vrows = await prisma.$queryRaw`SELECT DISTINCT "deptId" FROM "VettingEvent" WHERE "requisitionId" = ${reqId}`;
-      for (const v of (vrows || [])) if (v.deptId) deptIds.add(parseInt(v.deptId));
-    } catch (_) {}
-
-    // Tagged observer depts
-    try {
-      const tags = await prisma.requisitionTag.findMany({ where: { requisitionId: reqId }, select: { deptId: true } });
-      for (const t of tags) deptIds.add(t.deptId);
-    } catch (_) {}
-
+    const deptIds = await getInvolvedDeptIds(reqId);
     const ids = [...deptIds];
     if (ids.length === 0) return;
 
-    // In-app notifications for all involved depts (skip creator's own dept for minor updates to reduce noise)
     for (const deptId of ids) {
       await prisma.notification.create({
         data: { departmentId: deptId, content: payload.body || payload.title, link: payload.url || '/' }
       }).catch(() => {});
     }
 
-    // PWA push to all subscribed devices
     await sendPushNotification(ids, payload);
   } catch (_) {}
 }
@@ -2943,30 +3043,8 @@ app.get('/api/requisitions/:id', authenticateToken, async (req, res) => {
       ext = extRows?.[0] || {};
     } catch (_) { /* columns not yet migrated — ignore */ }
 
-    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
-    if (
-      req.user.role === 'department' && userDeptId &&
-      requisition.departmentId !== userDeptId &&
-      requisition.targetDepartmentId !== userDeptId
-    ) {
-      const finalApprovedByDeptId = ext.finalApprovedByDeptId ? parseInt(ext.finalApprovedByDeptId) : null;
-      const currentVettingDeptId = ext.currentVettingDeptId ? parseInt(ext.currentVettingDeptId) : null;
-      const treatedByDeptId = ext.treatedByDeptId ? parseInt(ext.treatedByDeptId) : null;
-      let wasVetter = false;
-      try {
-        const vettingRows = await prisma.$queryRaw`
-          SELECT 1 FROM "VettingEvent" WHERE "requisitionId" = ${parseInt(id)} AND "deptId" = ${userDeptId} LIMIT 1
-        `;
-        wasVetter = Array.isArray(vettingRows) && vettingRows.length > 0;
-      } catch (_) { /* VettingEvent table not yet created */ }
-      let isTaggedCheck = false;
-      try {
-        const tagRow = await prisma.requisitionTag.findFirst({ where: { requisitionId: parseInt(id), deptId: userDeptId } });
-        isTaggedCheck = !!tagRow;
-      } catch (_) {}
-      if (!wasVetter && currentVettingDeptId !== userDeptId && finalApprovedByDeptId !== userDeptId && treatedByDeptId !== userDeptId && !isTaggedCheck) {
-        return res.status(403).json({ error: 'You do not have permission to perform this action.' });
-      }
+    if (!(await canReadRequisition({ ...requisition, ...ext }, req.user))) {
+      return res.status(403).json({ error: 'You do not have permission to view this requisition.' });
     }
     // Attach vetting events — safe fallback
     let vettingEvents = [];
@@ -3832,18 +3910,19 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
     const typeValues = [...new Set(scopeTypes.flatMap(t => typeAliases[t.toLowerCase()] || [t]))];
     const typeScopeWhere = typeValues.length > 0 ? { type: { in: typeValues } } : {};
     let where = typeScopeWhere;
-    // RBAC: Department users see their own requisitions AND incoming ones targeted at them
-    // Also include requisitions where they are the current vetting dept
-    if (req.user.role === 'department' && req.user.deptId) {
+    // RBAC: department accounts see records where their department is involved.
+    if (normalizeRole(req.user.role) === 'department' && req.user.deptId) {
       const deptId = parseInt(req.user.deptId);
       // Extra IDs from columns not in Prisma schema — safe fallback if columns don't exist yet
-      let extraIds = [];
+      let linkedReqIds = await getDepartmentLinkedRequisitionIds(deptId);
       try {
         const vettingIds = await prisma.$queryRaw`
           SELECT id FROM "Requisition"
-          WHERE "currentVettingDeptId" = ${deptId} OR "finalApprovedByDeptId" = ${deptId}
+          WHERE "currentVettingDeptId" = ${deptId}
+             OR "finalApprovedByDeptId" = ${deptId}
+             OR "treatedByDeptId" = ${deptId}
         `;
-        extraIds = (vettingIds || []).map(r => parseInt(r.id));
+        linkedReqIds = [...new Set([...linkedReqIds, ...(vettingIds || []).map(r => parseInt(r.id))])];
       } catch (_) { /* columns not yet migrated — ignore */ }
       let taggedReqIds = [];
       try {
@@ -3854,7 +3933,7 @@ app.get('/api/requisitions', authenticateToken, async (req, res) => {
         OR: [
           { departmentId: deptId },
           { targetDepartmentId: deptId },
-          ...(extraIds.length > 0 ? [{ id: { in: extraIds } }] : []),
+          ...(linkedReqIds.length > 0 ? [{ id: { in: linkedReqIds } }] : []),
           ...(taggedReqIds.length > 0 ? [{ id: { in: taggedReqIds } }] : [])
         ]
       };
@@ -4070,10 +4149,10 @@ app.post('/api/test-email', authenticateToken, requireRoles(['global_admin']), a
 app.get('/api/requisitions/:id/attachments', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    if (req.user.role === 'department' && req.user.deptId) {
+    if (normalizeRole(req.user.role) === 'department' && req.user.deptId) {
       const reqCheck = await prisma.requisition.findUnique({ where: { id: parseInt(id) } });
-      // Allow both the creator department AND any target department to view attachments
-      if (!reqCheck || (reqCheck.departmentId !== req.user.deptId && reqCheck.targetDepartmentId !== req.user.deptId)) {
+      if (!reqCheck) return res.status(404).json({ error: 'Requisition not found' });
+      if (!(await canReadRequisition(reqCheck, req.user))) {
         return res.status(403).json({ error: 'Access denied' });
       }
     }
