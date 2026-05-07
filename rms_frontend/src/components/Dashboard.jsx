@@ -64,7 +64,7 @@ const Dashboard = ({ onViewChange }) => {
   const [ccOpen, setCcOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState('All');
   const [myReqs, setMyReqs] = useState([]);
-  const [myStats, setMyStats] = useState({ submitted: 0, requisitions: 0, memos: 0, inProgress: 0, treated: 0, rejected: 0 });
+  const [myStats, setMyStats] = useState({ submitted: 0, requisitions: 0, memos: 0, inProgress: 0, approved: 0, treated: 0, rejected: 0 });
   const [departments, setDepartments] = useState([]);
 
   const loadDashboard = async () => {
@@ -80,7 +80,13 @@ const Dashboard = ({ onViewChange }) => {
 
     const DONE_STATES = ['treated', 'published'];
     const pendingForMe = all.filter(r => {
-      if (DONE_STATES.includes(r.finalApprovalStatus)) return false;
+      const isDone = DONE_STATES.includes(r.finalApprovalStatus);
+      if (isDone) {
+        if (isAdmin && !userDeptId) return true;
+        if (!userDeptId) return false;
+        return Number(r.currentVettingDeptId) === userDeptId ||
+               (isExecutive && Number(r.finalApprovedByDeptId) === userDeptId);
+      }
       if (isAdmin && !userDeptId) {
         return r.status === 'pending' || r.finalApprovalStatus === 'vetting' ||
           (r.status === 'approved' && (!r.finalApprovalStatus || r.finalApprovalStatus === 'none'));
@@ -92,7 +98,7 @@ const Dashboard = ({ onViewChange }) => {
       const isVetting = Number(r.currentVettingDeptId) === userDeptId && r.finalApprovalStatus === 'vetting';
       return isTargeted || needsFinal || isVetting;
     });
-    setRecentPending(pendingForMe.slice(0, 5));
+    setRecentPending(pendingForMe.slice(0, 10));
 
     // CC'd requisitions — tagged as observer
     if (user?.role === 'department' && userDeptId) {
@@ -103,6 +109,7 @@ const Dashboard = ({ onViewChange }) => {
       const mine = all.filter(r => Number(r.departmentId) === userDeptId || Number(r.creatorDeptId) === userDeptId);
       const submitted = mine.filter(r => r.status !== 'draft');
       const inProgress = submitted.filter(r => !['treated', 'published', 'rejected'].includes(r.finalApprovalStatus) && r.status !== 'rejected');
+      const approved = submitted.filter(r => r.finalApprovalStatus === 'approved');
       const treated = submitted.filter(r => ['treated', 'published'].includes(r.finalApprovalStatus));
       const rejected = submitted.filter(r => r.status === 'rejected');
       setMyStats({
@@ -110,6 +117,7 @@ const Dashboard = ({ onViewChange }) => {
         requisitions: submitted.filter(isOperationalRequisition).length,
         memos: submitted.filter(isMemoRecord).length,
         inProgress: inProgress.length,
+        approved: approved.length,
         treated: treated.length,
         rejected: rejected.length
       });
@@ -567,11 +575,12 @@ const Dashboard = ({ onViewChange }) => {
                 </div>
 
                 {/* Mini stats row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   {[
                     { label: 'Submitted', value: myStats.submitted, icon: Send, color: 'blue' },
                     { label: 'In Progress', value: myStats.inProgress, icon: RotateCcw, color: 'amber' },
-                    { label: 'Treated', value: myStats.treated, icon: BadgeCheck, color: 'emerald' },
+                    { label: 'Approved', value: myStats.approved, icon: ShieldCheck, color: 'emerald' },
+                    { label: 'Treated', value: myStats.treated, icon: BadgeCheck, color: 'indigo' },
                     { label: 'Rejected', value: myStats.rejected, icon: XCircle, color: 'red' },
                   ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className={`flex items-center gap-3 p-3 rounded-2xl bg-${color}-50/60 border border-${color}-200/50`}>
