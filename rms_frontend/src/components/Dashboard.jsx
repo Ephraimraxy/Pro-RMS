@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardStats, getRequisitions, isMemoRecord, isOperationalRequisition } from '../lib/store';
 import { reqAPI } from '../lib/api';
+import toast from 'react-hot-toast';
 import { ArrowUpRight, Clock, CheckCircle2, XCircle, ListFilter, Eye, AlertTriangle, ShieldCheck, ArrowRight, Paperclip, ChevronDown, ChevronUp, Send, BadgeCheck, RotateCcw, FileText } from 'lucide-react';
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }) => (
@@ -134,6 +135,50 @@ const Dashboard = ({ onViewChange }) => {
 
   useEffect(() => {
     loadDashboard();
+  }, []);
+
+  // Live sync — re-fetch dashboard data whenever any involved requisition changes
+  useEffect(() => {
+    if (!localStorage.getItem('rms_user')) return;
+    let es;
+    let reconnectTimer;
+
+    const connect = async () => {
+      try {
+        const { ticket } = await reqAPI.getSseTicket();
+        es = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
+        es.addEventListener('requisition_updated', (e) => {
+          const { id, action, fromDept, toDept } = JSON.parse(e.data);
+
+          // Silently refresh all dashboard data
+          loadDashboard();
+
+          // Descriptive toast so the user knows what changed
+          const label = (() => {
+            if (!action) return `Req #${id} was updated`;
+            if (action === 'forwarded')        return `📤 ${fromDept} forwarded Req #${id}${toDept ? ` → ${toDept}` : ''}`;
+            if (action === 'returned')         return `↩️ ${fromDept} returned Req #${id}${toDept ? ` to ${toDept}` : ''}`;
+            if (action === 'approved')         return `✅ ${fromDept} approved Req #${id}`;
+            if (action === 'rejected')         return `❌ ${fromDept} rejected Req #${id}`;
+            if (action === 'finally_approved') return `🏆 ${fromDept} finally approved Req #${id}`;
+            if (action === 'sent_to_vetting')  return `📋 Req #${id} sent to vetting${toDept ? ` → ${toDept}` : ''}`;
+            if (action === 'vetting_forwarded') return `📋 ${fromDept} forwarded Req #${id} in vetting`;
+            if (action === 'treated')          return `✅ ${fromDept} treated Req #${id}`;
+            return `Req #${id} was updated`;
+          })();
+
+          toast(label, {
+            duration: 5000,
+            style: { fontSize: '12px', fontWeight: '600' },
+            id: `req-update-${id}`
+          });
+        });
+        es.onerror = () => { es.close(); reconnectTimer = setTimeout(connect, 8000); };
+      } catch { reconnectTimer = setTimeout(connect, 15000); }
+    };
+
+    connect();
+    return () => { es?.close(); clearTimeout(reconnectTimer); };
   }, []);
 
   const formatCurrency = (val) => {
