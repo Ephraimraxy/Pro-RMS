@@ -2059,7 +2059,10 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
 
             {/* Right Sidebar Column */}
             <div className="bg-muted/10 overflow-y-auto custom-scrollbar p-4 lg:p-5 space-y-5 flex flex-col order-1 lg:order-2">
-              
+
+              {/* Items — mobile slot 0: appears first on mobile, before Current Status */}
+              {itemsBlock && <div className="lg:hidden border-b border-border/30 pb-4">{itemsBlock}</div>}
+
               {/* Status & Alerts */}
               <div className="space-y-3">
                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Current Status</p>
@@ -2188,8 +2191,6 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
                 ) : null}
               </div>
 
-              {/* Items — mobile slot 2: appears after Processing Chain */}
-              {itemsBlock && <div className="lg:hidden border-t border-border/30 pt-4">{itemsBlock}</div>}
 
               {/* Vetting Chain History */}
               {detail?.vettingEvents?.length > 0 && (() => {
