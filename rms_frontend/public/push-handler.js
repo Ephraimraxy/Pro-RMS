@@ -6,7 +6,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body ?? 'You have a new update.',
     icon: '/CSS_Favicon.png',
-    badge: '/CSS_Badge.svg',
+    badge: '/CSS_Favicon.png',
     tag: data.tag ?? `rms-${Date.now()}`,
     renotify: true,
     data: { url },
