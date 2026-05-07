@@ -1242,14 +1242,9 @@ const VettingSelectionModal = ({ reqId, user, departments, onClose, onDone }) =>
   const [selectedId, setSelectedId] = useState('');
   const [acting, setActing]         = useState(false);
 
-  const approverName = user?.name || '';
-  const isGMOrAbove  = /general\s*manager|\bgm\b|ceo|chairman/i.test(approverName);
-
-  // GM and Chairman can route directly to Account; others start at ICC or Audit
   const vettingDepts = departments.filter(d => {
     const n = d.name || '';
-    if (/\bicc\b|integrity|compliance|audit/i.test(n)) return true;
-    if (isGMOrAbove && /\baccount\b/i.test(n)) return true;
+    if (/\bicc\b|integrity|compliance|audit|\baccount\b/i.test(n)) return true;
     return false;
   });
 
