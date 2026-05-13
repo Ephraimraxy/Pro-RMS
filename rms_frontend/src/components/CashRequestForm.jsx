@@ -32,16 +32,13 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
     /general\s*manager|\bgm\b|ceo|chairman|\bicc\b|integrity|compliance|audit|account/i.test(name);
 
   // Allowed targets when creating:
-  // • Chairman → anywhere
-  // • HR/GM    → any dept except ICC/Audit/Account (those come via vetting chain, not routing)
+  // • Chairman / HR / GM → anywhere (no restrictions)
   // • Regular dept → any dept EXCEPT GM, Chairman, ICC, Audit, Account
   //                  (must reach those via HR first; can freely route among peer depts)
   const allowedTargets = departments.filter(d => {
     if (d.id === user?.deptId) return false;
-    const isVettingOrAccount = /\bicc\b|integrity|compliance|audit|account/i.test(d.name);
-    if (isChairmanCreator) return !isVettingOrAccount;        // Chairman: not vetting at creation
-    if (isGMCreator || isHRCreator) return !isVettingOrAccount; // HR/GM: not vetting at creation
-    return !isPrivilegedDept(d.name);                         // Regular: exclude privileged depts
+    if (isChairmanCreator || isGMCreator || isHRCreator) return true; // No restrictions
+    return !isPrivilegedDept(d.name);                                  // Regular: exclude privileged depts
   });
 
   useEffect(() => {
