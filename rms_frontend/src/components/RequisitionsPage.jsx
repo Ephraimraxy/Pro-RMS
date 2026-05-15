@@ -1806,7 +1806,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               )}
 
               {!isTaggedObserver && !approveChecked && !isReturnedToCreator && isIncoming && req.status === 'pending' && !loading &&
-               !['treated', 'published', 'approved'].includes(detail?.finalApprovalStatus) && (
+               !['treated', 'published', 'approved', 'vetting'].includes(detail?.finalApprovalStatus) && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                    <RespondPanel
                      req={req}
