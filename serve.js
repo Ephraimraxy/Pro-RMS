@@ -1802,10 +1802,9 @@ app.put('/api/department/access-code', authenticateToken, async (req, res) => {
       : dept.accessCode === currentCode.trim();
     if (!valid) return sendError(res, 401, 'The current access code you entered is incorrect.');
     const newHash = await bcrypt.hash(newCode.trim(), 10);
-    // accessCodeLabel intentionally NOT updated — admin still sees the original code with a "changed" indicator
     await prisma.department.update({
       where: { id: req.user.deptId },
-      data: { accessCodeHash: newHash, codeChangedByDept: true }
+      data: { accessCodeHash: newHash, accessCodeLabel: newCode.trim(), codeChangedByDept: true }
     });
     await prisma.activityLog.create({
       data: {
