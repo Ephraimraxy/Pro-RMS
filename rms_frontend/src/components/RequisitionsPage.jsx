@@ -2075,7 +2075,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
 
               {/* Final Approve Panel — below Attach Documents, for dept authority users */}
               {!isTaggedObserver && user?.role === 'department' && detail && !loading &&
-               !['treated', 'published', 'vetting', 'approved'].includes(detail?.finalApprovalStatus) && (
+               !['treated', 'published', 'vetting'].includes(detail?.finalApprovalStatus) && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                   <FinalApprovePanel
                     req={req}
