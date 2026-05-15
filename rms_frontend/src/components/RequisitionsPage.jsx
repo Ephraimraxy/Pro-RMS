@@ -1520,8 +1520,8 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
   const canTag = !isTaggedObserver && user?.role === 'department' && detail;
   // Is this a direct inter-department request (no admin workflow)?
   const isInterDept = detail?.targetDepartmentId && !detail?.currentStageId;
-  // Can current user take approval action (not dept user, requisition is pending)
-  const canApprove = user?.role !== 'department' && req.status === 'pending' && !isInterDept;
+  // Can current user take approval action — requires detail to be loaded to avoid flash of wrong panel
+  const canApprove = !!detail && user?.role !== 'department' && req.status === 'pending' && !isInterDept;
   // Is the request financial?
   const isFinancial = req.type === 'Cash' || (req.amount && req.amount > 0);
 
@@ -1805,7 +1805,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
                 </div>
               )}
 
-              {!isTaggedObserver && canApprove && (
+              {!isTaggedObserver && !loading && canApprove && (
                 <div className="space-y-3 pt-4 border-t border-border/50">
                   <div className="flex items-center space-x-2">
                      <ShieldCheck size={13} className="text-primary" />
@@ -1961,7 +1961,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               )}
 
               {/* ── Post-Creation Attachment Upload ── */}
-              {!isTaggedObserver && !approveChecked && !['treated', 'published'].includes(detail?.finalApprovalStatus) && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
+              {!isTaggedObserver && !loading && !approveChecked && !['treated', 'published'].includes(detail?.finalApprovalStatus) && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
                 // Compute stage context for tagging
                 const fwdEvents = detail?.forwardEvents || [];
                 const approvals = detail?.approvals || [];
