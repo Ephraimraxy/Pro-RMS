@@ -785,7 +785,7 @@ const CreatorCommentPanel = ({ req, departments, onDone }) => {
       toast.success('Clarification submitted and requisition re-forwarded.');
       onDone();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Re-forward failed. Please try again.');
+      toast.error(err?.response?.data?.error || err?.message || `Re-forward failed (${err?.response?.status ?? 'network'}).`);
     } finally { setActing(false); }
   };
 
@@ -1806,7 +1806,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               )}
 
               {!isTaggedObserver && !approveChecked && !isReturnedToCreator && isIncoming && req.status === 'pending' && !loading &&
-               !['treated', 'published'].includes(detail?.finalApprovalStatus) && (
+               !['treated', 'published', 'approved'].includes(detail?.finalApprovalStatus) && (
                 <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
                    <RespondPanel
                      req={req}
