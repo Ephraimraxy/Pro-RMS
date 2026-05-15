@@ -181,6 +181,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
 
   const handleHardRefresh = async () => {
     if (refreshRunning) return;
+    const hadSwUpdate = swUpdated.current; // capture before we reset it
     setPendingUpdates(0); // clear badge immediately on click
     setShowRefreshPopover(true);
     setRefreshRunning(true);
@@ -244,7 +245,14 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
 
     setRefreshSummary({ ok, fail });
     setRefreshRunning(false);
-    if (fail === 0) setTimeout(() => setShowRefreshPopover(false), 3500);
+    if (fail === 0) {
+      if (hadSwUpdate) {
+        // New deployment detected — full reload needed to load updated JS/CSS
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        setTimeout(() => setShowRefreshPopover(false), 3500);
+      }
+    }
   };
 
   return (

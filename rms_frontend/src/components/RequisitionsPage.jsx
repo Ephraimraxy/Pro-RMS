@@ -1973,7 +1973,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               )}
 
               {/* ── Post-Creation Attachment Upload ── */}
-              {!isTaggedObserver && !loading && !approveChecked && !['treated', 'published'].includes(detail?.finalApprovalStatus) && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
+              {!isTaggedObserver && !loading && !approveChecked && !['treated', 'published', 'vetting', 'approved'].includes(detail?.finalApprovalStatus) && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
                 // Compute stage context for tagging
                 const fwdEvents = detail?.forwardEvents || [];
                 const approvals = detail?.approvals || [];
