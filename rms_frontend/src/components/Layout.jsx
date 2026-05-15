@@ -54,11 +54,11 @@ const SignalBars = ({ bars }) => (
 );
 
 const QUALITY_CFG = {
-  offline: { label: 'Offline',       bars: 0, cls: 'bg-rose-500/10 border-rose-400/30 text-rose-600',   dot: 'bg-rose-500' },
-  poor:    { label: 'Poor Signal',   bars: 1, cls: 'bg-red-500/10 border-red-400/30 text-red-600',       dot: 'bg-red-500 animate-pulse' },
-  weak:    { label: 'Weak Signal',   bars: 2, cls: 'bg-orange-500/10 border-orange-400/30 text-orange-600', dot: 'bg-orange-500 animate-pulse' },
-  partial: { label: 'Partial',       bars: 3, cls: 'bg-amber-500/10 border-amber-400/30 text-amber-700',  dot: 'bg-amber-500' },
-  strong:  { label: 'Online',        bars: 4, cls: 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600', dot: 'bg-emerald-500 animate-pulse' },
+  offline: { label: 'Offline',  bars: 0, cls: 'bg-rose-500/10 border-rose-400/30 text-rose-600',      dot: 'bg-rose-500' },
+  poor:    { label: 'Poor',     bars: 1, cls: 'bg-red-500/10 border-red-400/30 text-red-600',          dot: 'bg-red-500 animate-pulse' },
+  weak:    { label: 'Weak',     bars: 2, cls: 'bg-orange-500/10 border-orange-400/30 text-orange-600', dot: 'bg-orange-500 animate-pulse' },
+  partial: { label: 'Partial',  bars: 3, cls: 'bg-amber-500/10 border-amber-400/30 text-amber-700',    dot: 'bg-amber-500' },
+  strong:  { label: 'Full',     bars: 4, cls: 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600', dot: 'bg-emerald-500 animate-pulse' },
 };
 
 const REFRESH_STEPS = [
@@ -313,7 +313,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
             <SignalBars bars={qcfg.bars} />
             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${qcfg.dot}`} />
             <span className="text-[9px] font-black uppercase tracking-[0.22em] whitespace-nowrap">
-              Neural Core: {qcfg.label}
+              Your Network Is: {qcfg.label}
             </span>
           </div>
         )}
