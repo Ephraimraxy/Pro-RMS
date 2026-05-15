@@ -165,7 +165,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
     // Step 2: requisitions
     setStep('reqs', 'running');
     try {
-      await reqAPI.getAll();
+      await reqAPI.getRequisitions();
       setStep('reqs', 'done'); ok++;
     } catch (e) {
       const msg = e?.response?.status === 401 ? 'Session expired — please log in again'
