@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "frontend:install": "npm --prefix rms_frontend ci --cache ./.npm-cache --legacy-peer-deps --no-audit --no-fund --loglevel=warn",
-    "build": "prisma db push --schema=rms_backend/prisma/schema.prisma && prisma generate --schema=rms_backend/prisma/schema.prisma && npm run frontend:install && npm --prefix rms_frontend run build",
+    "build": "prisma generate --schema=rms_backend/prisma/schema.prisma && npm run frontend:install && npm --prefix rms_frontend run build",
     "start": "node serve.js",
     "seed": "node rms_backend/prisma/seed.js",
     "deploy-sync": "prisma db push --schema=rms_backend/prisma/schema.prisma && node rms_backend/prisma/seed.js"
