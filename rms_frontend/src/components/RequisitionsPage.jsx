@@ -756,26 +756,36 @@ const TagModal = ({ reqId, departments, onClose, onTagged }) => {
 // ── Creator Clarification Panel (shown when requisition is returned to creator) ──
 const CreatorCommentPanel = ({ req, departments, onDone }) => {
   const [comment, setComment] = useState('');
-  const [targetId, setTargetId] = useState('');
   const [acting, setActing]   = useState(false);
 
-  const hrDept = departments.find(d => /\bhr\b|human\s*resource/i.test(d.name));
+  // All departments that can receive a re-forward (exclude self, Chairman, GM — keep HR and peers)
+  const forwardableDepts = departments.filter(d =>
+    d.id !== req.departmentId &&
+    !/ceo|chairman|general\s*manager|\bgm\b/i.test(d.name)
+  );
+
+  // Auto-select the single option, or default to HR if present
+  const defaultTarget = forwardableDepts.length === 1
+    ? forwardableDepts[0]
+    : forwardableDepts.find(d => /\bhr\b|human\s*resource/i.test(d.name));
+
+  const [targetId, setTargetId] = useState(defaultTarget ? String(defaultTarget.id) : '');
 
   const handleSubmit = async () => {
     if (!comment.trim()) { toast.error('Please enter a clarification comment before re-forwarding.'); return; }
     if (!targetId) { toast.error('Please select the department to forward to.'); return; }
     setActing(true);
     try {
-      await forwardAPI.creatorComment(req.id, comment);
+      // Single forward call — the note carries the clarification; no redundant creator-comment trip
       await forwardAPI.forward(req.id, {
         targetDepartmentId: parseInt(targetId),
         note: comment,
         returnToSender: false
       });
-      toast.success('Comment added and requisition re-forwarded.');
+      toast.success('Clarification submitted and requisition re-forwarded.');
       onDone();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Could not submit comment. Please try again.');
+      toast.error(err?.response?.data?.error || 'Re-forward failed. Please try again.');
     } finally { setActing(false); }
   };
 
@@ -783,7 +793,7 @@ const CreatorCommentPanel = ({ req, departments, onDone }) => {
     <div className="space-y-3 border border-amber-200 rounded-2xl p-4 bg-amber-50/60 shadow-sm relative overflow-hidden">
       <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
       <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest pl-1">Add Clarification &amp; Re-forward</p>
-      <p className="text-xs text-amber-700 pl-1">Your requisition fields are locked. You may add a clarification note and re-forward to HR for processing.</p>
+      <p className="text-xs text-amber-700 pl-1">Your requisition fields are locked. Add a clarification note and re-forward for processing.</p>
       <textarea
         value={comment}
         onChange={e => setComment(e.target.value)}
@@ -797,10 +807,10 @@ const CreatorCommentPanel = ({ req, departments, onDone }) => {
           onChange={e => setTargetId(e.target.value)}
           className="w-full bg-white border border-amber-200 rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-300 appearance-none shadow-sm"
         >
-          <option value="">— Select department —</option>
-          {departments
-            .filter(d => /\bhr\b|human\s*resource/i.test(d.name))
-            .map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          {!targetId && <option value="">— Select department —</option>}
+          {forwardableDepts.map(d => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
         </select>
       </div>
       <button
