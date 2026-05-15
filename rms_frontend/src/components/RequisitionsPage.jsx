@@ -2886,11 +2886,15 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
                              <button className="p-2 bg-background shadow-inner rounded-lg text-primary transition-all active:scale-90 border border-primary/10">
                                <Eye size={16} />
                              </button>
-                             {(isAdmin || r.status === 'draft') && (
-                              <button onClick={e => { e.stopPropagation(); showSingleDeleteConfirm(r.id, e); }} className="p-2 bg-red-50 shadow-inner rounded-lg text-red-500 transition-all active:scale-90 border border-red-200/50">
-                                <Trash2 size={16} />
-                              </button>
-                            )}
+                             {(() => {
+                               const isLocked = ['treated','published','approved'].includes(r.finalApprovalStatus);
+                               const canDel = isAdmin || (Number(r.departmentId) === Number(user?.deptId) && !isLocked);
+                               return canDel ? (
+                                 <button onClick={e => { e.stopPropagation(); showSingleDeleteConfirm(r.id, e); }} className="p-2 bg-red-50 shadow-inner rounded-lg text-red-500 transition-all active:scale-90 border border-red-200/50">
+                                   <Trash2 size={16} />
+                                 </button>
+                               ) : null;
+                             })()}
                           </div>
                         </td>
                       </tr>

@@ -316,3 +316,15 @@ model RequisitionTag {
 
   @@unique([requisitionId, deptId])
 }
+
+model DeletedRecord {
+  id             Int      @id @default(autoincrement())
+  originalId     Int
+  recordType     String
+  title          String?
+  departmentId   Int?
+  departmentName String?
+  deletedByName  String?
+  deletedAt      DateTime @default(now())
+  snapshot       Json
+}

@@ -285,6 +285,11 @@ export const vettingAPI = {
   }
 };
 
+export const adminAPI = {
+  getDeletedRecords: () => api.get('/admin/deleted-records'),
+  purgeDeletedRecord: (id) => api.delete(`/admin/deleted-records/${id}`),
+};
+
 export const memoAPI = {
   publish:   (reqId, { startAt, endAt } = {}) =>
     api.post(`/requisitions/${reqId}/publish-memo`, {

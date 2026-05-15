@@ -6,7 +6,7 @@ import {
   CheckCircle2, RotateCcw, Info, User, Mail, Phone, MapPin, BadgeCheck, Download
 } from 'lucide-react';
 import { getDepartments, addDepartment, deleteDepartment } from '../lib/store';
-import { deptAPI, settingsAPI } from '../lib/api';
+import { deptAPI, settingsAPI, adminAPI } from '../lib/api';
 import { ShieldCheck, Sparkles } from 'lucide-react';
 import { useAIFeatures } from '../context/AIFeaturesContext';
 import { toast } from 'react-hot-toast';
@@ -359,6 +359,32 @@ const DepartmentManager = ({ onViewChange }) => {
   const [aiToggle, setAiToggle] = useState(true);
   const [savingAI, setSavingAI] = useState(false);
 
+  // Deleted Records Bin (hidden from departments — super admin only)
+  const [deletedRecords, setDeletedRecords] = useState([]);
+  const [loadingBin, setLoadingBin] = useState(false);
+  const [purgingId, setPurgingId] = useState(null);
+
+  const loadDeletedRecords = async () => {
+    setLoadingBin(true);
+    try {
+      const data = await adminAPI.getDeletedRecords();
+      setDeletedRecords(Array.isArray(data) ? data : data?.data || []);
+    } catch { setDeletedRecords([]); }
+    finally { setLoadingBin(false); }
+  };
+
+  const handlePurgeRecord = async (id) => {
+    if (!window.confirm('Permanently delete this record from the bin? This cannot be undone.')) return;
+    setPurgingId(id);
+    try {
+      await adminAPI.purgeDeletedRecord(id);
+      toast.success('Record permanently purged.');
+      setDeletedRecords(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to purge record.');
+    } finally { setPurgingId(null); }
+  };
+
   const loadDepts = async () => {
     const data = await getDepartments();
     setDepartments(data);
@@ -406,7 +432,7 @@ const DepartmentManager = ({ onViewChange }) => {
     );
   };
 
-  useEffect(() => { loadDepts(); loadChairmanSetting(); loadAISetting(); }, []);
+  useEffect(() => { loadDepts(); loadChairmanSetting(); loadAISetting(); loadDeletedRecords(); }, []);
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -693,6 +719,87 @@ const DepartmentManager = ({ onViewChange }) => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Deleted Records Bin (super admin eyes only) ────────────────────── */}
+      <div className="glass bg-white/70 rounded-3xl border border-red-200/50 p-6 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+              <Trash2 size={16} className="text-red-500" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-foreground">Deleted Records Bin</h3>
+              <p className="text-[10px] text-muted-foreground/70 font-medium mt-0.5">Records removed by departments — invisible to them. Permanently purge or retain for audit.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-red-50 border border-red-200 text-[10px] font-black text-red-600 uppercase tracking-widest">
+              {deletedRecords.length} record{deletedRecords.length !== 1 ? 's' : ''}
+            </span>
+            <button onClick={loadDeletedRecords} disabled={loadingBin} className="p-2 rounded-xl border border-border/50 hover:bg-muted transition-all text-muted-foreground disabled:opacity-40">
+              <RotateCcw size={13} className={loadingBin ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {loadingBin ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 size={22} className="animate-spin text-muted-foreground/40" />
+          </div>
+        ) : deletedRecords.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground/50 font-medium">Bin is empty — no department deletions recorded.</div>
+        ) : (
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-separate border-spacing-y-1.5">
+              <thead>
+                <tr className="text-muted-foreground text-[9px] font-black uppercase tracking-[0.18em]">
+                  <th className="pb-3 px-3">Orig. ID</th>
+                  <th className="pb-3 px-3">Type</th>
+                  <th className="pb-3 px-3">Title</th>
+                  <th className="pb-3 px-3">Department</th>
+                  <th className="pb-3 px-3">Deleted By</th>
+                  <th className="pb-3 px-3">Deleted At</th>
+                  <th className="pb-3 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deletedRecords.map(rec => (
+                  <tr key={rec.id} className="group">
+                    <td className="py-2.5 px-3 bg-red-50/40 border-y border-l border-red-100/60 rounded-l-xl text-[10px] font-black text-red-600 tracking-widest">#{rec.originalId}</td>
+                    <td className="py-2.5 px-3 bg-red-50/40 border-y border-red-100/60">
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border ${rec.recordType === 'Cash' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : rec.recordType === 'Memo' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                        {rec.recordType}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 bg-red-50/40 border-y border-red-100/60 max-w-[180px]">
+                      <p className="text-[11px] font-bold text-foreground truncate">{rec.title || '—'}</p>
+                    </td>
+                    <td className="py-2.5 px-3 bg-red-50/40 border-y border-red-100/60">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">{rec.departmentName || '—'}</span>
+                    </td>
+                    <td className="py-2.5 px-3 bg-red-50/40 border-y border-red-100/60">
+                      <span className="text-[10px] font-medium text-muted-foreground/80">{rec.deletedByName || '—'}</span>
+                    </td>
+                    <td className="py-2.5 px-3 bg-red-50/40 border-y border-red-100/60">
+                      <span className="text-[9px] font-mono text-muted-foreground/70">{new Date(rec.deletedAt).toLocaleString()}</span>
+                    </td>
+                    <td className="py-2.5 px-3 bg-red-50/40 border-y border-r border-red-100/60 rounded-r-xl text-right">
+                      <button
+                        onClick={() => handlePurgeRecord(rec.id)}
+                        disabled={purgingId === rec.id}
+                        className="px-3 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-40 flex items-center gap-1.5 ml-auto"
+                      >
+                        {purgingId === rec.id ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+                        Purge
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Seal View Modal */}

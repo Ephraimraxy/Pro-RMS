@@ -637,8 +637,8 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
   }, [isCollapsed]);
 
   const [hrPortalOpen, setHrPortalOpen] = useState(false);
-  const [hrPortalEnabled, setHrPortalEnabled] = useState(true);
-  const [studioEnabled, setStudioEnabled] = useState(true);
+  const [hrPortalEnabled, setHrPortalEnabled] = useState(null);
+  const [studioEnabled, setStudioEnabled] = useState(null);
 
   useEffect(() => {
     const loadFeatureFlags = async () => {

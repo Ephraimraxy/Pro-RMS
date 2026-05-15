@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 import {
   FileText, Send, Clock, CheckCircle2, Plus, X,
   ArrowRightCircle, Globe, ChevronRight, Loader2,
-  ArrowLeft, RotateCcw, EyeOff, Calendar, Paperclip, Eye
+  ArrowLeft, RotateCcw, EyeOff, Calendar, Paperclip, Eye, Trash2
 } from 'lucide-react';
 
 const statusColors = {
@@ -280,8 +280,24 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh, onEditDraf
   const isCEO     = /ceo|chairman/i.test(deptName);
   const isAdmin   = user?.role === 'global_admin';
   const isPublisher = isHR || isAdmin;
+  const isCreatorDept = Number(user?.deptId) === Number(memo.departmentId);
+  const isFinalized = ['treated', 'published', 'approved'].includes(memo.finalApprovalStatus);
+  const canDelete = isAdmin || (isCreatorDept && !isFinalized);
 
   const isIncoming = user?.deptId && detail?.targetDepartmentId === user.deptId;
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete memo "${memo.title}"? It will be removed from all processing records.`)) return;
+    setActing(true);
+    try {
+      await reqAPI.deleteRequisition(memo.id);
+      toast.success(`Memo #${memo.id} deleted.`);
+      onRefresh();
+      onBack();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Could not delete this memo.');
+    } finally { setActing(false); }
+  };
 
   // Compute display status from finalApprovalStatus + publish dates
   const fas = detail?.finalApprovalStatus || memo.finalApprovalStatus;
@@ -367,6 +383,16 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh, onEditDraf
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
           Back to Memos
         </button>
+        {canDelete && (
+          <button
+            onClick={handleDelete}
+            disabled={acting}
+            className="flex items-center gap-2 text-xs font-black text-red-600 bg-red-50 hover:bg-red-500 hover:text-white transition-all px-4 py-2 rounded-xl shadow-sm uppercase tracking-wider border border-red-200 disabled:opacity-40"
+          >
+            {acting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Delete Memo
+          </button>
+        )}
         {memo.status === 'draft' && onEditDraft && (
           <button
             onClick={() => onEditDraft(memo)}
@@ -701,8 +727,29 @@ const MemoManagement = ({ onViewChange }) => {
                               <span className="text-[9px] text-muted-foreground font-medium mt-1 uppercase tracking-tighter">{new Date(memo.createdAt).toLocaleDateString()}</span>
                            </div>
                         </div>
-                        <div className="w-8 h-8 rounded-full bg-white border border-border/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-white transition-all transform group-hover:scale-110 shadow-sm">
-                           <ChevronRight size={16} />
+                        <div className="flex items-center gap-2">
+                          {(user?.role === 'global_admin' || (Number(user?.deptId) === Number(memo.departmentId) && !['treated','published','approved'].includes(memo.finalApprovalStatus))) && (
+                            <button
+                              onClick={async e => {
+                                e.stopPropagation();
+                                if (!window.confirm(`Delete memo "${memo.title}"?`)) return;
+                                try {
+                                  await reqAPI.deleteRequisition(memo.id);
+                                  toast.success(`Memo #${memo.id} deleted.`);
+                                  loadMemos();
+                                } catch (err) {
+                                  toast.error(err?.response?.data?.error || 'Could not delete memo.');
+                                }
+                              }}
+                              className="w-8 h-8 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                              title="Delete memo"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                          <div className="w-8 h-8 rounded-full bg-white border border-border/50 flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-white transition-all transform group-hover:scale-110 shadow-sm">
+                             <ChevronRight size={16} />
+                          </div>
                         </div>
                       </div>
                     </div>

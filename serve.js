@@ -2122,20 +2122,36 @@ app.delete('/api/requisitions/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const reqId = parseInt(id);
-    const existing = await prisma.requisition.findUnique({ where: { id: reqId } });
+    const existing = await prisma.requisition.findUnique({
+      where: { id: reqId },
+      include: { department: { select: { name: true } } }
+    });
     if (!existing) return res.status(404).json({ error: 'Requisition not found' });
 
-    const systemUser = await prisma.user.findFirst({ where: { role: 'global_admin' } });
-    const isAdmin = getNumericUserId(req.user) === systemUser?.id;
+    const isAdmin = normalizeRole(req.user.role) === 'global_admin';
+    const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
 
     if (!isAdmin) {
-      if (existing.status !== 'draft') {
-        return res.status(400).json({ error: 'Only draft requisitions can be deleted. Submitted or approved records require administrator access.' });
-      }
-      const userDeptId = req.user.deptId ? parseInt(req.user.deptId) : null;
       if (existing.departmentId !== userDeptId) {
-        return res.status(403).json({ error: 'You do not have permission to delete this requisition.' });
+        return res.status(403).json({ error: 'You can only delete records belonging to your department.' });
       }
+      // Block deletion once the record has been finally treated, published, or fully approved
+      const lockedStatuses = ['treated', 'published', 'approved'];
+      if (lockedStatuses.includes(existing.finalApprovalStatus)) {
+        return res.status(400).json({ error: 'This record has been finally processed and can no longer be deleted. Contact the administrator if removal is required.' });
+      }
+      // Save a hidden snapshot to the deleted records bin before removing
+      await prisma.deletedRecord.create({
+        data: {
+          originalId:     reqId,
+          recordType:     existing.type || 'Requisition',
+          title:          existing.title,
+          departmentId:   existing.departmentId,
+          departmentName: existing.department?.name || null,
+          deletedByName:  req.user.name || null,
+          snapshot:       JSON.parse(JSON.stringify(existing)),
+        }
+      });
     }
 
     // Cascade-delete all related records in dependency order so FK constraints are satisfied
@@ -2178,12 +2194,30 @@ app.post('/api/requisitions/bulk-delete', authenticateToken, async (req, res) =>
 
     const targetIds = isAdmin ? ids : [];
     if (!isAdmin) {
-      // Departments can only bulk-delete their own drafts
+      // Departments can bulk-delete their own records — not if finally processed
       const allowed = await prisma.requisition.findMany({
-        where: { id: { in: ids }, status: 'draft', departmentId: userDeptId },
-        select: { id: true }
+        where: {
+          id: { in: ids },
+          departmentId: userDeptId,
+          finalApprovalStatus: { notIn: ['treated', 'published', 'approved'] }
+        },
+        include: { department: { select: { name: true } } }
       });
       allowed.forEach(r => targetIds.push(r.id));
+      // Save hidden snapshots for each deleted record
+      if (allowed.length > 0) {
+        await prisma.deletedRecord.createMany({
+          data: allowed.map(r => ({
+            originalId:     r.id,
+            recordType:     r.type || 'Requisition',
+            title:          r.title,
+            departmentId:   r.departmentId,
+            departmentName: r.department?.name || null,
+            deletedByName:  req.user.name || null,
+            snapshot:       JSON.parse(JSON.stringify(r)),
+          }))
+        });
+      }
     }
     if (targetIds.length === 0) return res.json({ ok: true, message: 'No eligible records to delete.' });
 
@@ -2210,6 +2244,29 @@ app.post('/api/requisitions/bulk-delete', authenticateToken, async (req, res) =>
   }
 });
 
+
+// ── Deleted Records Bin (super admin only — invisible to department users) ──────
+app.get('/api/admin/deleted-records', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
+  try {
+    const records = await prisma.deletedRecord.findMany({
+      orderBy: { deletedAt: 'desc' }
+    });
+    res.json(records);
+  } catch (err) {
+    logger.error('[DELETED RECORDS GET]', err.message);
+    res.status(500).json({ error: 'Failed to fetch deleted records.' });
+  }
+});
+
+app.delete('/api/admin/deleted-records/:id', authenticateToken, requireRoles(['global_admin']), async (req, res) => {
+  try {
+    await prisma.deletedRecord.delete({ where: { id: parseInt(req.params.id) } });
+    res.json({ ok: true, message: 'Record permanently purged from bin.' });
+  } catch (err) {
+    logger.error('[DELETED RECORDS DELETE]', err.message);
+    res.status(500).json({ error: 'Failed to purge record.' });
+  }
+});
 
 // ── System Settings ───────────────────────────────────────────────────────────
 // GET /api/system-settings/:key  — read one setting (public for dept-level reads like chairman access)
