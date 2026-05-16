@@ -1492,8 +1492,9 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
   const [acting, setActing]         = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const [printModal, setPrintModal] = useState(false);
-  const [newFiles, setNewFiles]     = useState([]);
-  const [uploading, setUploading]   = useState(false);
+  const [newFiles, setNewFiles]       = useState([]);
+  const [uploading, setUploading]     = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [approveChecked, setApproveChecked] = useState(false);
   const [tagModal, setTagModal]     = useState(false);
   const fileInputRef                = React.useRef(null);
@@ -1507,19 +1508,21 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
     return () => { cancelled = true; };
   }, [req.id]);
 
-  const handleAttachFiles = async (stageCtx) => {
-    if (!newFiles.length) return;
+  const handleAttachFiles = async (stageCtx, filesToUpload) => {
+    const files = filesToUpload ?? newFiles;
+    if (!files.length) return;
     setUploading(true);
+    setUploadProgress(0);
     try {
       const { uploadAttachments } = await import('../lib/store');
-      await uploadAttachments(req.id, newFiles, stageCtx);
+      await uploadAttachments(req.id, files, { ...stageCtx, onProgress: setUploadProgress });
       const updated = await getRequisitionDetail(req.id);
       setDetail(updated);
       setNewFiles([]);
-      toast.success(`${newFiles.length} file(s) attached successfully.`);
+      toast.success(`${files.length} file(s) attached successfully.`);
     } catch (err) {
       toast.error(err?.response?.data?.error || 'File upload failed. Please try again.');
-    } finally { setUploading(false); }
+    } finally { setUploading(false); setUploadProgress(null); }
   };
 
   // Is this an incoming (target dept) requisition for the current user?
@@ -2011,25 +2014,31 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
                       ref={fileInputRef}
                       className="hidden"
                       accept="*/*"
-                      onChange={e => setNewFiles(prev => {
+                      onChange={e => {
                         const added = Array.from(e.target.files);
-                        const names = new Set(prev.map(f => f.name));
-                        return [...prev, ...added.filter(f => !names.has(f.name))];
-                      })}
+                        e.target.value = '';
+                        if (!added.length) return;
+                        const names = new Set(newFiles.map(f => f.name));
+                        const merged = [...newFiles, ...added.filter(f => !names.has(f.name))];
+                        setNewFiles(merged);
+                        handleAttachFiles({ stageName, stageKey, uploaderDept }, merged);
+                      }}
                     />
 
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-border/40 rounded-xl p-4 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all group"
-                    >
-                      <div className="flex flex-col items-center gap-1.5">
-                        <Paperclip size={18} className="text-muted-foreground/50 group-hover:text-primary transition-colors" />
-                        <p className="text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors">
-                          Click to select files
-                        </p>
-                        <p className="text-[9px] text-muted-foreground/50">PDF, images, Word, Excel — any format</p>
+                    {!uploading && (
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-border/40 rounded-xl p-4 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                      >
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Paperclip size={18} className="text-muted-foreground/50 group-hover:text-primary transition-colors" />
+                          <p className="text-[11px] font-bold text-muted-foreground group-hover:text-primary transition-colors">
+                            Click to select files
+                          </p>
+                          <p className="text-[9px] text-muted-foreground/50">PDF, images, Word, Excel — any format</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {newFiles.length > 0 && (
                       <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -2038,33 +2047,45 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
                             <FileText size={12} className="text-primary shrink-0" />
                             <span className="flex-1 truncate text-[11px] font-bold text-foreground">{f.name}</span>
                             <span className="text-[9px] font-mono text-muted-foreground shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
-                            <button
-                              title="Preview"
-                              onClick={() => {
-                                const url = URL.createObjectURL(f);
-                                window.open(url, '_blank', 'noopener,noreferrer');
-                                setTimeout(() => URL.revokeObjectURL(url), 10000);
-                              }}
-                              className="p-0.5 text-muted-foreground hover:text-primary rounded transition-colors shrink-0"
-                            >
-                              <Eye size={12} />
-                            </button>
-                            <button
-                              onClick={() => setNewFiles(newFiles.filter((_, j) => j !== i))}
-                              className="p-0.5 text-muted-foreground hover:text-destructive rounded transition-colors shrink-0"
-                            >
-                              <X size={12} />
-                            </button>
+                            {!uploading && (
+                              <>
+                                <button
+                                  title="Preview"
+                                  onClick={() => {
+                                    const url = URL.createObjectURL(f);
+                                    window.open(url, '_blank', 'noopener,noreferrer');
+                                    setTimeout(() => URL.revokeObjectURL(url), 10000);
+                                  }}
+                                  className="p-0.5 text-muted-foreground hover:text-primary rounded transition-colors shrink-0"
+                                >
+                                  <Eye size={12} />
+                                </button>
+                                <button
+                                  onClick={() => setNewFiles(newFiles.filter((_, j) => j !== i))}
+                                  className="p-0.5 text-muted-foreground hover:text-destructive rounded transition-colors shrink-0"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </>
+                            )}
                           </div>
                         ))}
-                        <button
-                          onClick={() => handleAttachFiles({ stageName, stageKey, uploaderDept })}
-                          disabled={uploading}
-                          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-bold py-2.5 px-4 rounded-xl text-[11px] uppercase tracking-widest transition-all hover:bg-primary/90 disabled:opacity-50 shadow-md shadow-primary/20 active:scale-95"
-                        >
-                          {uploading ? <Loader2 size={13} className="animate-spin" /> : <ArrowDownToLine size={13} />}
-                          {uploading ? 'Uploading...' : `Attach ${newFiles.length} File${newFiles.length > 1 ? 's' : ''}`}
-                        </button>
+                        {uploading && (
+                          <div className="space-y-1.5 pt-1 animate-in fade-in duration-300">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
+                                <Loader2 size={10} className="animate-spin" /> Uploading…
+                              </span>
+                              <span className="font-mono text-muted-foreground">{uploadProgress ?? 0}%</span>
+                            </div>
+                            <div className="w-full bg-muted/40 rounded-full h-2 overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full transition-all duration-200"
+                                style={{ width: `${uploadProgress ?? 0}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

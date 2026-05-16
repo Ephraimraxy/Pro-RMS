@@ -248,7 +248,7 @@ export async function getSyncQueueStatus() {
   return { pending: queue.length };
 }
 
-export async function uploadAttachments(requisitionId, files, { stageName, stageKey, uploaderDept } = {}) {
+export async function uploadAttachments(requisitionId, files, { stageName, stageKey, uploaderDept, onProgress } = {}) {
   if (!navigator.onLine) {
     const totalSize = files.reduce((s, f) => s + f.size, 0);
     if (totalSize > OFFLINE_FILE_SIZE_LIMIT) {
@@ -281,7 +281,10 @@ export async function uploadAttachments(requisitionId, files, { stageName, stage
 
   try {
     const response = await api.post(`/requisitions/${requisitionId}/attachments`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+      }
     });
     return response;
   } catch (err) {

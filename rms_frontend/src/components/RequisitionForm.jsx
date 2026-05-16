@@ -21,6 +21,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
   const [departments, setDepartments] = useState([]);
   const [files, setFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [refining, setRefining] = useState(false);
   const [aiPreview, setAiPreview] = useState(null);
 
@@ -181,9 +182,12 @@ const RequisitionForm = ({ isOpen, onClose }) => {
       // Upload attachments if created successfully
       if (result && result.length > 0 && files.length > 0) {
         try {
-          await uploadAttachments(result[0].id, files);
+          setUploadProgress(0);
+          await uploadAttachments(result[0].id, files, { onProgress: setUploadProgress });
         } catch {
           toast.error('Requisition created but file upload failed. You can add files later.');
+        } finally {
+          setUploadProgress(null);
         }
       }
 
@@ -458,27 +462,47 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                     <FileText size={12} className="text-primary shrink-0" />
                     <span className="font-medium truncate flex-1">{f.name}</span>
                     <span className="text-muted-foreground shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
-                    <button
-                      type="button"
-                      title="Preview"
-                      onClick={() => {
-                        const url = URL.createObjectURL(f);
-                        window.open(url, '_blank', 'noopener,noreferrer');
-                        setTimeout(() => URL.revokeObjectURL(url), 10000);
-                      }}
-                      className="text-muted-foreground hover:text-primary p-0.5 transition-colors"
-                    >
-                      <Eye size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
-                      className="text-muted-foreground hover:text-destructive p-0.5"
-                    >
-                      <X size={12} />
-                    </button>
+                    {uploadProgress === null && (
+                      <>
+                        <button
+                          type="button"
+                          title="Preview"
+                          onClick={() => {
+                            const url = URL.createObjectURL(f);
+                            window.open(url, '_blank', 'noopener,noreferrer');
+                            setTimeout(() => URL.revokeObjectURL(url), 10000);
+                          }}
+                          className="text-muted-foreground hover:text-primary p-0.5 transition-colors"
+                        >
+                          <Eye size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-muted-foreground hover:text-destructive p-0.5"
+                        >
+                          <X size={12} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
+                {uploadProgress !== null && (
+                  <div className="space-y-1 pt-1 animate-in fade-in duration-300">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
+                        <Loader2 size={10} className="animate-spin" /> Uploading files…
+                      </span>
+                      <span className="font-mono text-muted-foreground">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-muted/40 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all duration-200"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -118,10 +118,10 @@ async function sendPushNotification(deptIds, { title, body, url }) {
 
 // ── Final Approval Authority ──────────────────────────────────────────────────
 // Returns: 'hr' | 'gm' | 'chairman' | null (no authority)
-// Hierarchy: Chairman > GM > HR
-//   Chairman → approves at ANY amount (full authority over all bands)
-//   GM       → approves amounts below chairman_min (covers HR + GM bands)
-//   HR       → approves amounts within HR band only (< 50,000)
+// Bands:
+//   HR        → ≤ 50,000
+//   GM        → 50,001 – 100,000
+//   Chairman  → > 100,000 (full authority at any amount)
 const checkFinalApproveAuthority = (deptName, amount, isMaterial = false) => {
   const n = (deptName || '').toLowerCase();
   const amt = parseFloat(amount) || 0;
@@ -137,13 +137,13 @@ const checkFinalApproveAuthority = (deptName, amount, isMaterial = false) => {
     return null;
   }
 
-  // Chairman has full authority over all amount levels
+  // Chairman: full authority over all amount levels
   if (isChairman) return 'chairman';
-  // GM covers HR + GM bands (any amount below chairman_min = 100,000)
-  if (isGM && amt < 100000) return 'gm';
-  // HR covers HR band only
-  if (isHR && amt < 50000) return 'hr';
-  return null; // Not authorised for this amount band
+  // GM band: 50,001 – 100,000
+  if (isGM && amt > 50000 && amt <= 100000) return 'gm';
+  // HR band: ≤ 50,000
+  if (isHR && amt <= 50000) return 'hr';
+  return null; // Amount outside this department's authorised band
 };
 
 // Vetting chain order: ICC → Audit → Account
