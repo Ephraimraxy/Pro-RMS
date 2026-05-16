@@ -283,11 +283,7 @@ export async function uploadAttachments(requisitionId, files, { stageName, stage
     const response = await api.post(`/requisitions/${requisitionId}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
-        if (onProgress && e.total) {
-          // Cap at 90% — the remaining 10% is reserved for server-side processing
-          const pct = Math.round((e.loaded / e.total) * 90);
-          onProgress(pct);
-        }
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
       }
     });
     return response;

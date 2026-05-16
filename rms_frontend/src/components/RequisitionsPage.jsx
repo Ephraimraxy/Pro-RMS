@@ -1977,7 +1977,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               )}
 
               {/* ── Post-Creation Attachment Upload ── */}
-              {!isTaggedObserver && !loading && !approveChecked && !['treated', 'published', 'vetting', 'approved'].includes(detail?.finalApprovalStatus) && (isIncoming || canApprove || user?.role === 'global_admin') && (() => {
+              {!isTaggedObserver && !loading && !approveChecked && user?.role !== 'global_admin' && !['treated', 'published', 'vetting', 'approved'].includes(detail?.finalApprovalStatus) && (isIncoming || canApprove) && (() => {
                 // Compute stage context for tagging
                 const fwdEvents = detail?.forwardEvents || [];
                 const approvals = detail?.approvals || [];
@@ -2077,7 +2077,8 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
                           <div className="space-y-1.5 pt-1 animate-in fade-in duration-300">
                             <div className="flex items-center justify-between text-[10px]">
                               <span className="font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                                <Loader2 size={10} className="animate-spin" /> Uploading…
+                                <Loader2 size={10} className="animate-spin" />
+                                {(uploadProgress ?? 0) >= 100 ? 'Processing…' : 'Uploading…'}
                               </span>
                               <span className="font-mono text-muted-foreground">{uploadProgress ?? 0}%</span>
                             </div>

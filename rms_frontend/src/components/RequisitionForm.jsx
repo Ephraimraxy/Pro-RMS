@@ -492,7 +492,8 @@ const RequisitionForm = ({ isOpen, onClose }) => {
                   <div className="space-y-1 pt-1 animate-in fade-in duration-300">
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
-                        <Loader2 size={10} className="animate-spin" /> Uploading files…
+                        <Loader2 size={10} className="animate-spin" />
+                        {uploadProgress >= 100 ? 'Processing…' : 'Uploading…'}
                       </span>
                       <span className="font-mono text-muted-foreground">{uploadProgress}%</span>
                     </div>
