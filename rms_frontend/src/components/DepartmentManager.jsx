@@ -660,6 +660,7 @@ const DepartmentManager = ({ onViewChange }) => {
   const [deletedRecords, setDeletedRecords] = useState([]);
   const [loadingBin, setLoadingBin] = useState(false);
   const [purgingId, setPurgingId] = useState(null);
+  const [pendingPurgeId, setPendingPurgeId] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
 
   // Signature management (admin override)
@@ -691,8 +692,13 @@ const DepartmentManager = ({ onViewChange }) => {
     } finally { setUploadingSigFor(null); }
   };
 
-  const handlePurgeRecord = async (id) => {
-    if (!window.confirm('Permanently delete this record from the bin? This cannot be undone.')) return;
+  const handlePurgeRecord = (id) => {
+    setPendingPurgeId(id);
+  };
+
+  const confirmPurgeRecord = async () => {
+    const id = pendingPurgeId;
+    setPendingPurgeId(null);
     setPurgingId(id);
     try {
       await adminAPI.purgeDeletedRecord(id);
@@ -1236,6 +1242,10 @@ const DepartmentManager = ({ onViewChange }) => {
       <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete}
         isProcessing={isProcessing} title="Delete Department"
         message={`Are you sure you want to permanently delete "${pendingDept?.name}"? This action cannot be undone.`} />
+
+      <ConfirmModal isOpen={!!pendingPurgeId} onClose={() => setPendingPurgeId(null)} onConfirm={confirmPurgeRecord}
+        isProcessing={!!purgingId} title="Purge Record"
+        message="Permanently delete this record from the bin? This cannot be undone." />
     </>
   );
 };
