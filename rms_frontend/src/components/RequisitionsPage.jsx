@@ -1885,7 +1885,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               {/* Attachments Section */}
               {/* ── Enclosures (existing attachments) ── */}
               {attachments.length > 0 && (
-                <div className="space-y-3 pt-4 border-t border-border/50">
+                <div className="hidden lg:block space-y-3 pt-4 border-t border-border/50">
                   <div className="flex items-center space-x-2">
                      <Paperclip size={13} className="text-primary" />
                      <p className="text-[10px] font-black text-foreground uppercase tracking-[0.1em]">Enclosures ({attachments.length})</p>
@@ -2102,6 +2102,50 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               {/* Items — mobile slot 0: appears first on mobile, before Current Status */}
               {itemsBlock && <div className="lg:hidden border-b border-border/30 pb-4">{itemsBlock}</div>}
 
+              {/* Enclosures — mobile slot 1: right after item table, before chains */}
+              {attachments.length > 0 && (
+                <div className="lg:hidden space-y-3 border-b border-border/30 pb-4">
+                  <div className="flex items-center space-x-2">
+                    <Paperclip size={13} className="text-primary" />
+                    <p className="text-[10px] font-black text-foreground uppercase tracking-[0.1em]">Enclosures ({attachments.length})</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {attachments.map(a => (
+                      <div key={a.id} className="flex items-center gap-2 p-3 bg-muted/20 rounded-xl border border-border/30 text-xs hover:border-primary/20 transition-all group">
+                        <FileText size={13} className="text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-foreground font-bold text-[11px]">{a.filename}</p>
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            <span className="text-[9px] text-muted-foreground font-mono">{a.size ? `${(a.size / 1024).toFixed(0)} KB` : 'N/A'}</span>
+                            {(a.uploadedBy?.name || a.uploaderDept) && (
+                              <span className="text-[9px] text-primary/70 font-bold uppercase tracking-wide">
+                                {a.uploaderDept || a.uploadedBy?.department?.name || ''}
+                                {a.uploadedBy?.name ? ` · ${a.uploadedBy.name}` : ''}
+                              </span>
+                            )}
+                            {a.stageName && <span className="text-[9px] text-muted-foreground/60 italic">{a.stageName}</span>}
+                            {a.createdAt && <span className="text-[9px] text-muted-foreground/50 font-mono">{new Date(a.createdAt).toLocaleDateString()}</span>}
+                          </div>
+                        </div>
+                        <button onClick={() => setPreviewFile(a)} title="Preview" className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"><Eye size={14} /></button>
+                        <button onClick={async () => {
+                          try {
+                            const res = await fetch(`/api/attachments/${a.id}/download`, { credentials: 'include' });
+                            if (!res.ok) throw new Error();
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const dl = document.createElement('a');
+                            dl.href = url; dl.download = a.filename; document.body.appendChild(dl);
+                            dl.click(); dl.remove();
+                            setTimeout(() => URL.revokeObjectURL(url), 10000);
+                          } catch { toast.error('Download failed.'); }
+                        }} title="Download" className="p-1.5 text-muted-foreground hover:text-primary transition-all rounded-lg hover:bg-primary/5 shrink-0"><Download size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Status & Alerts */}
               <div className="space-y-3">
                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Current Status</p>
@@ -2197,41 +2241,7 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
               {/* Brief only — mobile slot 1: appears between Current Status and Processing Chain */}
               {briefBlock && <div className="lg:hidden border-t border-border/30 pt-4">{briefBlock}</div>}
 
-              {/* Processing Chain (for inter-dept) OR Approval Trail */}
-              <div className="space-y-3 flex-1">
-                {isInterDept && forwardEvents.length > 0 ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Processing Chain</p>
-                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[9px] font-bold">
-                        {forwardEvents.length}
-                      </div>
-                    </div>
-                    <ProcessingChain events={[...forwardEvents].reverse()} />
-                  </>
-                ) : timeline.length > 0 ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Approval Trail</p>
-                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[9px] font-bold">
-                        {timeline.length}
-                      </div>
-                    </div>
-                    {loading ? (
-                      <div className="space-y-3 animate-pulse">
-                         {[1,2,3].map(i => <div key={i} className="h-14 bg-muted/40 rounded-xl" />)}
-                      </div>
-                    ) : (
-                      <div className="relative pl-1">
-                         <ApprovalTimeline stages={timeline} />
-                      </div>
-                    )}
-                  </>
-                ) : null}
-              </div>
-
-
-              {/* Vetting Chain History */}
+              {/* Vetting Chain History — most recent, shown above processing chain */}
               {detail?.vettingEvents?.length > 0 && (() => {
                 const evts = detail.vettingEvents; // ascending from server
                 const displayed = [...evts].reverse(); // newest first
@@ -2345,6 +2355,39 @@ const RequisitionDetailModal = ({ req, user, departments, onClose, onAction, onE
                   </div>
                 );
               })()}
+
+              {/* Processing Chain (for inter-dept) OR Approval Trail */}
+              <div className="space-y-3 flex-1">
+                {isInterDept && forwardEvents.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Processing Chain</p>
+                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[9px] font-bold">
+                        {forwardEvents.length}
+                      </div>
+                    </div>
+                    <ProcessingChain events={[...forwardEvents].reverse()} />
+                  </>
+                ) : timeline.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em]">Approval Trail</p>
+                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[9px] font-bold">
+                        {timeline.length}
+                      </div>
+                    </div>
+                    {loading ? (
+                      <div className="space-y-3 animate-pulse">
+                         {[1,2,3].map(i => <div key={i} className="h-14 bg-muted/40 rounded-xl" />)}
+                      </div>
+                    ) : (
+                      <div className="relative pl-1">
+                         <ApprovalTimeline stages={timeline} />
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
 
               {/* Identity & Verification */}
               {verCode && (
