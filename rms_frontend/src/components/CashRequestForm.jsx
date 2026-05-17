@@ -96,6 +96,60 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
   };
   const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
 
+  // ── Auto-save ──────────────────────────────────────────────────────────────
+  const lsKey = `rms_autosave_${type}_${user?.deptId || 'x'}`;
+
+  const hasContent = subject.trim() || comment.trim() ||
+    items.some(i => i.description.trim()) || files.length > 0;
+
+  // Save form state to localStorage whenever content changes
+  useEffect(() => {
+    if (!isOpen || isEditing) return;
+    if (!hasContent) return;
+    const snapshot = { subject, comment, items, targetDeptId, urgency, savedAt: Date.now() };
+    try { localStorage.setItem(lsKey, JSON.stringify(snapshot)); } catch { /* storage full */ }
+  }, [subject, comment, items, targetDeptId, urgency, isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On open: restore from localStorage if no editDraft and snapshot is < 24h old
+  useEffect(() => {
+    if (!isOpen || isEditing) return;
+    try {
+      const raw = localStorage.getItem(lsKey);
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      if (Date.now() - (snap.savedAt || 0) > 86400000) { localStorage.removeItem(lsKey); return; }
+      if (snap.subject) setSubject(snap.subject);
+      if (snap.comment) setComment(snap.comment);
+      if (snap.items?.length) setItems(snap.items);
+      if (snap.targetDeptId) setTargetDeptId(snap.targetDeptId);
+      if (snap.urgency) setUrgency(snap.urgency);
+    } catch { /* corrupt */ }
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save to server as draft silently on back/close if content exists
+  const handleClose = async () => {
+    if (!hasContent || isEditing || submitting) { onClose(); return; }
+    try {
+      const validItems = items.filter(i => i.description.trim());
+      const content = type === 'Cash'
+        ? JSON.stringify({ itemized: true, comment: comment.trim(), items: validItems.map(i => ({ qty: parseFloat(i.qty) || 1, description: i.description.trim(), amount: parseFloat(i.amount) || 0, lineTotal: (parseFloat(i.qty) || 1) * (parseFloat(i.amount) || 0) })), total })
+        : JSON.stringify({ itemized: false, description: comment.trim() });
+      const payload = {
+        title: subject.trim() || `${type} Draft`,
+        description: subject.trim() || `${type} Draft`,
+        type, urgency, isDraft: true, content,
+        ...(type === 'Cash' && total > 0 && { amount: total }),
+        ...(user?.deptId != null && { departmentId: user.deptId }),
+        ...(targetDeptId && { targetDepartmentId: parseInt(targetDeptId) }),
+      };
+      await addRequisition(payload);
+      localStorage.removeItem(lsKey);
+      toast('Progress auto-saved as draft.', { icon: '💾', duration: 3000 });
+    } catch { /* network off — localStorage already has it */ }
+    onClose();
+  };
+
+  // Also clear localStorage on successful submit (inside handleSubmit after onClose)
   if (!isOpen) return null;
 
   const total = items.reduce((s, i) => s + (parseFloat(i.qty || 0) * parseFloat(i.amount || 0)), 0);
@@ -188,6 +242,7 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
       clearTimeout(slowTimerRef.current);
       setSlowWarning(false);
 
+      try { localStorage.removeItem(lsKey); } catch { /* ignore */ }
       toast.success(isDraft ? 'Draft saved.' : `${type} request submitted successfully.`);
       onClose();
     } catch (err) {
@@ -215,7 +270,7 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
       {/* Header with Back Button */}
       <div className="flex items-center justify-between">
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="px-4 py-2 bg-white border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl flex items-center gap-2 transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
         >
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
@@ -426,12 +481,14 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
             )}
 
             <input
+              id={`file-input-${type}`}
               ref={fileRef}
               type="file"
               multiple
-              className="hidden"
+              className="sr-only"
               accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.txt,.csv"
               onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
+              tabIndex={-1}
             />
             {files.length > 0 && (
               <div className="space-y-2">
@@ -450,14 +507,12 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
                 ))}
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={submitting}
-              className="flex items-center gap-2 text-xs font-bold text-primary hover:text-primary/80 px-3 py-2 rounded-xl border border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-all w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+            <label
+              htmlFor={`file-input-${type}`}
+              className={`flex items-center gap-2 text-xs font-bold text-primary hover:text-primary/80 px-3 py-2 rounded-xl border border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-all w-full justify-center cursor-pointer select-none ${submitting ? 'opacity-50 pointer-events-none' : ''}`}
             >
-              <Paperclip size={14} /> {files.length > 0 ? `Add more files` : 'Attach supporting documents'}
-            </button>
+              <Paperclip size={14} /> {files.length > 0 ? 'Add more files' : 'Attach supporting documents'}
+            </label>
 
             {/* Staged files notice — files upload when request is submitted */}
             {files.length > 0 && uploadStatus === 'idle' && (

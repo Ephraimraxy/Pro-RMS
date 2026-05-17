@@ -435,18 +435,19 @@ const RequisitionForm = ({ isOpen, onClose }) => {
               Supporting Documents (FIRS Compliant)
             </label>
             <input
+              id="req-file-input"
               type="file"
               multiple
-              className="hidden"
+              className="sr-only"
               ref={fileInputRef}
-              onChange={e => setFiles(prev => [...prev, ...Array.from(e.target.files)])}
-              disabled={!isOnline || submitting}
+              onChange={e => { setFiles(prev => [...prev, ...Array.from(e.target.files)]); e.target.value = ''; }}
+              tabIndex={-1}
             />
-            <div
-              onClick={() => isOnline && !submitting && fileInputRef.current?.click()}
+            <label
+              htmlFor="req-file-input"
               className={`border-2 border-dashed border-border/50 rounded-2xl p-6 flex flex-col items-center justify-center space-y-2 transition-all ${isOnline && !submitting
                   ? 'bg-white/40 hover:bg-white/80 cursor-pointer'
-                  : 'bg-muted/30 opacity-50 cursor-not-allowed'
+                  : 'bg-muted/30 opacity-50 cursor-not-allowed pointer-events-none'
                 }`}
             >
               <Upload size={22} className="text-muted-foreground" />
@@ -454,7 +455,7 @@ const RequisitionForm = ({ isOpen, onClose }) => {
               {!isOnline && (
                 <p className="text-[10px] text-destructive uppercase font-bold">Attachments require online connection</p>
               )}
-            </div>
+            </label>
 
             {files.length > 0 && (
               <div className="space-y-1.5">
