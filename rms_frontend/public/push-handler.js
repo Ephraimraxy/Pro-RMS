@@ -1,3 +1,8 @@
+// Allow the waiting SW to activate immediately when the app requests it
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 // Push notification handler — imported by the generated service worker
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {};

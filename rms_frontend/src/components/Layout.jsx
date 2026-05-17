@@ -164,10 +164,17 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
         .then(reg => {
           swPollRef.current = setInterval(() => reg.update().catch(() => {}), 120000);
           reg.addEventListener('updatefound', () => {
-            if (!swUpdated.current) {
-              swUpdated.current = true;
-              setPendingUpdates(prev => prev + 1);
-            }
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New SW installed and waiting — notify user
+                if (!swUpdated.current) {
+                  swUpdated.current = true;
+                  setPendingUpdates(prev => prev + 1);
+                }
+              }
+            });
           });
         })
         .catch(() => {});
@@ -247,8 +254,22 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
     setRefreshRunning(false);
     if (fail === 0) {
       if (hadSwUpdate) {
-        // New deployment detected — full reload needed to load updated JS/CSS
-        setTimeout(() => window.location.reload(), 1200);
+        // New deployment detected — tell the waiting SW to activate, then reload
+        // so the page loads the fresh JS/CSS assets instead of cached old ones
+        const activateAndReload = async () => {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            const waiting = reg.waiting;
+            if (waiting) {
+              await new Promise((resolve) => {
+                navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+                waiting.postMessage({ type: 'SKIP_WAITING' });
+              });
+            }
+          } catch { /* SW not available — reload anyway */ }
+          window.location.reload();
+        };
+        setTimeout(activateAndReload, 800);
       } else {
         setTimeout(() => setShowRefreshPopover(false), 3500);
       }
