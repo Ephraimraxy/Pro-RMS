@@ -159,7 +159,7 @@ const NetworkProvider = ({ children }) => {
     checkConnectivity();
 
     // Periodic heartbeat (every 10 seconds)
-    checkInterval = setInterval(checkConnectivity, 10000);
+    checkInterval = setInterval(checkConnectivity, 30000);
 
     const handleBrowserStatusChange = () => {
       if (navigator.onLine) checkConnectivity();

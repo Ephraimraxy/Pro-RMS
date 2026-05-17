@@ -630,7 +630,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
     };
 
     checkActions();
-    const interval = setInterval(checkActions, 30000);
+    const interval = setInterval(checkActions, 60000);
     window.addEventListener('requisitionUpdated', checkActions);
     return () => {
       clearInterval(interval);
@@ -682,7 +682,7 @@ const Layout = ({ children, user, currentView, onViewChange }) => {
       setSyncPending(status.pending || 0);
     };
     loadSync();
-    const interval = setInterval(loadSync, 15000);
+    const interval = setInterval(loadSync, 30000);
     return () => clearInterval(interval);
   }, []);
 

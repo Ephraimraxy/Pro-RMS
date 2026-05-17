@@ -59,7 +59,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-requisitions',
-              networkTimeoutSeconds: 5,
+              networkTimeoutSeconds: 3,
               expiration: { maxEntries: 100, maxAgeSeconds: 86400 },
               cacheableResponse: { statuses: [0, 200] }
             }
@@ -70,7 +70,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-departments',
-              networkTimeoutSeconds: 5,
+              networkTimeoutSeconds: 3,
               expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
               cacheableResponse: { statuses: [0, 200] }
             }
@@ -91,7 +91,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-notifications',
-              networkTimeoutSeconds: 5,
+              networkTimeoutSeconds: 3,
               expiration: { maxEntries: 20, maxAgeSeconds: 3600 },
               cacheableResponse: { statuses: [0, 200] }
             }
@@ -102,7 +102,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-audit',
-              networkTimeoutSeconds: 5,
+              networkTimeoutSeconds: 3,
               expiration: { maxEntries: 20, maxAgeSeconds: 86400 },
               cacheableResponse: { statuses: [0, 200] }
             }
@@ -113,7 +113,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-hr',
-              networkTimeoutSeconds: 5,
+              networkTimeoutSeconds: 3,
               expiration: { maxEntries: 100, maxAgeSeconds: 3600 },
               cacheableResponse: { statuses: [0, 200] }
             }
@@ -123,7 +123,7 @@ export default defineConfig({
     })
   ],
   base: '/',
-  build: { sourcemap: true },
+  build: { sourcemap: false },
   server: {
     proxy: {
       '/api': {
