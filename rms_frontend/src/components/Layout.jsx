@@ -6,7 +6,7 @@ import {
   LogOut, Bell, Briefcase, Activity, User as UserIcon, PenTool,
   ChevronLeft, ChevronRight, ChevronDown, Menu, Inbox, Clock, WifiOff, RefreshCcw,
   Building2, ShieldAlert, Users, CalendarDays, DollarSign, UserPlus,
-  HeartHandshake, Loader2, CheckCircle2, XCircle, X
+  HeartHandshake, Loader2, CheckCircle2, XCircle, X, FilePen, Trash2
 } from 'lucide-react';
 import { getNotifications, getSyncQueueStatus, flushSyncQueue, markNotificationRead, markAllNotificationsRead, clearNotifications, getRequisitions, isMemoRecord } from '../lib/store';
 import { reqAPI, settingsAPI, authAPI } from '../lib/api';
@@ -72,6 +72,36 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
   const { isOnline, networkQuality } = useNetwork();
   const qcfg = QUALITY_CFG[networkQuality] || QUALITY_CFG.strong;
   const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const [showDrafts, setShowDrafts] = React.useState(false);
+  const [drafts, setDrafts] = React.useState([]);
+  const [loadingDrafts, setLoadingDrafts] = React.useState(false);
+  const [deletingDraftId, setDeletingDraftId] = React.useState(null);
+
+  const loadDrafts = React.useCallback(async () => {
+    setLoadingDrafts(true);
+    try {
+      const data = await reqAPI.getRequisitions({ status: 'draft' });
+      setDrafts(Array.isArray(data) ? data.filter(r => r.status === 'draft') : []);
+    } catch { setDrafts([]); }
+    finally { setLoadingDrafts(false); }
+  }, []);
+
+  React.useEffect(() => { loadDrafts(); }, [loadDrafts]);
+
+  const handleDeleteDraft = async (id) => {
+    setDeletingDraftId(id);
+    try {
+      await reqAPI.deleteRequisition(id);
+      setDrafts(prev => prev.filter(d => d.id !== id));
+    } catch { /* ignore */ }
+    finally { setDeletingDraftId(null); }
+  };
+
+  const handleOpenDraft = (draft) => {
+    setShowDrafts(false);
+    onViewChange('requisitions', { reqId: draft.id });
+  };
 
   const handleNotifClick = async (n) => {
     // Mark as read (fire and forget — don't await so UI stays responsive)
@@ -345,7 +375,7 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
         {/* Hard refresh — pull latest data from server */}
         <div className="relative">
           <button
-            onClick={handleHardRefresh}
+            onClick={() => { setShowDrafts(false); setShowBell(false); handleHardRefresh(); }}
             disabled={refreshRunning}
             title={pendingUpdates > 0 ? `${pendingUpdates} new update${pendingUpdates > 1 ? 's' : ''} — click to apply` : 'Pull latest data from server'}
             className={`relative p-1.5 rounded-lg transition-all disabled:opacity-40 ${showRefreshPopover ? 'bg-foreground text-background shadow-md' : 'text-muted-foreground hover:bg-muted hover:text-primary'}`}
@@ -427,9 +457,110 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
           )}
         </div>
 
+        {/* Drafts quick-access */}
         <div className="relative">
           <button
-            onClick={() => setShowBell(!showBell)}
+            onClick={() => { setShowDrafts(v => !v); setShowBell(false); setShowRefreshPopover(false); if (!showDrafts) loadDrafts(); }}
+            title="My Drafts"
+            className={`relative p-1.5 rounded-lg transition-all ${showDrafts ? 'bg-foreground text-background shadow-md' : 'text-muted-foreground hover:bg-muted hover:text-primary'}`}
+          >
+            <FilePen size={17} />
+            {drafts.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] rounded-full bg-amber-500 text-white text-[8px] font-black flex items-center justify-center px-0.5 ring-2 ring-white shadow-sm">
+                {drafts.length > 9 ? '9+' : drafts.length}
+              </span>
+            )}
+          </button>
+
+          {showDrafts && (
+            <div className="fixed inset-x-4 top-[60px] sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-80 bg-white rounded-2xl border border-border/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+              <div className="p-4 border-b border-border/40 bg-muted/30 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FilePen size={13} className="text-amber-500" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-foreground">My Drafts</h3>
+                  {drafts.length > 0 && (
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">{drafts.length}</span>
+                  )}
+                </div>
+                <button onClick={() => setShowDrafts(false)} className="p-0.5 text-muted-foreground hover:text-foreground rounded-lg transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="max-h-[380px] overflow-y-auto custom-scrollbar">
+                {loadingDrafts ? (
+                  <div className="p-8 flex items-center justify-center">
+                    <Loader2 size={18} className="animate-spin text-muted-foreground" />
+                  </div>
+                ) : drafts.length === 0 ? (
+                  <div className="p-10 text-center space-y-3">
+                    <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto opacity-50">
+                      <FilePen size={20} className="text-muted-foreground" />
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium">No drafts saved yet.</p>
+                    <p className="text-[10px] text-muted-foreground/60">Start a request and save it as a draft to continue later.</p>
+                  </div>
+                ) : (
+                  drafts.map(draft => {
+                    const isDeleting = deletingDraftId === draft.id;
+                    const amount = draft.amount ? `₦${parseFloat(draft.amount).toLocaleString()}` : null;
+                    const daysAgo = Math.floor((Date.now() - new Date(draft.updatedAt || draft.createdAt)) / 86400000);
+                    const timeLabel = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo}d ago`;
+                    return (
+                      <div key={draft.id} className="p-3 border-b border-border/20 last:border-0 hover:bg-muted/30 transition-colors group">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <FilePen size={13} className="text-amber-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-bold text-foreground truncate leading-tight">{draft.title || 'Untitled Draft'}</p>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">{draft.type || 'Request'}</span>
+                              {amount && <span className="text-[9px] font-bold text-primary">{amount}</span>}
+                              <span className="text-[9px] text-muted-foreground/50">{timeLabel}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleOpenDraft(draft)}
+                              title="Continue editing"
+                              className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-white transition-all"
+                            >
+                              <FilePen size={11} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDraft(draft.id)}
+                              disabled={isDeleting}
+                              title="Delete draft"
+                              className="p-1.5 rounded-lg bg-red-50 hover:bg-red-500 text-red-400 hover:text-white transition-all disabled:opacity-40"
+                            >
+                              {isDeleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {drafts.length > 0 && (
+                <div className="p-3 bg-muted/20 border-t border-border/40 text-center">
+                  <button
+                    onClick={() => { setShowDrafts(false); onViewChange('requisitions'); }}
+                    className="text-[9px] font-black text-primary hover:text-primary/70 uppercase tracking-widest transition-colors"
+                  >
+                    View All in Requisitions
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="relative">
+          <button
+            onClick={() => { setShowBell(v => !v); setShowDrafts(false); setShowRefreshPopover(false); }}
             className={`relative transition-all p-1.5 rounded-lg ${showBell ? 'bg-foreground text-background shadow-md' : 'text-muted-foreground hover:bg-muted hover:text-primary'}`}
           >
             <Bell size={18} />
