@@ -16,8 +16,12 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
   const [files, setFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'uploading' | 'done' | 'queued' | 'error'
+  const [submitStep, setSubmitStep] = useState(null); // null | 'creating' | 'uploading' | 'finalizing'
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [slowWarning, setSlowWarning] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const fileRef = useRef(null);
+  const slowTimerRef = useRef(null);
 
   useEffect(() => {
     const up = () => setIsOnline(true);
@@ -115,6 +119,12 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
     }
 
     setSubmitting(true);
+    setSlowWarning(false);
+    setUploadProgress(0);
+
+    // Show "taking longer than expected" after 10 seconds
+    slowTimerRef.current = setTimeout(() => setSlowWarning(true), 10000);
+
     try {
       const content = type === 'Cash'
         ? JSON.stringify({
@@ -144,6 +154,8 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
         ...(targetDeptId && { targetDepartmentId: parseInt(targetDeptId) }),
       };
 
+      // Step 1 — create / update requisition
+      setSubmitStep('creating');
       let savedId;
       if (isEditing) {
         await reqAPI.updateRequisition(editDraft.id, payload);
@@ -153,28 +165,48 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
         savedId = Array.isArray(result) ? result[0]?.id : result?.id;
       }
 
+      // Step 2 — upload files
       if (files.length > 0) {
         if (!savedId) {
-          // Requisition was queued offline — files can't be attached yet; tell the user clearly
-          toast('Your requisition is saved offline. Re-attach your files once the request syncs to the server.', { icon: '📎', duration: 6000 });
+          toast('Requisition saved offline. Re-attach your files once it syncs to the server.', { icon: '📎', duration: 6000 });
         } else {
+          setSubmitStep('uploading');
           setUploadStatus('uploading');
+          setUploadProgress(0);
           try {
-            await uploadAttachments(savedId, files);
-            // uploadAttachments from store queues offline automatically and toasts itself
+            await uploadAttachments(savedId, files, { onProgress: setUploadProgress });
             setUploadStatus(navigator.onLine ? 'done' : 'queued');
           } catch (uploadErr) {
             setUploadStatus('error');
-            toast.error('Files could not be attached — ' + (uploadErr?.message || 'upload failed. Please try again.'));
+            toast.error('Request sent but files could not be attached — ' + (uploadErr?.message || 'upload failed. You can attach them from the request detail later.'));
           }
         }
       }
 
+      // Step 3 — finalizing
+      setSubmitStep('finalizing');
+      clearTimeout(slowTimerRef.current);
+      setSlowWarning(false);
+
       toast.success(isDraft ? 'Draft saved.' : `${type} request submitted successfully.`);
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Submission failed. Please try again.');
-    } finally { setSubmitting(false); }
+      clearTimeout(slowTimerRef.current);
+      setSlowWarning(false);
+      const msg = err?.response?.data?.error || err?.message || 'Submission failed.';
+      const status = err?.response?.status;
+      if (status === 0 || !navigator.onLine) {
+        toast.error('No connection — your request was saved offline and will sync automatically when you reconnect.');
+      } else if (status >= 500) {
+        toast.error(`Server error (${status}) — please try again in a moment.`);
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      clearTimeout(slowTimerRef.current);
+      setSubmitting(false);
+      setSubmitStep(null);
+    }
   };
 
   return (
@@ -421,14 +453,19 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              disabled={uploadStatus === 'uploading'}
+              disabled={submitting}
               className="flex items-center gap-2 text-xs font-bold text-primary hover:text-primary/80 px-3 py-2 rounded-xl border border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-all w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {uploadStatus === 'uploading'
-                ? <><Loader2 size={14} className="animate-spin" /> Uploading files, please wait…</>
-                : <><Paperclip size={14} /> {files.length > 0 ? 'Add more files' : 'Attach supporting documents'}</>
-              }
+              <Paperclip size={14} /> {files.length > 0 ? `Add more files` : 'Attach supporting documents'}
             </button>
+
+            {/* Staged files notice — files upload when request is submitted */}
+            {files.length > 0 && uploadStatus === 'idle' && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 border border-primary/20 rounded-xl text-[11px] text-primary font-medium">
+                <CheckCircle size={12} className="shrink-0 text-primary" />
+                {files.length} file{files.length !== 1 ? 's' : ''} staged — will upload automatically when you submit
+              </div>
+            )}
           </div>
 
           {/* Target dept + Urgency */}
@@ -471,24 +508,76 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
 
         </div>
 
+        {/* Submit progress panel — only visible while submitting */}
+        {submitting && (
+          <div className="px-6 lg:px-8 pb-4 space-y-3 animate-in fade-in duration-300">
+            {/* Step indicators */}
+            <div className="flex items-center gap-3">
+              {[
+                { key: 'creating',   label: isEditing ? 'Updating request…' : 'Creating request…' },
+                { key: 'uploading',  label: `Uploading ${files.length} file${files.length !== 1 ? 's' : ''}…` },
+                { key: 'finalizing', label: 'Finalizing…' },
+              ].filter(s => files.length > 0 || s.key !== 'uploading').map((s, idx, arr) => {
+                const stepOrder = ['creating', 'uploading', 'finalizing'];
+                const currentIdx = stepOrder.indexOf(submitStep);
+                const sIdx = stepOrder.indexOf(s.key);
+                const done = currentIdx > sIdx;
+                const active = submitStep === s.key;
+                return (
+                  <React.Fragment key={s.key}>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black transition-all ${done ? 'bg-emerald-500 text-white' : active ? 'bg-primary text-white animate-pulse' : 'bg-muted text-muted-foreground'}`}>
+                        {done ? '✓' : idx + 1}
+                      </div>
+                      <span className={`text-[10px] font-bold ${active ? 'text-primary' : done ? 'text-emerald-600' : 'text-muted-foreground'}`}>{s.label}</span>
+                    </div>
+                    {idx < arr.length - 1 && <div className="flex-1 h-px bg-border/50" />}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* Upload progress bar */}
+            {submitStep === 'uploading' && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span className="font-bold text-primary">{uploadProgress >= 100 ? 'Processing…' : 'Uploading…'}</span>
+                  <span className="font-mono">{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-muted/40 rounded-full h-2 overflow-hidden">
+                  <div className="h-full bg-primary rounded-full transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Slow network warning */}
+            {slowWarning && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 animate-in fade-in duration-500">
+                <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                <p className="text-[11px] font-medium leading-snug">
+                  This is taking longer than expected — your network may be slow. Please keep this page open and do not refresh.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Footer */}
         <div className="p-6 lg:p-8 border-t border-border/50 flex flex-col-reverse sm:flex-row gap-4 shrink-0 bg-white">
           <button
             onClick={() => handleSubmit(true)}
-            disabled={submitting || uploadStatus === 'uploading'}
+            disabled={submitting}
             className="py-4 px-8 rounded-2xl border-2 border-border/60 text-sm font-black text-muted-foreground hover:bg-muted hover:text-foreground transition-all disabled:opacity-50 active:scale-95"
           >
             Save Draft
           </button>
           <button
             onClick={() => handleSubmit(false)}
-            disabled={submitting || uploadStatus === 'uploading'}
+            disabled={submitting}
             className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl bg-primary text-white text-sm font-black transition-all disabled:opacity-50 shadow-xl shadow-primary/30 hover:bg-primary/90 hover:shadow-primary/40 active:scale-95"
           >
-            {uploadStatus === 'uploading'
-              ? <><Loader2 size={20} className="animate-spin" /> Uploading files…</>
-              : submitting
-              ? <><Loader2 size={20} className="animate-spin" /> {!isOnline ? 'Saving offline…' : 'Submitting…'}</>
+            {submitting
+              ? <><Loader2 size={20} className="animate-spin" /> {!isOnline ? 'Saving offline…' : 'Please wait…'}</>
               : <><Send size={20} /> {isEditing ? 'Update & Submit' : `Submit ${type} Request`}</>
             }
           </button>
