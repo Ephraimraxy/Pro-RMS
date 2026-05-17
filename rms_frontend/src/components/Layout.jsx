@@ -87,20 +87,28 @@ const Navbar = ({ user, toggleSidebar, isCollapsed, notifications, setNotificati
     finally { setLoadingDrafts(false); }
   }, []);
 
-  React.useEffect(() => { loadDrafts(); }, [loadDrafts]);
+  React.useEffect(() => {
+    loadDrafts();
+    window.addEventListener('rms:draftSaved', loadDrafts);
+    return () => window.removeEventListener('rms:draftSaved', loadDrafts);
+  }, [loadDrafts]);
 
   const handleDeleteDraft = async (id) => {
     setDeletingDraftId(id);
     try {
       await reqAPI.deleteRequisition(id);
       setDrafts(prev => prev.filter(d => d.id !== id));
+      // Also tell requisitions page to refresh its list
+      window.dispatchEvent(new CustomEvent('globalHardRefresh'));
     } catch { /* ignore */ }
     finally { setDeletingDraftId(null); }
   };
 
   const handleOpenDraft = (draft) => {
     setShowDrafts(false);
-    onViewChange('requisitions', { reqId: draft.id });
+    // Navigate to requisitions first, then signal it to open the edit form
+    onViewChange('requisitions');
+    window.dispatchEvent(new CustomEvent('rms:openDraftEdit', { detail: { id: draft.id, type: draft.type } }));
   };
 
   const handleNotifClick = async (n) => {

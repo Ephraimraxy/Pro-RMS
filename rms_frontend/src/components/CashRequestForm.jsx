@@ -130,22 +130,36 @@ const CashRequestForm = ({ type = 'Cash', isOpen, onClose, editDraft = null }) =
   const handleClose = async () => {
     if (!hasContent || isEditing || submitting) { onClose(); return; }
     try {
-      const validItems = items.filter(i => i.description.trim());
+      // Save ALL items (including partially filled) so content can be restored
+      const allItems = items.map(i => ({
+        qty: parseFloat(i.qty) || 1,
+        description: String(i.description ?? ''),
+        amount: parseFloat(i.amount) || 0,
+        lineTotal: (parseFloat(i.qty) || 1) * (parseFloat(i.amount) || 0)
+      }));
+      const draftTotal = allItems.reduce((s, i) => s + i.lineTotal, 0);
       const content = type === 'Cash'
-        ? JSON.stringify({ itemized: true, comment: comment.trim(), items: validItems.map(i => ({ qty: parseFloat(i.qty) || 1, description: i.description.trim(), amount: parseFloat(i.amount) || 0, lineTotal: (parseFloat(i.qty) || 1) * (parseFloat(i.amount) || 0) })), total })
+        ? JSON.stringify({ itemized: true, comment: comment.trim(), items: allItems, total: draftTotal })
         : JSON.stringify({ itemized: false, description: comment.trim() });
       const payload = {
         title: subject.trim() || `${type} Draft`,
         description: subject.trim() || `${type} Draft`,
         type, urgency, isDraft: true, content,
-        ...(type === 'Cash' && total > 0 && { amount: total }),
+        ...(draftTotal > 0 && { amount: draftTotal }),
         ...(user?.deptId != null && { departmentId: user.deptId }),
         ...(targetDeptId && { targetDepartmentId: parseInt(targetDeptId) }),
       };
-      await addRequisition(payload);
+      const result = await addRequisition(payload);
+      const savedId = Array.isArray(result) ? result[0]?.id : result?.id;
       localStorage.removeItem(lsKey);
+      // Notify navbar badge to refresh
+      window.dispatchEvent(new CustomEvent('rms:draftSaved'));
       toast('Progress auto-saved as draft.', { icon: '💾', duration: 3000 });
-    } catch { /* network off — localStorage already has it */ }
+      // If there are files, open the draft immediately for the user to attach them
+      if (files.length > 0 && savedId) {
+        window.dispatchEvent(new CustomEvent('rms:openDraftEdit', { detail: { id: savedId, type } }));
+      }
+    } catch { /* network off — localStorage still has snapshot */ }
     onClose();
   };
 

@@ -2650,6 +2650,23 @@ const RequisitionsPage = ({ onViewChange, initialReqId, onDeepLinkConsumed }) =>
     return () => window.removeEventListener('openRequisition', handleOpenReq);
   }, [requisitions]);
 
+  // Open a draft directly in edit form (from navbar drafts popover or auto-save)
+  useEffect(() => {
+    const handleOpenDraftEdit = async (e) => {
+      const { id, type: draftType } = e.detail || {};
+      if (!id) return;
+      try {
+        const { getRequisitionDetail } = await import('../lib/store');
+        const draft = await getRequisitionDetail(id);
+        if (!draft) return;
+        setEditDraft(draft);
+        setIsFormOpen(draftType || draft.type || 'Cash');
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('rms:openDraftEdit', handleOpenDraftEdit);
+    return () => window.removeEventListener('rms:openDraftEdit', handleOpenDraftEdit);
+  }, []);
+
   const filtered = requisitions.filter(r => {
     if (isMemoRecord(r)) return false;
     const matchSearch  = r.title?.toLowerCase().includes(search.toLowerCase()) || String(r.id).includes(search);
