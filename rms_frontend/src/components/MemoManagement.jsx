@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { getMemoRecords, getDepartments, getRequisitionDetail } from '../lib/store';
 import { forwardAPI, memoAPI, reqAPI } from '../lib/api';
 import { toast } from 'react-hot-toast';
+import ConfirmModal from './ConfirmModal';
 import {
   FileText, Send, Clock, CheckCircle2, Plus, X,
   ArrowRightCircle, Globe, ChevronRight, Loader2,
@@ -270,6 +271,7 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh, onEditDraf
   const [acting, setActing]     = useState(false);
   const [note, setNote]         = useState('');
   const [fwdDeptId, setFwdDeptId] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   // Publish scheduling
   const [publishStartAt, setPublishStartAt] = useState('');
   const [publishEndAt,   setPublishEndAt]   = useState('');
@@ -287,7 +289,6 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh, onEditDraf
   const isIncoming = user?.deptId && detail?.targetDepartmentId === user.deptId;
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete memo "${memo.title}"? It will be removed from all processing records.`)) return;
     setActing(true);
     try {
       await reqAPI.deleteRequisition(memo.id);
@@ -385,7 +386,7 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh, onEditDraf
         </button>
         {canDelete && (
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirmDelete(true)}
             disabled={acting}
             className="flex items-center gap-2 text-xs font-black text-red-600 bg-red-50 hover:bg-red-500 hover:text-white transition-all px-4 py-2 rounded-xl shadow-sm uppercase tracking-wider border border-red-200 disabled:opacity-40"
           >
@@ -393,6 +394,14 @@ const MemoDetailView = ({ memo, user, departments, onBack, onRefresh, onEditDraf
             Delete Memo
           </button>
         )}
+        <ConfirmModal
+          isOpen={confirmDelete}
+          onClose={() => setConfirmDelete(false)}
+          onConfirm={handleDelete}
+          isProcessing={acting}
+          title="Delete Memo"
+          message={`Delete memo "${memo.title}"? It will be removed from all processing records.`}
+        />
         {memo.status === 'draft' && onEditDraft && (
           <button
             onClick={() => onEditDraft(memo)}
@@ -548,6 +557,8 @@ const MemoManagement = ({ onViewChange }) => {
   const [loading, setLoading]     = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [draftToEdit, setDraftToEdit] = useState(null);
+  const [pendingDeleteMemo, setPendingDeleteMemo] = useState(null);
+  const [deletingMemo, setDeletingMemo] = useState(false);
   const [selectedMemo, setSelectedMemo] = useState(null);
   const [tab, setTab]             = useState('all'); // 'all' | 'incoming' | 'published'
 
@@ -730,17 +741,7 @@ const MemoManagement = ({ onViewChange }) => {
                         <div className="flex items-center gap-2">
                           {(user?.role === 'global_admin' || (Number(user?.deptId) === Number(memo.departmentId) && !['treated','published','approved'].includes(memo.finalApprovalStatus))) && (
                             <button
-                              onClick={async e => {
-                                e.stopPropagation();
-                                if (!window.confirm(`Delete memo "${memo.title}"?`)) return;
-                                try {
-                                  await reqAPI.deleteRequisition(memo.id);
-                                  toast.success(`Memo #${memo.id} deleted.`);
-                                  loadMemos();
-                                } catch (err) {
-                                  toast.error(err?.response?.data?.error || 'Could not delete memo.');
-                                }
-                              }}
+                              onClick={e => { e.stopPropagation(); setPendingDeleteMemo(memo); }}
                               className="w-8 h-8 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm"
                               title="Delete memo"
                             >
@@ -760,6 +761,25 @@ const MemoManagement = ({ onViewChange }) => {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!pendingDeleteMemo}
+        onClose={() => setPendingDeleteMemo(null)}
+        isProcessing={deletingMemo}
+        title="Delete Memo"
+        message={`Delete memo "${pendingDeleteMemo?.title}"?`}
+        onConfirm={async () => {
+          setDeletingMemo(true);
+          try {
+            await reqAPI.deleteRequisition(pendingDeleteMemo.id);
+            toast.success(`Memo #${pendingDeleteMemo.id} deleted.`);
+            setPendingDeleteMemo(null);
+            loadMemos();
+          } catch (err) {
+            toast.error(err?.response?.data?.error || 'Could not delete memo.');
+          } finally { setDeletingMemo(false); }
+        }}
+      />
   );
 };
 
