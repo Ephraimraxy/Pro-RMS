@@ -55,5 +55,4 @@ Cloudflare R2 Storage (S3-compatible):
 
 If no external storage is configured, files upload locally to `uploads/`.
 
----
-*Built with excellence by Antigravity*
+
