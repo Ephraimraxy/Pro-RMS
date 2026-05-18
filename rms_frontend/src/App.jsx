@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, createContext, useContext, Suspense } from 'react'
 import Login from './components/Login'
+import LoginPagePremium from './components/LoginPagePremium'
 import PublicVerify from './components/PublicVerify'
 import DepartmentHeadModal from './components/DepartmentHeadModal'
 import Layout from './components/Layout'
@@ -205,6 +206,14 @@ const AppContent = () => {
   const [deptProfile, setDeptProfile] = useState(null);
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [deepLinkReqId, setDeepLinkReqId] = useState(null);
+  const [loginStyle, setLoginStyle] = useState('standard');
+
+  useEffect(() => {
+    fetch('/api/public/login-style')
+      .then(r => r.json())
+      .then(d => { if (d?.value) setLoginStyle(d.value); })
+      .catch(() => {});
+  }, []);
 
   // navigate(view) — normal navigation
   // navigate('requisitions', { reqId: 31 }) — deep-link directly into a requisition
@@ -271,7 +280,7 @@ const AppContent = () => {
     );
   }
 
-  if (!user) return <Login />;
+  if (!user) return loginStyle === 'premium' ? <LoginPagePremium /> : <Login />;
 
   const isAdminView = ['workflow_builder', 'department_manager', 'audit_logs'].includes(currentView);
   const isHRView = ['hr_dashboard', 'hr_employees', 'hr_leaves', 'hr_attendance', 'hr_payroll', 'hr_recruitment'].includes(currentView);

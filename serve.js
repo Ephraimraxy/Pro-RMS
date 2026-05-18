@@ -2274,6 +2274,15 @@ app.delete('/api/admin/deleted-records/:id', authenticateToken, requireRoles(['g
   }
 });
 
+// ── Public login-style setting (no auth — needed before user logs in) ─────────
+app.get('/api/public/login-style', async (req, res) => {
+  try {
+    await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "SystemSetting" ("key" TEXT PRIMARY KEY, "value" TEXT NOT NULL DEFAULT '')`;
+    const rows = await prisma.$queryRaw`SELECT "value" FROM "SystemSetting" WHERE "key" = 'login_style' LIMIT 1`;
+    res.json({ value: rows[0]?.value ?? 'standard' });
+  } catch { res.json({ value: 'standard' }); }
+});
+
 // ── System Settings ───────────────────────────────────────────────────────────
 // GET /api/system-settings/:key  — read one setting (public for dept-level reads like chairman access)
 app.get('/api/system-settings/:key', authenticateToken, async (req, res) => {

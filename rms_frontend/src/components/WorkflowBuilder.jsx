@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Plus, Trash2, Shield, ArrowDown, Settings2, Info, FileText, Users, ChevronRight, Save, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Shield, ArrowDown, Settings2, Info, FileText, Users, ChevronRight, Save, Loader2, Monitor } from 'lucide-react';
 
 const WorkflowStage = ({ stage, onUpdate, onDelete, isFirst }) => {
   return (
@@ -84,6 +84,7 @@ const WorkflowBuilder = ({ onViewChange }) => {
   // ── Feature flags ──────────────────────────────────────────────────────────
   const [studioEnabled, setStudioEnabled]     = useState(true);
   const [hrPortalEnabled, setHrPortalEnabled] = useState(true);
+  const [loginStyle, setLoginStyle]           = useState('standard');
   const [savingFeatures, setSavingFeatures]   = useState(false);
 
   const loadData = async () => {
@@ -126,14 +127,17 @@ const WorkflowBuilder = ({ onViewChange }) => {
 
   const loadFeatureFlags = async () => {
     try {
-      const [studioRes, hrRes] = await Promise.allSettled([
+      const [studioRes, hrRes, loginRes] = await Promise.allSettled([
         settingsAPI.get('document_studio_enabled'),
         settingsAPI.get('hr_portal_enabled'),
+        settingsAPI.get('login_style'),
       ]);
       if (studioRes.status === 'fulfilled' && studioRes.value?.value !== undefined)
         setStudioEnabled(studioRes.value.value !== 'false');
       if (hrRes.status === 'fulfilled' && hrRes.value?.value !== undefined)
         setHrPortalEnabled(hrRes.value.value !== 'false');
+      if (loginRes.status === 'fulfilled' && loginRes.value?.value)
+        setLoginStyle(loginRes.value.value);
     } catch {}
   };
 
@@ -143,6 +147,7 @@ const WorkflowBuilder = ({ onViewChange }) => {
       await Promise.all([
         settingsAPI.set('document_studio_enabled', String(studioEnabled)),
         settingsAPI.set('hr_portal_enabled', String(hrPortalEnabled)),
+        settingsAPI.set('login_style', loginStyle),
       ]);
       toast.success('Feature settings saved.');
     } catch {
@@ -519,6 +524,39 @@ const WorkflowBuilder = ({ onViewChange }) => {
                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${hrPortalEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
+
+                {/* Login Screen Style */}
+                <div className="p-5 rounded-2xl border-2 border-border/50 bg-white/80 hover:border-primary/30 transition-all space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Monitor size={18} className="text-primary shrink-0" />
+                    <div>
+                      <p className="text-sm font-black text-foreground">Login Screen Style</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Choose the login screen displayed to all users. Premium uses a cinematic video background.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { value: 'standard', label: 'Standard', desc: 'Clean gradient panel, no video' },
+                      { value: 'premium', label: 'Premium', desc: 'Cinematic video background' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setLoginStyle(opt.value)}
+                        className={`flex flex-col items-start gap-1 p-4 rounded-xl border-2 text-left transition-all ${loginStyle === opt.value ? 'border-primary bg-primary/5' : 'border-border/50 bg-white hover:border-primary/30'}`}
+                      >
+                        <div className="flex items-center gap-2 w-full">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${loginStyle === opt.value ? 'border-primary' : 'border-border'}`}>
+                            {loginStyle === opt.value && <div className="w-2 h-2 rounded-full bg-primary" />}
+                          </div>
+                          <span className={`text-xs font-black uppercase tracking-widest ${loginStyle === opt.value ? 'text-primary' : 'text-foreground'}`}>{opt.label}</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground pl-6 leading-relaxed">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="pt-2 space-y-1.5">
@@ -532,6 +570,12 @@ const WorkflowBuilder = ({ onViewChange }) => {
                   <div className={`w-2 h-2 rounded-full ${hrPortalEnabled ? 'bg-emerald-500' : 'bg-red-400'}`} />
                   <p className="text-xs text-muted-foreground font-medium">
                     HR Portal is currently <strong className={hrPortalEnabled ? 'text-emerald-600' : 'text-red-500'}>{hrPortalEnabled ? 'enabled' : 'disabled'}</strong>
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Login screen is set to <strong className="text-blue-600 capitalize">{loginStyle}</strong>
                   </p>
                 </div>
               </div>
